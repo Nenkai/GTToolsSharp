@@ -7,3 +7,5 @@ Source code for the PDIPFS path resolver is implemented. Table of contents can b
 
 
 What does not work yet is unpacking files as the BTree implementation is still ongoing.
+**Repacking is a planned feature.**
+
