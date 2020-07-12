@@ -5,7 +5,8 @@ using System.Text;
 using System.Threading.Tasks;
 
 using Syroot.BinaryData.Memory;
-using GTToolsSharp.BTree;
+
+using static GTToolsSharp.Utils;
 
 namespace GTToolsSharp.BTree
 {
@@ -40,41 +41,48 @@ namespace GTToolsSharp.BTree
             uint offset = GetBitsAt(ref sr, index + 1);
             sr.Position += (int)offset; // p = advancePointer(p, offset);
 
-            key = ReadKey(ref sr);
+            key = ReadKeyFromStream(default, ref sr);
             return key != null;
 		}
 
-        public abstract TKey ReadKey(ref SpanReader sr);
+        public abstract TKey ReadKeyFromStream(TKey key, ref SpanReader sr);
 
         public abstract TKey SearchByKey(ref SpanReader sr);
 
         public abstract int LessThanKeyCompareOp(TKey key, ref SpanReader sr);
 
-        public int SearchWithComparison(ref SpanReader sr, uint count, TKey key, out SearchResult res)
+        public abstract int EqualToKeyCompareOp(TKey key, ref SpanReader sr);
+
+        public SpanReader SearchWithComparison(ref SpanReader sr, uint count, TKey key, SearchResult res, SearchCompareMethod method)
         {
-            res = new SearchResult();
             uint high = GetBitsAt(ref sr, 0) & 0x7FFu;
             uint low = 0;
             uint index = 0;
 
             res.upperBound = high;
 
-            SpanReader subData = sr;
+            SpanReader subData = default;
             while (low < high)
             {
                 uint mid = low + (high - low) / 2;
                 index = mid + 1;
                 uint offset = GetBitsAt(ref sr, index);
 
-                sr.Position += (int)offset;
-                subData = sr;
+                subData = sr.GetReaderAtOffset((int)offset);
 
-                int ret = LessThanKeyCompareOp(key, ref subData);
+                int ret;
+                if (method == SearchCompareMethod.LessThan)
+                    ret = LessThanKeyCompareOp(key, ref subData);
+                else if (method == SearchCompareMethod.EqualTo)
+                    ret = EqualToKeyCompareOp(key, ref subData);
+                else
+                    throw new ArgumentException($"Invalid search method provided '{method}'");
+
                 if (ret == 0)
                 {
                     res.lowerBound = mid;
                     res.index = mid;
-                    return subData.Position;
+                    return subData;
                 }
                 else if (ret > 0)
                     low = index;
@@ -93,19 +101,19 @@ namespace GTToolsSharp.BTree
             if (count != 0 && index != res.upperBound)
             {
                 uint offset = GetBitsAt(ref sr, index + 1);
-                subData = sr.Slice((int)offset);
+                subData = sr.GetReaderAtOffset((int)offset);
             }
 
-            return subData.Position;
+            return subData;
         }
 
         public static ushort GetBitsAt(ref SpanReader sr, uint offset)
         {
             uint offsetAligned = (offset * 12) / 8;
-            ushort result = ReadUInt16AtOffset(ref sr, offsetAligned);
+            ushort result = Utils.ReadUInt16AtOffset(ref sr, offsetAligned);
             if ((offset & 0x1) == 0)
                 result >>= 4;
-            return (ushort)(result & 0xFFF);
+            return (ushort)(result & 0xFFFu);
         }
 
         public static ulong DecodeBitsAndAdvance(ref SpanReader sr)
@@ -121,31 +129,10 @@ namespace GTToolsSharp.BTree
             return value;
         }
 
-        public static ushort ReadUInt16AtOffset(ref SpanReader sr, uint offset)
+        public enum SearchCompareMethod
         {
-            int curPos = sr.Position;
-            sr.Position += (int)offset;
-            ushort val = sr.ReadUInt16();
-            sr.Position = curPos;
-            return val;
-        }
-
-        public static ushort ReadByteAtOffset(ref SpanReader sr, uint offset)
-        {
-            int curPos = sr.Position;
-            sr.Position += (int)offset;
-            ushort val = sr.ReadByte();
-            sr.Position = curPos;
-            return val;
-        }
-
-        public static uint ReadUInt24AtOffset(ref SpanReader sr, uint offset)
-        {
-            int curPos = sr.Position;
-            sr.Position += (int)offset;
-            uint val = (uint)sr.ReadUInt24As32();
-            sr.Position = curPos;
-            return val;
+            LessThan,
+            EqualTo,
         }
     }
 }

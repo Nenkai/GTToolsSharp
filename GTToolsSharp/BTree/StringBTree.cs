@@ -16,12 +16,17 @@ namespace GTToolsSharp.BTree
 
         }
 
+        public override int EqualToKeyCompareOp(StringKey key, ref SpanReader sr)
+        {
+            throw new NotImplementedException();
+        }
+
         public override int LessThanKeyCompareOp(StringKey key, ref SpanReader sr)
         {
             throw new NotImplementedException();
         }
 
-        public override StringKey ReadKey(ref SpanReader sr)
+        public override StringKey ReadKeyFromStream(StringKey key, ref SpanReader sr)
         {
             uint len = (uint)DecodeBitsAndAdvance(ref sr);
             return new StringKey(sr.ReadStringRaw((int)len));

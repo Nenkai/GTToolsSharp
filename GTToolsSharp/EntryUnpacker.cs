@@ -24,7 +24,7 @@ namespace GTToolsSharp
             ParentDirectory = parentDir;
         }
 
-        public void UnpackFromKey(EntryKey entryKey)
+        public void UnpackFromKey(FileEntryKey entryKey)
         {
             string entryPath = _volume.GetEntryPath(entryKey, ParentDirectory);
             if (string.IsNullOrEmpty(entryPath))
@@ -39,7 +39,7 @@ namespace GTToolsSharp
                 Console.WriteLine($"DIR: {entryPath}");
                 Directory.CreateDirectory(fullEntryPath);
 
-                var childEntryBTree = new EntryBTree(_volume.TOCData, (int)_volume.EntryOffsets[(int)entryKey.LinkIndex]);
+                var childEntryBTree = new FileEntryBTree(_volume.TOCData, (int)_volume.EntryOffsets[(int)entryKey.LinkIndex]);
                 var childUnpacker = new EntryUnpacker(_volume, OutDir, entryPath);
                 childEntryBTree.Traverse(childUnpacker);
             }
@@ -50,11 +50,15 @@ namespace GTToolsSharp
                 var nodeBTree = new NodeBTree(_volume.TOCData, (int)_volume.NodeTreeOffset);
                 var nodeKey = new NodeKey(entryKey.LinkIndex);
 
-                nodeBTree.SearchByKey(nodeKey);
+                uint nodeIndex = nodeBTree.SearchIndexByKey(nodeKey);
+                if (nodeIndex != NodeKey.InvalidIndex)
+                {
+                   // _volume.UnpackNode(nodeKey, fullEntryPath);
+                }
+
 
             }
         }
-
 
     }
 }

@@ -6,11 +6,11 @@ using System.Threading.Tasks;
 
 namespace GTToolsSharp.BTree
 {
-    public class EntryKey
+    public class FileEntryKey
     {
         public EntryKeyFlags Flags;
         public uint NameIndex;
-        public uint ExtIndex;
+        public uint FileExtensionIndex;
         public uint LinkIndex;
     }
 

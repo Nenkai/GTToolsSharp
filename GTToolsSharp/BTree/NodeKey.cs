@@ -6,12 +6,16 @@ using System.Threading.Tasks;
 
 namespace GTToolsSharp.BTree
 {
-    class NodeKey
+    public class NodeKey
     {
-        public uint Flags { get; }
-        public uint NodeIndex { get; }
-        public uint Size1 { get; }
-        public uint Size2 { get; }
+        public uint Flags { get; set; }
+        public uint NodeIndex { get; set; } = InvalidIndex;
+        public uint CompressedSize { get; set; }
+        public uint UncompressedSize { get; set; }
+        public uint VolumeIndex { get; set; } = InvalidIndex;
+        public uint SectorIndex { get; set; }
+
+        public const uint InvalidIndex = uint.MaxValue;
 
         public NodeKey(uint nodeIndex)
         {

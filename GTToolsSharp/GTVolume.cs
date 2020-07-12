@@ -50,7 +50,7 @@ namespace GTToolsSharp
         public byte[] TOCData { get; private set; }
 
         public uint NameTreeOffset;
-        public uint ExtTreeOffset;
+        public uint FileExtensionTreeOffset;
         public uint NodeTreeOffset;
 
         public List<uint> EntryOffsets;
@@ -58,6 +58,7 @@ namespace GTToolsSharp
         public string TitleID;
 
         private FileStream _volStream;
+        public FileStream Stream => _volStream;
 
         public GTVolume(FileStream sourceStream, Endian endianness)
         {
@@ -117,27 +118,54 @@ namespace GTToolsSharp
         /// </summary>
         public void UnpackAllFiles()
         {
-            EntryBTree rootEntries = new EntryBTree(this.TOCData, (int)this.EntryOffsets[0]);
+            FileEntryBTree rootEntries = new FileEntryBTree(this.TOCData, (int)this.EntryOffsets[0]);
 
             var unpacker = new EntryUnpacker(this, OutputDirectory, "");
             rootEntries.Traverse(unpacker);
         }
 
-        public string GetEntryPath(EntryKey key, string prefix)
+        public bool UnpackNode(NodeKey nodeKey, string filePath)
+        {
+            uint volumeIndex = nodeKey.VolumeIndex;
+
+            ulong offset = DataOffset + (ulong)nodeKey.SectorIndex * 0x800;
+            uint uncompressedSize = nodeKey.UncompressedSize;
+
+            byte[] data = new byte[nodeKey.CompressedSize];
+            Stream.ReadBytesAt(data, offset, (int)nodeKey.CompressedSize);
+            DecryptData(data, nodeKey.NodeIndex);
+
+            if (!TryInflate(data, uncompressedSize, out byte[] deflatedData))
+                return false;
+
+            File.WriteAllBytes(filePath, deflatedData);
+
+            return true;
+        }
+
+        public static string lastEntryPath = "";
+        public string GetEntryPath(FileEntryKey key, string prefix)
         {
             string entryPath = prefix;
             StringBTree nameBTree = new StringBTree(TOCData, (int)NameTreeOffset);
+
 
             if (nameBTree.TryFindIndex(key.NameIndex, out StringKey nameKey))
                 entryPath += nameKey.Value;
 
             if (key.Flags.HasFlag(EntryKeyFlags.File))
             {
-                StringBTree extBTree = new StringBTree(TOCData, (int)this.ExtTreeOffset);
+                // If it's a file, find the extension aswell
+                StringBTree extBTree = new StringBTree(TOCData, (int)this.FileExtensionTreeOffset);
                 
+                if (extBTree.TryFindIndex(key.FileExtensionIndex, out StringKey extKey) && !string.IsNullOrEmpty(extKey.Value))
+                    entryPath += extKey.Value;
+
             }
             else if (key.Flags.HasFlag(EntryKeyFlags.Directory))
                 entryPath += '/';
+
+            lastEntryPath = entryPath;
 
             return entryPath;
         }
@@ -160,7 +188,7 @@ namespace GTToolsSharp
             return true;
         }
 
-        private bool DecryptData(Span<byte> data, uint seed)
+        public bool DecryptData(Span<byte> data, uint seed)
         {
             keyset.CryptBytes(data, data, seed);
             return true;
@@ -245,7 +273,7 @@ namespace GTToolsSharp
             }
 
             NameTreeOffset = sr.ReadUInt32();
-            ExtTreeOffset = sr.ReadUInt32();
+            FileExtensionTreeOffset = sr.ReadUInt32();
             NodeTreeOffset = sr.ReadUInt32();
             uint entryTreeCount = sr.ReadUInt32();
 
@@ -256,7 +284,7 @@ namespace GTToolsSharp
             return true;
         }
 
-        private unsafe bool TryInflate(Span<byte> data, ulong outSize, out byte[] deflatedData)
+        public unsafe bool TryInflate(Span<byte> data, ulong outSize, out byte[] deflatedData)
         {
             deflatedData = Array.Empty<byte>();
             if (outSize > uint.MaxValue)
@@ -281,7 +309,7 @@ namespace GTToolsSharp
             {
                 int decompLen = (int)outSize - headerSize;
 
-                using var ums = new UnmanagedMemoryStream(pBuffer, (long)outSize);
+                using var ums = new UnmanagedMemoryStream(pBuffer, sr.Length - headerSize);
                 using var ds = new DeflateStream(ums, CompressionMode.Decompress);
 
                 deflatedData = new byte[(int)outSize];
