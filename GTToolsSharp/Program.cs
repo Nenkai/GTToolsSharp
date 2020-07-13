@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using CommandLine;
 
+using System.Text.Json;
+
 namespace GTToolsSharp
 {
     class Program
@@ -51,10 +53,27 @@ namespace GTToolsSharp
                 }
             }
 
+            Keyset keyset;
+            if (!File.Exists("key.json"))
+            {
+                Console.WriteLine($"Error: Key file is missing, A default one was created with GT5 keys. (key.txt)");
+                CreateDefaultKeysFile();
+                Console.WriteLine($"Change them accordingly to the keys of the game you are trying to unpack.");
+                Console.WriteLine();
+                return;
+            }
+            else
+            {
+                keyset = ReadKeyset();
+                if (keyset is null)
+                    return;
+
+            }
+
             GTVolume vol = null;
             if (isFile)
             {
-                vol = GTVolume.Load(options.InputPath, false, Syroot.BinaryData.Core.Endian.Big);
+                vol = GTVolume.Load(keyset, options.InputPath, false, Syroot.BinaryData.Core.Endian.Big);
             }
             else if (isDir)
             {
@@ -65,7 +84,7 @@ namespace GTToolsSharp
                     return;
                 }
 
-                vol = GTVolume.Load(options.InputPath, true, Syroot.BinaryData.Core.Endian.Big);
+                vol = GTVolume.Load(keyset, options.InputPath, true, Syroot.BinaryData.Core.Endian.Big);
             }
 
             if (!string.IsNullOrEmpty(options.LogPath))
@@ -93,12 +112,29 @@ namespace GTToolsSharp
 
             sw?.WriteLine(message);
         }
+
+        public static void CreateDefaultKeysFile()
+        {
+            string json = JsonSerializer.Serialize(GTVolume.DefaultKeyset, new JsonSerializerOptions() { WriteIndented = true });
+            File.WriteAllText("key.json", json);
+        }
+
+        public static Keyset ReadKeyset()
+        {
+            try
+            {
+                return JsonSerializer.Deserialize<Keyset>(File.ReadAllText("key.json"));
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Error: Unable to parse key.json. {e.Message}");
+                return null;
+            }
+        }
+
         public static void HandleNotParsedArgs(IEnumerable<Error> errors)
         {
-            foreach (var error in errors)
-            {
-                Console.WriteLine(error.ToString());
-            }
+            ;
         }
     }
 }

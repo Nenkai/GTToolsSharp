@@ -11,7 +11,6 @@ using System.Buffers;
 using Syroot.BinaryData.Memory;
 using Syroot.BinaryData.Core;
 
-using ICSharpCode.SharpZipLib;
 
 using GTToolsSharp.BTree;
 
@@ -20,9 +19,6 @@ namespace GTToolsSharp
     public class GTVolume
     {
         public const int BASE_VOLUME_SEED = 1;
-
-        public static Keyset keyset = new Keyset("KALAHARI-37863889", new Key(0x2DEE26A7, 0x412D99F5, 0x883C94E9, 0x0F1A7069));
-
         // 160 Bytes
         private const int HeaderSize = 0xA0;
         private readonly static byte[] MAGIC = { 0x5B, 0x74, 0x51, 0x62 };
@@ -31,6 +27,8 @@ namespace GTToolsSharp
         private const int SEGMENT_SIZE = 2048;
         private const uint ZLIB_MAGIC = 0xFFF7EEC5;
 
+        public Keyset Keyset { get; private set; }
+        public static readonly Keyset DefaultKeyset = new Keyset("KALAHARI-37863889", new Key(0x2DEE26A7, 0x412D99F5, 0x883C94E9, 0x0F1A7069));
         public readonly Endian Endian;
 
         public bool IsPatchVolume;
@@ -57,12 +55,11 @@ namespace GTToolsSharp
 
         public string TitleID;
 
-        private FileStream _volStream;
-        public FileStream Stream => _volStream;
+        public FileStream Stream { get; }
 
         public GTVolume(FileStream sourceStream, Endian endianness)
         {
-            _volStream = sourceStream;
+            Stream = sourceStream;
 
             Endian = endianness;
         }
@@ -82,7 +79,7 @@ namespace GTToolsSharp
         /// <param name="isPatchVolume"></param>
         /// <param name="endianness"></param>
         /// <returns></returns>
-        public static GTVolume Load(string path, bool isPatchVolume, Endian endianness)
+        public static GTVolume Load(Keyset keyset, string path, bool isPatchVolume, Endian endianness)
         {
             var fs = new FileStream(!isPatchVolume ? path : Path.Combine(path, "K", "4D"), FileMode.Open);
 
@@ -91,6 +88,7 @@ namespace GTToolsSharp
                 vol = new GTVolume(path, Endian.Big);
             else
                 vol = new GTVolume(fs, endianness);
+            vol.SetKeyset(keyset);
 
             if (fs.Length < HeaderSize)
                 throw new IndexOutOfRangeException($"File size is smaller than expected header size ({HeaderSize}).");
@@ -109,6 +107,9 @@ namespace GTToolsSharp
 
             return vol;
         }
+
+        private void SetKeyset(Keyset keyset)
+            => Keyset = keyset;
 
         public void SetOutputDirectory(string dirPath)
             => OutputDirectory = dirPath;
@@ -212,13 +213,13 @@ namespace GTToolsSharp
             Span<uint> blocks = MemoryMarshal.Cast<byte, uint>(headerData);
             int end = headerData.Length / sizeof(uint); // 160 / 4
 
-            keyset.CryptBlocks(blocks, blocks);
+            Keyset.CryptBlocks(blocks, blocks);
             return true;
         }
 
         public bool DecryptData(Span<byte> data, uint seed)
         {
-            keyset.CryptBytes(data, data, seed);
+            Keyset.CryptBytes(data, data, seed);
             return true;
         }
 
@@ -281,9 +282,9 @@ namespace GTToolsSharp
             }
             else
             {
-                _volStream.Seek(SEGMENT_SIZE, SeekOrigin.Begin);
+                Stream.Seek(SEGMENT_SIZE, SeekOrigin.Begin);
 
-                var br = new BinaryReader(_volStream);
+                var br = new BinaryReader(Stream);
                 byte[] data = br.ReadBytes((int)DataSize);
 
                 Program.Log($"[-] Using seed {Seed} to decrypt TOC at offset {SEGMENT_SIZE}");
