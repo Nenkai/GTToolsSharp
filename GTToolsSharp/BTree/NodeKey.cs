@@ -21,5 +21,8 @@ namespace GTToolsSharp.BTree
         {
             NodeIndex = nodeIndex;
         }
+
+        public override string ToString()
+            => $"Flags: {Flags} NodeIndex: {NodeIndex} ({PDIPFSPathResolver.GetPathFromSeed(NodeIndex)}), VolumeIndex: {VolumeIndex}, SectorIndex: {SectorIndex}, CompressedSize: {CompressedSize}, UncompSize: {UncompressedSize}";
     }
 }

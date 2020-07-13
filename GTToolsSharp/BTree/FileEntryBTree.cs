@@ -22,6 +22,7 @@ namespace GTToolsSharp.BTree
             SpanReader sr = new SpanReader(_buffer.Span, Endian.Big);
 
             uint offsetAndCount = sr.ReadUInt32();
+
             uint nodeCount = sr.ReadUInt16();
 
             for (int i = 0; i < nodeCount; i++)

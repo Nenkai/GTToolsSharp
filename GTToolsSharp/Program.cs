@@ -7,6 +7,9 @@ namespace GTToolsSharp
 {
     class Program
     {
+        private static StreamWriter sw;
+        public static bool PrintToConsole = true;
+
         public class Options
         {
             [Option('i', "input", Required = true, HelpText = "Input file or folder. Usually GT.VOL, or if game update, a PDIPFS folder.")]
@@ -17,11 +20,17 @@ namespace GTToolsSharp
 
             [Option('u', "unpack", HelpText = "Extract all the files in the volume file or folder.")]
             public bool Unpack { get; set; }
+
+            [Option('l', "log", HelpText = "Log file path. Default is log.txt.", Default = "log.txt")]
+            public string LogPath { get; set; }
+
+            [Option("noprint", HelpText = "Whether to disable printing messages if unpacking. Disabling this can speed up the unpacking process")]
+            public bool NoPrint { get; set; }
         }
 
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
+            Console.WriteLine("Gran Turismo 5/6 Volume Tools - (c) Nenkai#9075, ported from flatz");
 
             Parser.Default.ParseArguments<Options>(args)
                 .WithParsed(ParseArgs)
@@ -59,6 +68,11 @@ namespace GTToolsSharp
                 vol = GTVolume.Load(options.InputPath, true, Syroot.BinaryData.Core.Endian.Big);
             }
 
+            if (!string.IsNullOrEmpty(options.LogPath))
+                sw = new StreamWriter(options.LogPath);
+
+            PrintToConsole = !options.NoPrint;
+
             if (vol is null)
             {
                 Console.WriteLine("Could not process volume file.");
@@ -72,6 +86,13 @@ namespace GTToolsSharp
             }
         }
 
+        public static void Log(string message)
+        {
+            if (PrintToConsole)
+                Console.WriteLine(message);
+
+            sw?.WriteLine(message);
+        }
         public static void HandleNotParsedArgs(IEnumerable<Error> errors)
         {
             foreach (var error in errors)

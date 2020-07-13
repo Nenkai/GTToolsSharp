@@ -29,15 +29,18 @@ namespace GTToolsSharp
             string entryPath = _volume.GetEntryPath(entryKey, ParentDirectory);
             if (string.IsNullOrEmpty(entryPath))
             {
-                Console.WriteLine($"Could not determine entry path for Entry key at name Index {entryKey.NameIndex}");
+                Program.Log($"Could not determine entry path for Entry key at name Index {entryKey.NameIndex}");
                 return;
             }
 
             string fullEntryPath = Path.Combine(OutDir, entryPath);
             if (entryKey.Flags.HasFlag(EntryKeyFlags.Directory))
             {
-                Console.WriteLine($"DIR: {entryPath}");
-                Directory.CreateDirectory(fullEntryPath);
+                if (!_volume.IsPatchVolume)
+                {
+                    Program.Log($"DIR: {entryPath}");
+                    Directory.CreateDirectory(fullEntryPath);
+                }
 
                 var childEntryBTree = new FileEntryBTree(_volume.TOCData, (int)_volume.EntryOffsets[(int)entryKey.LinkIndex]);
                 var childUnpacker = new EntryUnpacker(_volume, OutDir, entryPath);
@@ -45,19 +48,21 @@ namespace GTToolsSharp
             }
             else if (entryKey.Flags.HasFlag(EntryKeyFlags.File))
             {
-                Console.WriteLine($"FILE: {entryPath}");
+                if (!_volume.IsPatchVolume)
+                    Program.Log($"FILE: {entryPath}");
 
                 var nodeBTree = new NodeBTree(_volume.TOCData, (int)_volume.NodeTreeOffset);
                 var nodeKey = new NodeKey(entryKey.LinkIndex);
 
                 uint nodeIndex = nodeBTree.SearchIndexByKey(nodeKey);
+
                 if (nodeIndex != NodeKey.InvalidIndex)
                 {
                    _volume.UnpackNode(nodeKey, fullEntryPath);
                 }
-
-
             }
+
+
         }
 
     }

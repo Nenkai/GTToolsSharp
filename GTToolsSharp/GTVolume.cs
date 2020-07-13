@@ -41,7 +41,7 @@ namespace GTToolsSharp
         public uint Seed { get; private set; }
         public uint DataSize { get; private set; }
         public ulong Unk { get; private set; }
-        public ulong TotalFileSize { get; private set; }
+        public ulong TotalVolumeFileSize { get; private set; }
         public ulong DataOffset { get; private set; }
 
         /// <summary>
@@ -118,12 +118,13 @@ namespace GTToolsSharp
         /// </summary>
         public void UnpackAllFiles()
         {
-            FileEntryBTree rootEntries = new FileEntryBTree(this.TOCData, (int)this.EntryOffsets[0]);
+            FileEntryBTree rootEntries = new FileEntryBTree(this.TOCData, (int)EntryOffsets[0]);
 
             var unpacker = new EntryUnpacker(this, OutputDirectory, "");
             rootEntries.Traverse(unpacker);
         }
 
+        private const string DirSeparator = "\\";
         public bool UnpackNode(NodeKey nodeKey, string filePath)
         {
             uint volumeIndex = nodeKey.VolumeIndex;
@@ -131,14 +132,42 @@ namespace GTToolsSharp
             ulong offset = DataOffset + (ulong)nodeKey.SectorIndex * 0x800;
             uint uncompressedSize = nodeKey.UncompressedSize;
 
-            byte[] data = new byte[nodeKey.CompressedSize];
-            Stream.ReadBytesAt(data, offset, (int)nodeKey.CompressedSize);
-            DecryptData(data, nodeKey.NodeIndex);
+            byte[] data;
 
-            if (!TryInflate(data, uncompressedSize, out byte[] deflatedData))
-                return false;
+            if (!IsPatchVolume)
+            {
+                data = new byte[nodeKey.CompressedSize];
+                Stream.ReadBytesAt(data, offset, (int)nodeKey.CompressedSize);
+                DecryptData(data, nodeKey.NodeIndex);
 
-            File.WriteAllBytes(filePath, deflatedData);
+                if (!TryInflate(data, uncompressedSize, out byte[] deflatedData))
+                    return false;
+
+                File.WriteAllBytes(filePath, deflatedData);
+            }
+            else
+            {
+                /* I'm really not sure if there's a better way to do this.
+                 * Volume files, at least nodes don't seem to even store any special flag whether
+                 * it is located within an actual volume file or a patch volume. The only thing that is different is the sector index.. Sometimes node index when it's updated
+                 * It's slow, but somewhat works I guess..
+                 * */
+                string patchFilePath = PDIPFSPathResolver.GetPathFromSeed(nodeKey.NodeIndex);
+                string localPath = this.PatchVolumeFolder+"/"+patchFilePath;
+                if (!File.Exists(localPath))
+                    return false;
+
+                data = File.ReadAllBytes(localPath);
+                DecryptData(data, nodeKey.NodeIndex);
+
+                if (!TryInflate(data, uncompressedSize, out byte[] deflatedData))
+                    return false;
+
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                File.WriteAllBytes(filePath, deflatedData);
+
+                Program.Log($"Unpacked: {patchFilePath} -> {filePath}");
+            }
 
             return true;
         }
@@ -148,7 +177,6 @@ namespace GTToolsSharp
         {
             string entryPath = prefix;
             StringBTree nameBTree = new StringBTree(TOCData, (int)NameTreeOffset);
-
 
             if (nameBTree.TryFindIndex(key.NameIndex, out StringKey nameKey))
                 entryPath += nameKey.Value;
@@ -210,11 +238,18 @@ namespace GTToolsSharp
             }
 
             Seed = sr.ReadUInt32();
+            Program.Log($"[>] Volume Seed: {Seed}");
+
             DataSize = sr.ReadUInt32();
             uint decompressedTOCSize = sr.ReadUInt32();
+            Program.Log($"[>] TOC Size: {DataSize} bytes ({decompressedTOCSize} decompressed)");
             Unk = sr.ReadUInt64();
-            TotalFileSize = sr.ReadUInt64();
+
+            TotalVolumeFileSize = sr.ReadUInt64();
+            Program.Log($"[>] Total Volume Size: {TotalVolumeFileSize}");
+
             TitleID = sr.ReadString0();
+            Program.Log($"[>] Title ID: {TitleID}");
 
             // Go to the location of the data start
 
@@ -223,10 +258,10 @@ namespace GTToolsSharp
                 string path = PDIPFSPathResolver.GetPathFromSeed(Seed);
 
                 string localPath = Path.Combine(this.PatchVolumeFolder, path);
-                Console.WriteLine($"Volume Patch path TOC: {localPath}");
+                Program.Log($"[!] Volume Patch Path Table of contents located at: {localPath}");
                 if (!File.Exists(localPath))
                 {
-                    Console.WriteLine($"Error: Unable to locate PDIPFS main TOC file on local filesystem. ({path})");
+                    Program.Log($"Error: Unable to locate PDIPFS main TOC file on local filesystem. ({path})");
                     return false;
                 }
 
@@ -235,8 +270,10 @@ namespace GTToolsSharp
                 fs.Read(data);
 
                 // Accessing a new file, we need to decrypt the header again
+                Program.Log($"[-] Using seed {Seed} to decrypt TOC file at {path}");
                 DecryptData(data, Seed);
 
+                Program.Log($"[-] Decompressing Table of contents file..");
                 if (!TryInflate(data, decompressedTOCSize, out byte[] deflatedData))
                     return false;
 
@@ -249,9 +286,12 @@ namespace GTToolsSharp
                 var br = new BinaryReader(_volStream);
                 byte[] data = br.ReadBytes((int)DataSize);
 
+                Program.Log($"[-] Using seed {Seed} to decrypt TOC at offset {SEGMENT_SIZE}");
+
                 // Decrypt it with the seed that the main header gave us
                 DecryptData(data, Seed);
 
+                Program.Log($"[-] Decompressing Table of contents within volume.. (offset: {SEGMENT_SIZE})");
                 if (!TryInflate(data, decompressedTOCSize, out byte[] deflatedData))
                     return false;
 
@@ -268,15 +308,23 @@ namespace GTToolsSharp
             byte[] magic = sr.ReadBytes(4);
             if (!magic.AsSpan().SequenceEqual(SEGMENT_MAGIC.AsSpan()))
             {
-                Console.WriteLine($"Volume file segment magic did not match, found ({string.Join('-', magic.Select(e => e.ToString("X2")))})");
+                Program.Log($"Volume file segment magic did not match, found ({string.Join('-', magic.Select(e => e.ToString("X2")))})");
                 return false;
             }
 
-            NameTreeOffset = sr.ReadUInt32();
-            FileExtensionTreeOffset = sr.ReadUInt32();
-            NodeTreeOffset = sr.ReadUInt32();
-            uint entryTreeCount = sr.ReadUInt32();
+            Program.Log("[-] Reading table of contents.");
 
+            NameTreeOffset = sr.ReadUInt32();
+            Program.Log($"[>] File names tree offset: {NameTreeOffset}");
+
+            FileExtensionTreeOffset = sr.ReadUInt32();
+            Program.Log($"[>] File extensions tree offset: {FileExtensionTreeOffset}");
+
+            NodeTreeOffset = sr.ReadUInt32();
+            Program.Log($"[>] Node tree offset: {NodeTreeOffset}");
+
+            uint entryTreeCount = sr.ReadUInt32();
+            Program.Log($"[>] Entry count: {entryTreeCount}.");
             EntryOffsets = new List<uint>((int)entryTreeCount);
             for (int i = 0; i < entryTreeCount; i++)
                 EntryOffsets.Add(sr.ReadUInt32());
@@ -298,7 +346,7 @@ namespace GTToolsSharp
             if ((long)zlibMagic != ZLIB_MAGIC)
                 return false;
 
-            if (!IsPatchVolume && (uint)outSize + sizeComplement != 0)
+            if ((uint)outSize + sizeComplement != 0)
                 return false;
 
             const int headerSize = 8;

@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 using Syroot.BinaryData.Memory;
+using Syroot.BinaryData.Core;
 
 using static GTToolsSharp.Utils;
 
@@ -21,8 +22,9 @@ namespace GTToolsSharp.BTree
 
         public bool TryFindIndex(uint index, out TKey key)
         {
-			SpanReader sr = new SpanReader(_buffer.Span, Syroot.BinaryData.Core.Endian.Big);
+			SpanReader sr = new SpanReader(_buffer.Span, Endian.Big);
 			uint offsetAndCount = sr.ReadUInt32();
+
 			uint nodeCount = sr.ReadUInt16();
 
 			for (uint i = 0u; i < nodeCount; ++i)
@@ -35,11 +37,11 @@ namespace GTToolsSharp.BTree
 
 				index -= high;
 
-                sr.Position += (int)nextOffset;// = advancePointer(p, nextOffset);
+                sr.Position += (int)nextOffset;
 			}
 
             uint offset = GetBitsAt(ref sr, index + 1);
-            sr.Position += (int)offset; // p = advancePointer(p, offset);
+            sr.Position += (int)offset;
 
             key = ReadKeyFromStream(default, ref sr);
             return key != null;

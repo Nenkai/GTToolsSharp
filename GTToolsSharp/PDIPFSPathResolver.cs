@@ -64,39 +64,43 @@ namespace GTToolsSharp
 
 		private static string GetSubPathName(uint seed, int charShiftCount)
 		{
-			string pathName = "/";
+			string pathName = string.Empty;
 
 			// Max 16 chars
-			char[] chars = new char[charShiftCount];
+			char[] chars = new char[charShiftCount + 1];
 
 			if (charShiftCount != 0)
 			{
-				for (int i = charShiftCount - 1; i > -1; i--)
+				int index = 1;
+				int charCnt = charShiftCount;
+				do
 				{
 					char c = Charset[(int)(seed % 36)];
 					seed /= 36;
-					chars[i] = c;
-				}
-			}
+					chars[index++] = c;
+					charCnt--;
+				} while (charCnt != 0);
 
-			if ((charShiftCount & 1) != 0) // On Even, new folder
-			{
-				pathName += '/';
-				pathName += chars[charShiftCount];
-			}
-			else
-			{
-				int charCountUntilFolder = 2;
-				for (int i = 0; i < charShiftCount; i++)
+				if ((charShiftCount & 1) == 0)
 				{
-					if (charCountUntilFolder == 0)
+					for (charCnt = charShiftCount; charCnt != 0; charCnt -= 2)
 					{
-						charCountUntilFolder = 2;
 						pathName += '/';
+						pathName += chars[charCnt];
+						pathName += chars[charCnt - 1];
 					}
-
-					pathName += chars[i];
-					charCountUntilFolder--;
+				}
+				else
+				{
+					charCnt = charShiftCount - 1;
+					for (pathName += chars[charCnt + 1], charShiftCount = charCnt; charCnt != 0;)
+					{
+						pathName += '/';
+						charCnt = charShiftCount - 2;
+						pathName += chars[charShiftCount];
+						charShiftCount = charCnt;
+						pathName += chars[charCnt + 1];
+					}
 				}
 			}
 
