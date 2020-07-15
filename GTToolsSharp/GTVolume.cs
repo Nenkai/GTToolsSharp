@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using System.IO;
 using System.IO.Compression;
+using System.Buffers;
 
 using Syroot.BinaryData.Memory;
 using Syroot.BinaryData.Core;
@@ -238,14 +239,15 @@ namespace GTToolsSharp
                 Stream.ReadBytesAt(data, offset, (int)nodeKey.CompressedSize);
                 CryptData(data, nodeKey.FileIndex);
 
-                if (!TryInflate(data, uncompressedSize, out byte[] deflatedData))
+                byte[] finalData = null;
+                if ((nodeKey.Flags & 0xF) != 0 && !TryInflate(data, uncompressedSize, out finalData))
                 {
                     Program.Log($"[X] Failed to decompress file ({filePath})", forceConsolePrint: true);
                     return false;
                 }
                     
 
-                File.WriteAllBytes(filePath, deflatedData);
+                File.WriteAllBytes(filePath, finalData ?? data);
             }
             else
             {
@@ -263,8 +265,6 @@ namespace GTToolsSharp
                     return false;
                 }
 
-                Program.Log(nodeKey.ToString());
-
                 if (!File.Exists(localPath))
                     return false;
 
@@ -273,14 +273,16 @@ namespace GTToolsSharp
                 data = File.ReadAllBytes(localPath);
                 CryptData(data, nodeKey.FileIndex);
 
-                if (!TryInflate(data, uncompressedSize, out byte[] deflatedData))
+                byte[] finalData = null;
+
+                if ((nodeKey.Flags & 0xF) != 0 && !TryInflate(data, uncompressedSize, out finalData))
                 {
-                    Program.Log($"Failed to decompress file {filePath} ({patchFilePath})");
+                    Program.Log($"[X] Failed to decompress file {filePath} ({patchFilePath})");
                     return false;
                 }
 
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                File.WriteAllBytes(filePath, deflatedData);
+                File.WriteAllBytes(filePath, finalData ?? data);
             }
 
             return true;
@@ -467,14 +469,11 @@ namespace GTToolsSharp
             if (sr.Length <= headerSize) // Header size, if it's under, data is missing
                 return false;
 
+            deflatedData = new byte[(int)outSize];
             fixed (byte* pBuffer = &sr.Span.Slice(headerSize)[0])
             {
-                int decompLen = (int)outSize - headerSize;
-
-                using var ums = new UnmanagedMemoryStream(pBuffer, decompLen);
+                using var ums = new UnmanagedMemoryStream(pBuffer, sr.Span.Length - headerSize);
                 using var ds = new DeflateStream(ums, CompressionMode.Decompress);
-
-                deflatedData = new byte[(int)outSize];
                 ds.Read(deflatedData, 0, (int)outSize);
             }
 

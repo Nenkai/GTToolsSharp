@@ -139,6 +139,12 @@ namespace GTToolsSharp
             }
             else if (!string.IsNullOrEmpty(options.PackDir))
             {
+                if (!vol.IsPatchVolume)
+                {
+                    Program.Log("[X] Cannot repack files in single volume files (GT.VOL).");
+                    return;
+                }
+
                 Program.Log("[-] Started packing process.");
 
                 vol.RegisterEntriesToRepack(options.PackDir);

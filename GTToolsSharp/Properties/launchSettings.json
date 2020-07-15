@@ -1,8 +1,7 @@
 {
   "profiles": {
     "GTToolsSharp": {
-      "commandName": "Project",
-      "commandLineArgs": " -i PDIPFS_IN -p RepackInput --packoutputdir RepackOutput"
+      "commandName": "Project"
     }
   }
 }

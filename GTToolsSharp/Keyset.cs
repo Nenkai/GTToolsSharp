@@ -135,10 +135,7 @@ namespace GTToolsSharp
         }
 
         private static uint CryptBlock(uint x, uint y)
-            => x ^ Crypto.ShuffleBits(y); // 832209292, 1534349666 ret 59896
-
-        private static uint InvCryptBlock(uint x, uint y)
-            => InvertedXorShift(x, Crypto.ShuffleBits(y));
+            => x ^ Crypto.ShuffleBits(y);
 
         private static uint InvertedXorShift(uint x, uint y)
             => ~XorShift(x, y);
