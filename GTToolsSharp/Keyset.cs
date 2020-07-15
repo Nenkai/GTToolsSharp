@@ -43,7 +43,8 @@ namespace GTToolsSharp
         }
 
         /// <summary>
-        /// Decrypts a buffer using the provided seed which turned into a key during decryption.
+        /// Crypts a buffer using the provided seed which turned into a key during decryption.
+        /// Can be used for both encrypting and decrypting.
         /// </summary>
         /// <param name="data"></param>
         /// <param name="dest"></param>
@@ -68,7 +69,33 @@ namespace GTToolsSharp
                 => (val << places) | (val >> (32 - places)); // 32 = bit count, size * byte bit size;
         }
 
-        public void CryptBlocks(Span<uint> data, Span<uint> dest)
+        /// <summary>
+        /// Encrypts a buffer using the provided seed which turned into a key during decryption.
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="dest"></param>
+        /// <param name="seed"></param>
+        public void EncryptBytes(Span<byte> data, Span<byte> dest, uint seed)
+        {
+            Key key = ComputeKey(seed);
+
+            for (int i = 0; i < data.Length; i++)
+            {
+                byte d = (byte)((((key.Data[0] ^ key.Data[1]) ^ data[i]) ^ (key.Data[2] ^ key.Data[3])) & (byte)0xFF);
+
+                key.Data[0] = ((RotateLeft(key.Data[0], 9) & 0x1FE00u) | (key.Data[0] >> 8));
+                key.Data[1] = ((RotateLeft(key.Data[1], 11) & 0x7F800u) | (key.Data[1] >> 8));
+                key.Data[2] = ((RotateLeft(key.Data[2], 15) & 0x7F8000u) | (key.Data[2] >> 8));
+                key.Data[3] = ((RotateLeft(key.Data[3], 21) & 0x1FE00000u) | (key.Data[3] >> 8));
+
+                dest[i] = d;
+            }
+
+            uint RotateLeft(uint val, int places)
+                => (val << places) | (val >> (32 - places)); // 32 = bit count, size * byte bit size;
+        }
+
+        public void DecryptBlocks(Span<uint> data, Span<uint> dest)
         {
             uint prevBlock = data[0].ReverseEndian();
             dest[0] = prevBlock.ReverseEndian();
@@ -89,8 +116,29 @@ namespace GTToolsSharp
             }
         }
 
+        public void EncryptBlocks(Span<uint> data, Span<uint> dest)
+        {
+            uint prevBlock = data[0].ReverseEndian();
+            dest[0] = prevBlock.ReverseEndian();
+
+            if (data.IsEmpty)
+                return;
+
+            for (int i = 1; i < data.Length; i++)
+            {
+                uint curBlock = data[i].ReverseEndian();
+                uint outBlock = CryptBlock(curBlock, prevBlock);
+                dest[i] = outBlock.ReverseEndian();
+
+                prevBlock = outBlock;
+            }
+        }
+
         private static uint CryptBlock(uint x, uint y)
-            => x ^ Crypto.ShuffleBits(y);
+            => x ^ Crypto.ShuffleBits(y); // 832209292, 1534349666 ret 59896
+
+        private static uint InvCryptBlock(uint x, uint y)
+            => InvertedXorShift(x, Crypto.ShuffleBits(y));
 
         private static uint InvertedXorShift(uint x, uint y)
             => ~XorShift(x, y);

@@ -11,19 +11,19 @@ using static GTToolsSharp.Utils;
 
 namespace GTToolsSharp.BTree
 {
-    class NodeBTree : BTree<NodeBTree, NodeKey>
+    class FileInfoBTree : BTree<FileInfoBTree, FileInfoKey>
     {
-        public NodeBTree(byte[] buffer, int offset)
+        public FileInfoBTree(byte[] buffer, int offset)
             : base(buffer, offset)
         {
 
         }
 
-        public override NodeKey ReadKeyFromStream(NodeKey key, ref SpanReader sr)
+        public override FileInfoKey ReadKeyFromStream(FileInfoKey key, ref SpanReader sr)
         {
             key.Flags = sr.ReadByte();
 
-            key.NodeIndex = (uint)DecodeBitsAndAdvance(ref sr);
+            key.FileIndex = (uint)DecodeBitsAndAdvance(ref sr);
             key.CompressedSize = (uint)DecodeBitsAndAdvance(ref sr);
             key.UncompressedSize = (key.Flags & 0xF) != 0 ? (uint)DecodeBitsAndAdvance(ref sr) : key.CompressedSize;
 
@@ -33,10 +33,17 @@ namespace GTToolsSharp.BTree
             return key;
         }
 
-        
-        public uint SearchIndexByKey(NodeKey key)
+        public void WriteKeyToStream(FileInfoKey key, ref SpanWriter sr)
         {
-            SpanReader sr = new SpanReader(this._buffer.Span, Endian.Big);
+             sr.WriteByte((byte)key.Flags);
+        }
+
+
+        public uint SearchIndexByKey(FileInfoKey key)
+        {
+            SpanReader sr = new SpanReader(this._buffer, Endian.Big);
+            sr.Position += _offsetStart;
+
             uint count = (uint)ReadByteAtOffset(ref sr, 0);
 
             sr.Endian = Endian.Little;
@@ -70,36 +77,38 @@ namespace GTToolsSharp.BTree
             {
                 uint index = (res.maxIndex - res.upperBound + res.lowerBound);
                 data.Position = 0;
+
+                key.KeyOffset = (uint)(_buffer.Length - data.Length);
                 ReadKeyFromStream(key, ref data);
                 return index;
             }
             else
-                return NodeKey.InvalidIndex;
+                return FileInfoKey.InvalidIndex;
         }
 
 
-        public override int LessThanKeyCompareOp(NodeKey key, ref SpanReader sr) 
+        public override int LessThanKeyCompareOp(FileInfoKey key, ref SpanReader sr) 
 	    {
             uint nodeIndex = (uint)DecodeBitsAndAdvance(ref sr);
-            if (key.NodeIndex < nodeIndex)
+            if (key.FileIndex < nodeIndex)
                 return -1;
             else 
                 return 1;
         }
 
-        public override int EqualToKeyCompareOp(NodeKey key, ref SpanReader sr)
+        public override int EqualToKeyCompareOp(FileInfoKey key, ref SpanReader sr)
         {
             sr.ReadByte(); // Skip flag
             uint nodeIndex = (uint)DecodeBitsAndAdvance(ref sr);
-            if (key.NodeIndex < nodeIndex)
+            if (key.FileIndex < nodeIndex)
                 return -1;
-            else if (key.NodeIndex > nodeIndex)
+            else if (key.FileIndex > nodeIndex)
                 return 1;
             else
                 return 0;
         }
 
-        public override NodeKey SearchByKey(ref SpanReader sr)
+        public override FileInfoKey SearchByKey(ref SpanReader sr)
         {
             throw new NotImplementedException();
         }

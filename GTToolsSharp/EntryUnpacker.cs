@@ -33,36 +33,34 @@ namespace GTToolsSharp
                 return;
             }
 
-            string fullEntryPath = Path.Combine(OutDir, entryPath);
+            string fullEntryPath = Path.Combine(OutDir ?? string.Empty, entryPath);
             if (entryKey.Flags.HasFlag(EntryKeyFlags.Directory))
             {
-                if (!_volume.IsPatchVolume)
-                {
+                if (!_volume.IsPatchVolume || _volume.NoUnpack)
                     Program.Log($"DIR: {entryPath}");
-                    Directory.CreateDirectory(fullEntryPath);
-                }
 
-                var childEntryBTree = new FileEntryBTree(_volume.TOCData, (int)_volume.EntryOffsets[(int)entryKey.LinkIndex]);
+                if (!_volume.IsPatchVolume && _volume.NoUnpack)
+                    Directory.CreateDirectory(fullEntryPath);
+
+                var childEntryBTree = new FileEntryBTree(_volume.TOCData, (int)_volume.RootAndFolderOffsets[(int)entryKey.DirEntryIndex]);
                 var childUnpacker = new EntryUnpacker(_volume, OutDir, entryPath);
-                childEntryBTree.Traverse(childUnpacker);
+                childEntryBTree.TraverseAndUnpack(childUnpacker);
             }
             else if (entryKey.Flags.HasFlag(EntryKeyFlags.File))
             {
-                if (!_volume.IsPatchVolume)
+                if (!_volume.IsPatchVolume || _volume.NoUnpack)
                     Program.Log($"FILE: {entryPath}");
 
-                var nodeBTree = new NodeBTree(_volume.TOCData, (int)_volume.NodeTreeOffset);
-                var nodeKey = new NodeKey(entryKey.LinkIndex);
+                var nodeBTree = new FileInfoBTree(_volume.TOCData, (int)_volume.NodeTreeOffset);
+                var nodeKey = new FileInfoKey(entryKey.DirEntryIndex);
 
                 uint nodeIndex = nodeBTree.SearchIndexByKey(nodeKey);
 
-                if (nodeIndex != NodeKey.InvalidIndex)
+                if (nodeIndex != FileInfoKey.InvalidIndex)
                 {
-                   _volume.UnpackNode(nodeKey, fullEntryPath);
+                     _volume.UnpackNode(nodeKey, fullEntryPath);
                 }
             }
-
-
         }
 
     }

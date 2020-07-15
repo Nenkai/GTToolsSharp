@@ -6,10 +6,12 @@ using System.Threading.Tasks;
 
 namespace GTToolsSharp.BTree
 {
-    public class NodeKey
+    public class FileInfoKey
     {
+        public uint KeyOffset;
+
         public uint Flags { get; set; }
-        public uint NodeIndex { get; set; } = InvalidIndex;
+        public uint FileIndex { get; set; } = InvalidIndex;
         public uint CompressedSize { get; set; }
         public uint UncompressedSize { get; set; }
         public uint VolumeIndex { get; set; } = InvalidIndex;
@@ -17,12 +19,12 @@ namespace GTToolsSharp.BTree
 
         public const uint InvalidIndex = uint.MaxValue;
 
-        public NodeKey(uint nodeIndex)
+        public FileInfoKey(uint nodeIndex)
         {
-            NodeIndex = nodeIndex;
+            FileIndex = nodeIndex;
         }
 
         public override string ToString()
-            => $"Flags: {Flags} NodeIndex: {NodeIndex} ({PDIPFSPathResolver.GetPathFromSeed(NodeIndex)}), VolumeIndex: {VolumeIndex}, SectorIndex: {SectorIndex}, CompressedSize: {CompressedSize}, UncompSize: {UncompressedSize}";
+            => $"Flags: {Flags} NodeIndex: {FileIndex} ({PDIPFSPathResolver.GetPathFromSeed(FileIndex)}), VolumeIndex: {VolumeIndex}, SectorIndex: {SectorIndex}, CompressedSize: {CompressedSize}, UncompSize: {UncompressedSize}";
     }
 }

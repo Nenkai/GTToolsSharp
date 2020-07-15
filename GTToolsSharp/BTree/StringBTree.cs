@@ -28,7 +28,7 @@ namespace GTToolsSharp.BTree
 
         public override StringKey ReadKeyFromStream(StringKey key, ref SpanReader sr)
         {
-            uint len = (uint)DecodeBitsAndAdvance(ref sr);
+            uint len = (uint)Utils.DecodeBitsAndAdvance(ref sr);
             return new StringKey(sr.ReadStringRaw((int)len));
         }
 

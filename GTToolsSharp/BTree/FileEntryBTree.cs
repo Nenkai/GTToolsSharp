@@ -17,9 +17,10 @@ namespace GTToolsSharp.BTree
             
         }
 
-        public void Traverse(EntryUnpacker unpacker)
+        public void TraverseAndUnpack(EntryUnpacker unpacker)
         {
-            SpanReader sr = new SpanReader(_buffer.Span, Endian.Big);
+            SpanReader sr = new SpanReader(_buffer, Endian.Big);
+            sr.Position += _offsetStart;
 
             uint offsetAndCount = sr.ReadUInt32();
 
@@ -36,8 +37,40 @@ namespace GTToolsSharp.BTree
                     var data = sr.GetReaderAtOffset((int)offset);
 
                     FileEntryKey key = new FileEntryKey();
+                    key.OffsetFromTree = data.Position;
+
                     key = ReadKeyFromStream(key, ref data);
                     unpacker.UnpackFromKey(key);
+                }
+
+                sr.Position += (int)nextOffset;
+            }
+        }
+
+        public void TraverseAndPack(EntryPacker packer)
+        {
+            SpanReader sr = new SpanReader(_buffer, Endian.Big);
+            sr.Position += _offsetStart;
+
+            uint offsetAndCount = sr.ReadUInt32();
+
+            uint nodeCount = sr.ReadUInt16();
+
+            for (int i = 0; i < nodeCount; i++)
+            {
+                uint high = GetBitsAt(ref sr, 0) & 0x7FFu;
+                uint nextOffset = GetBitsAt(ref sr, high + 1);
+
+                for (uint j = 0; j < high; ++j) // high is pretty much entry count
+                {
+                    uint offset = GetBitsAt(ref sr, j + 1);
+                    var data = sr.GetReaderAtOffset((int)offset);
+
+                    FileEntryKey key = new FileEntryKey();
+                    key.OffsetFromTree = data.Position;
+
+                    key = ReadKeyFromStream(key, ref data);
+                    packer.PackFromKey(key);
                 }
 
                 sr.Position += (int)nextOffset;
@@ -47,9 +80,9 @@ namespace GTToolsSharp.BTree
         public override FileEntryKey ReadKeyFromStream(FileEntryKey key, ref SpanReader sr)
         {
             key.Flags = (EntryKeyFlags)sr.ReadByte();
-            key.NameIndex = (uint)DecodeBitsAndAdvance(ref sr);
-            key.FileExtensionIndex = key.Flags.HasFlag(EntryKeyFlags.File) ? (uint)DecodeBitsAndAdvance(ref sr) : 0;
-            key.LinkIndex = (uint)DecodeBitsAndAdvance(ref sr);
+            key.NameIndex = (uint)Utils.DecodeBitsAndAdvance(ref sr);
+            key.FileExtensionIndex = key.Flags.HasFlag(EntryKeyFlags.File) ? (uint)Utils.DecodeBitsAndAdvance(ref sr) : 0;
+            key.DirEntryIndex = (uint)Utils.DecodeBitsAndAdvance(ref sr);
 
             return key;
         }

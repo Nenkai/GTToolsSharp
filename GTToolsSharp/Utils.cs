@@ -35,6 +35,19 @@ namespace GTToolsSharp
                 return (uint)sr.ReadByte() << 16 | (uint)sr.ReadByte() << 8 | (uint)sr.ReadByte();
         }
 
+        public static ulong DecodeBitsAndAdvance(ref SpanReader sr)
+        {
+            ulong value = sr.ReadByte();
+            ulong mask = 0x80;
+
+            while ((value & mask) != 0)
+            {
+                value = ((value - mask) << 8) | (sr.ReadByte());
+                mask <<= 7;
+            }
+            return value;
+        }
+
         /// <summary>
         /// Reads bytes within the file stream.
         /// </summary>

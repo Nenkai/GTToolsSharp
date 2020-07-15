@@ -2,10 +2,7 @@
   "profiles": {
     "GTToolsSharp": {
       "commandName": "Project",
-      "commandLineArgs": "-i D:\\Gran_Turismo_5\\PS3_GAME\\USRDIR\\GT.VOL -o GTEXT --unpack",
-      "environmentVariables": {
-        "Key": "D:\\Gran_Turismo_5\\PS3_GAME\\USRDIR\\GT.VOL"
-      }
+      "commandLineArgs": " -i PDIPFS_IN -p RepackInput --packoutputdir RepackOutput"
     }
   }
 }

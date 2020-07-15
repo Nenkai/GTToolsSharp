@@ -13,16 +13,21 @@ namespace GTToolsSharp.BTree
 {
     public abstract class BTree<TBTree, TKey>
     {
-        public Memory<byte> _buffer;
+        protected byte[] _buffer;
+        protected int _offsetStart;
 
-        public BTree(byte[] buffer, int offset)
+        public List<TKey> Keys = new List<TKey>();
+
+        public BTree(byte[] buffer, int offsetStart)
         {
-            _buffer = buffer.AsMemory(offset);
+            _buffer = buffer;
+            _offsetStart = offsetStart;
         }
 
         public bool TryFindIndex(uint index, out TKey key)
         {
-			SpanReader sr = new SpanReader(_buffer.Span, Endian.Big);
+			SpanReader sr = new SpanReader(_buffer, Endian.Big);
+            sr.Position = _offsetStart;
 			uint offsetAndCount = sr.ReadUInt32();
 
 			uint nodeCount = sr.ReadUInt16();
@@ -116,19 +121,6 @@ namespace GTToolsSharp.BTree
             if ((offset & 0x1) == 0)
                 result >>= 4;
             return (ushort)(result & 0xFFFu);
-        }
-
-        public static ulong DecodeBitsAndAdvance(ref SpanReader sr)
-        {
-            ulong value = sr.ReadByte();
-            ulong mask = 0x80;
-
-            while ((value & mask) != 0)
-            {
-                value = ((value - mask) << 8) | (sr.ReadByte());
-                mask <<= 7;
-            }
-            return value;
         }
 
         public enum SearchCompareMethod

@@ -8,10 +8,15 @@ namespace GTToolsSharp.BTree
 {
     public class FileEntryKey
     {
+        /// <summary>
+        /// Offset from the beginning of the FileEntry Tree table.
+        /// </summary>
+        public long OffsetFromTree;
+
         public EntryKeyFlags Flags;
         public uint NameIndex;
         public uint FileExtensionIndex;
-        public uint LinkIndex;
+        public uint DirEntryIndex;
     }
 
     [Flags]
