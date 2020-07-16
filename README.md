@@ -7,8 +7,8 @@ Source code for the PDIPFS path resolver is implemented. Files can be extracted 
 To unpack certain builds you will need the keys for each one of them. Only the keys for GT5 (EU) are provided.
 
 ## Usage
-To Unpack: `GTToolsSharp -i <input GT.VOL or PDIPFS path> -o <Folder to extract to> --unpack (--noprint)`
-To Repack: `GTToolsSharp -i <PDIPFS path only> -p <Folder with source files to pack i.e car/decken/00> --packoutputdir <output of repacked files>`
+* To Unpack: `GTToolsSharp -i <input GT.VOL or PDIPFS path> -o <Folder to extract to> --unpack (--noprint)`
+* To Repack: `GTToolsSharp -i <PDIPFS path only> -p <Folder with source files to pack i.e car/decken/00> --packoutputdir <output of repacked files>`
 
 ## Repacking files
 Probably very buggy and unsafe to use!
