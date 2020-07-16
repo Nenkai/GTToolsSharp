@@ -71,13 +71,9 @@ namespace GTToolsSharp
 
                         // Get the size for it
                         finalData = outputStream.ToArray();
-                        _volume.CryptData(finalData, nodeKey.FileIndex);
                     }
-                    else
-                    {
-                        Program.Log($"[/] Skipped packing {packEntry.VolumeDirPath} as it is marked as uncompressed - unsupported for now");
-                        return;
-                    }
+
+                    _volume.CryptData(finalData, nodeKey.FileIndex);
 
                     // Write it.
                     Directory.CreateDirectory(Path.GetDirectoryName(outPath));
