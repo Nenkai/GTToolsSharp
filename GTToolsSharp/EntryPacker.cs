@@ -56,7 +56,7 @@ namespace GTToolsSharp
                     // Prepare the scrambled file path
                     string outPath = Path.Combine(this.OutDir, PDIPFSPathResolver.GetPathFromSeed(nodeKey.FileIndex)).Replace('\\', '/');
 
-                    byte[] finalData
+                    byte[] finalData;
                     if ((nodeKey.Flags & 0xF) != 0) // Compressed?
                     {
                         // Create the file in memory
