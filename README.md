@@ -1,13 +1,13 @@
 # GTToolsSharp
-A port of gttool from flatz for Gran Turismo 5/6 to C#. Unfinished yet, also supports PDIPFS.
+A port of gttool from flatz for Gran Turismo 5/6 to C#.
 
 
-The motivation for this tool is to port over the near unreadability of the other tool, along with future features to be planned.
+The motivation for this tool is to port over the near unreadability of the other tool, along with extra features.
 
-Source code for the PDIPFS path resolver is implemented. Files can be extracted for GT.VOL (main build volume) and PDIPFS (update patches).
+Files can be extracted for GT.VOL (main build volume) and PDIPFS (update patches).
 
 
-To unpack certain builds you will need the keys for each one of them. Only the keys for GT5 (EU) are provided.
+To unpack/pack certain builds you will need the keys for each one of them. Only the keys for GT5 (EU) are provided.
 
 ## Usage
 * To Unpack: `GTToolsSharp -i <input GT.VOL or PDIPFS path> -o <Folder to extract to> --unpack (--noprint)`
