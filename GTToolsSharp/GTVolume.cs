@@ -277,7 +277,7 @@ namespace GTToolsSharp
 
                 if ((nodeKey.Flags & 0xF) != 0 && !TryInflate(data, uncompressedSize, out finalData))
                 {
-                    Program.Log($"[X] Failed to decompress file {filePath} ({patchFilePath})");
+                    Program.Log($"[X] Failed to decompress file {filePath} ({patchFilePath})", forceConsolePrint: true);
                     return false;
                 }
 
