@@ -1,5 +1,5 @@
 # GTToolsSharp
-A port of gttool from flatz for Gran Turismo 5/6 to C#. Unfinished yet, also supports PDIPFS. Repack is planned.
+A port of gttool from flatz for Gran Turismo 5/6 to C#. Unfinished yet, also supports PDIPFS.
 
 
 The motivation for this tool is to port over the near unreadability of the other tool, along with future features to be planned.
