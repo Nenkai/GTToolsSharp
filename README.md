@@ -14,12 +14,7 @@ To unpack/pack certain builds you will need the keys for each one of them. Only 
 * To Repack: `GTToolsSharp -i <PDIPFS path only> -p <Folder with source files to pack i.e car/decken/00> --packoutputdir <output of repacked files>`
 
 ## Repacking files
-Probably very buggy and unsafe to use!
-
-
-Does not build header and table of contents as they seem to break the games even with the correct output file sizes.
-
-Will only work on PDIPFS. Files most likely would have to be existing & already in a PDIPFS path to work.
+Does not repack GT.VOL.
 
 Make sure to make backups of the files you are reverting. If you get a black screen upon starting the game, revert your files.
 
