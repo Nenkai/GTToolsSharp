@@ -6,9 +6,23 @@ using System.Threading.Tasks;
 
 namespace GTToolsSharp
 {
+	/// <summary>
+	/// Polyphony Digital Patch File System
+	/// </summary>
 	class PDIPFSPathResolver
 	{
 		private const string Charset = "K59W4S6H7DOVJPERUQMT8BAIC2YLG30Z1FNX";
+
+		private static string _default;
+		public static string Default 
+		{ 
+			get
+            {
+				_default ??= GetPathFromSeed(1);
+				return _default;
+            } 
+		}
+
 
 		public static string GetPathFromSeed(uint seed)
 		{
@@ -37,7 +51,7 @@ namespace GTToolsSharp
 				uint s = XorShift(0x2242211, 25, seed - 0x108400);
 				t += GetSubPathName(s, 5);
 			}
-			else if (unchecked(seed + 0xfdf7c00 > -1))
+			else if (seed + 0xfdf7c00 >= 0)
 			{
 				t += '4';
 				uint s = XorShift(0x8889111, 32, seed + 0xFDEFC00);
@@ -50,7 +64,7 @@ namespace GTToolsSharp
 
 		private static uint XorShift(uint x, int rounds, uint startingValue)
 		{
-			for (int i = rounds; i != 0; i--)
+			for (int i = 0; i < rounds; i++)
 			{
 				startingValue <<= 1;
 				bool hasUpperBit = (1 << (int)rounds & startingValue) != 0;

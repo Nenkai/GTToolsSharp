@@ -3,25 +3,65 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 using Syroot.BinaryData.Memory;
 using Syroot.BinaryData.Core;
+using Syroot.BinaryData;
 
-using static GTToolsSharp.Utils;
+using GTToolsSharp.Utils;
+using static GTToolsSharp.Utils.CryptoUtils;
 
 namespace GTToolsSharp.BTree
 {
-    public abstract class BTree<TBTree, TKey>
+    [DebuggerDisplay("Count = {Entries.Count}, Offset: {_offsetStart}")]
+    public abstract class BTree<TKey> where TKey : IBTreeKey, new()
     {
         protected byte[] _buffer;
         protected int _offsetStart;
 
-        public List<TKey> Keys = new List<TKey>();
+        public List<TKey> Entries = new List<TKey>();
+
+        public BTree()
+        {
+
+        }
 
         public BTree(byte[] buffer, int offsetStart)
         {
             _buffer = buffer;
             _offsetStart = offsetStart;
+        }
+
+        public TKey GetByIndex(uint index)
+            => Entries[(int)index];
+
+        public void LoadEntries()
+        {
+            SpanReader sr = new SpanReader(_buffer, Endian.Big);
+            sr.Position = (int)_offsetStart;
+
+            uint offsetAndCount = sr.ReadUInt32();
+            uint segmentCount = sr.ReadUInt16();
+
+            for (int i = 0; i < segmentCount; i++)
+            {
+                uint keyCount = GetBitsAt(ref sr, 0) & 0x7FFu;
+                uint nextOffset = GetBitsAt(ref sr, keyCount + 1);
+
+                for (uint j = 0; j < keyCount; j++)
+                {
+                    uint offset = GetBitsAt(ref sr, j + 1);
+
+                    var data = sr.GetReaderAtOffset((int)offset);
+
+                    TKey key = new TKey();
+                    key.Deserialize(ref data);
+                    Entries.Add(key);
+                }
+
+                sr.Position += (int)nextOffset;
+            }
         }
 
         public bool TryFindIndex(uint index, out TKey key)
@@ -30,17 +70,17 @@ namespace GTToolsSharp.BTree
             sr.Position = _offsetStart;
 			uint offsetAndCount = sr.ReadUInt32();
 
-			uint nodeCount = sr.ReadUInt16();
+			uint segmentCount = sr.ReadUInt16();
 
-			for (uint i = 0u; i < nodeCount; ++i)
+			for (uint i = 0u; i < segmentCount; ++i)
 			{
-                uint high = GetBitsAt(ref sr, 0) & 0x7FFu;
-                uint nextOffset = GetBitsAt(ref sr, high + 1);
+                uint keyCount = GetBitsAt(ref sr, 0) & 0x7FFu;
+                uint nextOffset = GetBitsAt(ref sr, keyCount + 1);
 
-                if (index < high)
+                if (index < keyCount)
 					break;
 
-				index -= high;
+				index -= keyCount;
 
                 sr.Position += (int)nextOffset;
 			}
@@ -48,11 +88,10 @@ namespace GTToolsSharp.BTree
             uint offset = GetBitsAt(ref sr, index + 1);
             sr.Position += (int)offset;
 
-            key = ReadKeyFromStream(default, ref sr);
+            key = new TKey();
+            key.Deserialize(ref sr);
             return key != null;
 		}
-
-        public abstract TKey ReadKeyFromStream(TKey key, ref SpanReader sr);
 
         public abstract TKey SearchByKey(ref SpanReader sr);
 
@@ -112,15 +151,6 @@ namespace GTToolsSharp.BTree
             }
 
             return subData;
-        }
-
-        public static ushort GetBitsAt(ref SpanReader sr, uint offset)
-        {
-            uint offsetAligned = (offset * 12) / 8;
-            ushort result = Utils.ReadUInt16AtOffset(ref sr, offsetAligned);
-            if ((offset & 0x1) == 0)
-                result >>= 4;
-            return (ushort)(result & 0xFFFu);
         }
 
         public enum SearchCompareMethod

@@ -39,10 +39,10 @@ namespace GTToolsSharp
                 if (!_volume.IsPatchVolume || _volume.NoUnpack)
                     Program.Log($"DIR: {entryPath}");
 
-                if (!_volume.IsPatchVolume && _volume.NoUnpack)
+                if (_volume.NoUnpack)
                     Directory.CreateDirectory(fullEntryPath);
 
-                var childEntryBTree = new FileEntryBTree(_volume.TOCData, (int)_volume.RootAndFolderOffsets[(int)entryKey.DirEntryIndex]);
+                var childEntryBTree = new FileEntryBTree(_volume.TableOfContents.Data, (int)_volume.TableOfContents.RootAndFolderOffsets[(int)entryKey.EntryIndex]);
                 var childUnpacker = new EntryUnpacker(_volume, OutDir, entryPath);
                 childEntryBTree.TraverseAndUnpack(childUnpacker);
             }
@@ -51,8 +51,8 @@ namespace GTToolsSharp
                 if (!_volume.IsPatchVolume || _volume.NoUnpack)
                     Program.Log($"FILE: {entryPath}");
 
-                var nodeBTree = new FileInfoBTree(_volume.TOCData, (int)_volume.NodeTreeOffset);
-                var nodeKey = new FileInfoKey(entryKey.DirEntryIndex);
+                var nodeBTree = new FileInfoBTree(_volume.TableOfContents.Data, (int)_volume.TableOfContents.NodeTreeOffset);
+                var nodeKey = new FileInfoKey(entryKey.EntryIndex);
 
                 uint nodeIndex = nodeBTree.SearchIndexByKey(nodeKey);
 

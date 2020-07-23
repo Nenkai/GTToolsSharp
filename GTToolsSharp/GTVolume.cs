@@ -12,59 +12,50 @@ using Syroot.BinaryData.Memory;
 using Syroot.BinaryData.Core;
 
 using GTToolsSharp.BTree;
+using GTToolsSharp.Utils;
 
 namespace GTToolsSharp
 {
+    /// <summary>
+    /// Represents a container for all the files used within Gran Turismo games.
+    /// </summary>
     public class GTVolume
     {
         public const int BASE_VOLUME_SEED = 1;
         // 160 Bytes
         private const int HeaderSize = 0xA0;
-        private readonly static byte[] MAGIC = { 0x5B, 0x74, 0x51, 0x62 };
-        private readonly static byte[] SEGMENT_MAGIC = { 0x5B, 0x74, 0x51, 0x6E };
 
-        private const int SEGMENT_SIZE = 2048;
-        public const uint ZLIB_MAGIC = 0xFFF7EEC5;
-
+        /// <summary>
+        /// Keyset used to decrypt and encrypt volume files.
+        /// </summary>
         public Keyset Keyset { get; private set; }
+
+        /// <summary>
+        /// Default keys, Gran Turismo 5
+        /// </summary>
         public static readonly Keyset DefaultKeyset = new Keyset("KALAHARI-37863889", new Key(0x2DEE26A7, 0x412D99F5, 0x883C94E9, 0x0F1A7069));
+
+
         public readonly Endian Endian;
 
         public bool IsPatchVolume { get; set; }
         public string PatchVolumeFolder { get; set; }
         public bool NoUnpack { get; set; }
         public string OutputDirectory { get; private set; }
-        public string VolumeHeaderPath { get; private set; }
-        public string VolumeTOCOutputPath { get; private set; }
 
         public Dictionary<string, InputPackEntry> FilesToPack = new Dictionary<string, InputPackEntry>();
 
-        public uint Seed { get; private set; }
-        public uint DataSize { get; private set; }
-        public ulong Unk { get; private set; }
-        public ulong TotalVolumeFileSize { get; private set; }
-        public ulong DataOffset { get; private set; }
-
+        public GTVolumeHeader VolumeHeader { get; set; }
         public byte[] VolumeHeaderData { get; private set; }
-        /// <summary>
-        /// Data for the table of contents.
-        /// </summary>
-        public byte[] TOCData { get; private set; }
 
-        public uint NameTreeOffset;
-        public uint FileExtensionTreeOffset;
-        public uint NodeTreeOffset;
+        public GTVolumeTOC TableOfContents { get; set; }
 
-        public List<uint> RootAndFolderOffsets;
-
-        public string TitleID;
-
+        public uint DataOffset;
         public FileStream Stream { get; }
 
         public GTVolume(FileStream sourceStream, Endian endianness)
         {
             Stream = sourceStream;
-
             Endian = endianness;
         }
 
@@ -83,7 +74,7 @@ namespace GTToolsSharp
         /// <param name="isPatchVolume"></param>
         /// <param name="endianness"></param>
         /// <returns></returns>
-        public static GTVolume Load(Keyset keyset, string path, string volumeHeaderOutPath, string volumeTOCOutPath, bool isPatchVolume, Endian endianness)
+        public static GTVolume Load(Keyset keyset, string path, bool isPatchVolume, Endian endianness)
         {
             var fs = new FileStream(!isPatchVolume ? path : Path.Combine(path, "K", "4D"), FileMode.Open);
 
@@ -93,8 +84,6 @@ namespace GTToolsSharp
             else
                 vol = new GTVolume(fs, endianness);
             vol.SetKeyset(keyset);
-            vol.VolumeHeaderPath = volumeHeaderOutPath;
-            vol.VolumeTOCOutputPath = volumeTOCOutPath;
 
             if (fs.Length < HeaderSize)
                 throw new IndexOutOfRangeException($"File size is smaller than expected header size ({HeaderSize}).");
@@ -105,17 +94,27 @@ namespace GTToolsSharp
             if (!vol.DecryptHeader(vol.VolumeHeaderData, BASE_VOLUME_SEED))
                 return null;
 
-            if (!string.IsNullOrEmpty(vol.VolumeHeaderPath))
-                File.WriteAllBytes(vol.VolumeHeaderPath, vol.VolumeHeaderData);
-
             if (!vol.ReadHeader(vol.VolumeHeaderData))
                 return null;
 
-            if (!string.IsNullOrEmpty(vol.VolumeTOCOutputPath))
-                File.WriteAllBytes(vol.VolumeTOCOutputPath, vol.TOCData);
+            if (Program.SaveHeader)
+                File.WriteAllBytes("VolumeHeader.bin", vol.VolumeHeaderData);
 
-            if (!vol.ParseTableOfContentsSegment())
+            Program.Log("[-] Reading table of contents.", true);
+
+            if (!vol.DecryptTOC())
                 return null;
+
+            if (!vol.TableOfContents.LoadTOC())
+                return null;
+
+            Program.Log($"[>] File names tree offset: {vol.TableOfContents.NameTreeOffset}", true);
+            Program.Log($"[>] File extensions tree offset: {vol.TableOfContents.FileExtensionTreeOffset}", true);
+            Program.Log($"[>] Node tree offset: {vol.TableOfContents.NodeTreeOffset}", true);
+            Program.Log($"[>] Entry count: {vol.TableOfContents.RootAndFolderOffsets.Count}.", true);
+
+            if (Program.SaveTOC)
+                File.WriteAllBytes("VolumeTOC.bin", vol.TableOfContents.Data);
 
             return vol;
         }
@@ -132,78 +131,42 @@ namespace GTToolsSharp
         public void UnpackAllFiles()
         {
             Program.Log("[-] Unpacking files.");
-            FileEntryBTree rootEntries = new FileEntryBTree(this.TOCData, (int)RootAndFolderOffsets[0]);
+            FileEntryBTree rootEntries = new FileEntryBTree(this.TableOfContents.Data, (int)TableOfContents.RootAndFolderOffsets[0]);
 
             var unpacker = new EntryUnpacker(this, OutputDirectory, "");
             rootEntries.TraverseAndUnpack(unpacker);
         }
 
-        public void PackFiles(string outrepackDir)
+        public void PackFiles(string outrepackDir, string[] filesToRemove)
         {
-            if (FilesToPack.Count == 0)
+            if (FilesToPack.Count == 0 && filesToRemove.Length == 0)
             {
-                Program.Log("[X] Found no files to pack.", forceConsolePrint: true);
+                Program.Log("[X] Found no files to pack or remove from volume.", forceConsolePrint: true);
                 return;
             }
 
-            FileEntryBTree rootEntries = new FileEntryBTree(this.TOCData, (int)RootAndFolderOffsets[0]);
+            Program.Log($"[-] Preparing to pack {FilesToPack.Count} files, and remove {filesToRemove.Length} files");
+            TableOfContents.PackFilesForPatchFileSystem(FilesToPack, filesToRemove, outrepackDir);
 
-            var packer = new EntryPacker(this, outrepackDir, "");
-            rootEntries.TraverseAndPack(packer);
+            Program.Log($"[-] Saving Table of Contents ({PDIPFSPathResolver.GetPathFromSeed(VolumeHeader.LastIndex)})");
+            TableOfContents.SaveToPatchFileSystem(outrepackDir, out uint compressedSize, out uint uncompressedSize);
+            VolumeHeader.CompressedTOCSize = compressedSize;
+            VolumeHeader.TOCSize = uncompressedSize;
+            VolumeHeader.TotalVolumeSize = TableOfContents.GetTotalPatchFileSystemSize(compressedSize);
 
-            // Until the entire thing is figured out, don't do anything header wise.
-            // It breaks the game.
-            // WriteTOC();
-            // WriteHeader();
+            Program.Log($"[-] Saving main volume header (K/4D)");
+            byte[] header = VolumeHeader.Serialize();
+
+            Span<uint> headerBlocks = MemoryMarshal.Cast<byte, uint>(header);
+            Keyset.EncryptBlocks(headerBlocks, headerBlocks);
+            Keyset.CryptData(header, BASE_VOLUME_SEED);
+
+            string headerPath = Path.Combine(outrepackDir, PDIPFSPathResolver.Default);
+            Directory.CreateDirectory(Path.GetDirectoryName(headerPath));
+
+            File.WriteAllBytes(headerPath, header);
+
             Program.Log($"[/] Done packing. Note: Could be potentially game breaking, backup your original files!", forceConsolePrint: true);
-        }
-
-        public void WriteTOC(string outRepackDir)
-        {
-            string tocPath = PDIPFSPathResolver.GetPathFromSeed(Seed);
-            Program.Log($"[-] Compressing and encrypting TOC file ({tocPath}).", forceConsolePrint: true);
-
-            byte[] newTOC = new byte[TOCData.Length];
-            TOCData.AsSpan().CopyTo(newTOC);
-
-            using var ms = new MemoryStream();
-            using var bw = new BinaryWriter(ms);
-            bw.Write(ZLIB_MAGIC);
-            bw.Write((uint)(0u - newTOC.Length));
-            using var ds = new DeflateStream(ms, CompressionMode.Compress, leaveOpen: true);
-            ds.Write(newTOC, 0, newTOC.Length);
-
-            byte[] compressedFile = ms.ToArray();
-            CryptData(compressedFile, Seed);
-
-            string outPath = Path.Combine(outRepackDir, tocPath).Replace('\\', '/');
-
-            Directory.CreateDirectory(Path.GetDirectoryName(outPath));
-            File.WriteAllBytes(outPath, compressedFile);
-
-            Program.Log($"[/] Done packing TOC.", forceConsolePrint: true);
-        }
-
-        public void WriteHeader(string outRepackDir, uint compressedTOCFileSize)
-        {
-            Program.Log($"[-] Packing Main Header. (K/4D)", forceConsolePrint: true);
-
-            byte[] newHeader = new byte[HeaderSize];
-            VolumeHeaderData.AsSpan().CopyTo(newHeader);
-
-            SpanWriter sw = new SpanWriter(newHeader, Endian.Big);
-            sw.Position = 8;
-            sw.WriteUInt32(compressedTOCFileSize);
-            sw.WriteUInt32((uint)TOCData.Length);
-
-            Span<uint> blocks = MemoryMarshal.Cast<byte, uint>(newHeader);
-            Keyset.EncryptBlocks(blocks, blocks);
-            CryptData(newHeader, BASE_VOLUME_SEED);
-
-            Directory.CreateDirectory(outRepackDir + "/K");
-
-            // FIXME: PDIPFSPathResolver.GetPathFromSeed(1);
-            File.WriteAllBytes(outRepackDir + "/K/4D", newHeader);
         }
 
         public void RegisterEntriesToRepack(string inputDir)
@@ -219,12 +182,9 @@ namespace GTToolsSharp
             }
         }
 
-        private const string DirSeparator = "\\";
         public bool UnpackNode(FileInfoKey nodeKey, string filePath)
         {
-            uint volumeIndex = nodeKey.VolumeIndex;
-
-            ulong offset = DataOffset + (ulong)nodeKey.SectorIndex * SEGMENT_SIZE;
+            ulong offset = DataOffset + (ulong)nodeKey.SegmentIndex * GTVolumeTOC.SEGMENT_SIZE;
             uint uncompressedSize = nodeKey.UncompressedSize;
 
             byte[] data;
@@ -237,10 +197,10 @@ namespace GTToolsSharp
 
                 data = new byte[nodeKey.CompressedSize];
                 Stream.ReadBytesAt(data, offset, (int)nodeKey.CompressedSize);
-                CryptData(data, nodeKey.FileIndex);
+                Keyset.CryptData(data, nodeKey.FileIndex);
 
                 byte[] finalData = null;
-                if ((nodeKey.Flags & 0xF) != 0 && !TryInflate(data, uncompressedSize, out finalData))
+                if (nodeKey.Flags.HasFlag(FileInfoKey.FileInfoFlags.Compressed) && !MiscUtils.TryInflate(data, uncompressedSize, out finalData))
                 {
                     Program.Log($"[X] Failed to decompress file ({filePath})", forceConsolePrint: true);
                     return false;
@@ -268,14 +228,14 @@ namespace GTToolsSharp
                 if (!File.Exists(localPath))
                     return false;
 
-                Program.Log($"Unpacking: {patchFilePath} -> {filePath}");
+                Program.Log($"[:] Unpacking: {patchFilePath} -> {filePath}");
 
                 data = File.ReadAllBytes(localPath);
-                CryptData(data, nodeKey.FileIndex);
+                Keyset.CryptData(data, nodeKey.FileIndex);
 
                 byte[] finalData = null;
 
-                if ((nodeKey.Flags & 0xF) != 0 && !TryInflate(data, uncompressedSize, out finalData))
+                if (nodeKey.Flags.HasFlag(FileInfoKey.FileInfoFlags.Compressed) && !MiscUtils.TryInflate(data, uncompressedSize, out finalData))
                 {
                     Program.Log($"[X] Failed to decompress file {filePath} ({patchFilePath})", forceConsolePrint: true);
                     return false;
@@ -292,7 +252,7 @@ namespace GTToolsSharp
         public string GetEntryPath(FileEntryKey key, string prefix)
         {
             string entryPath = prefix;
-            StringBTree nameBTree = new StringBTree(TOCData, (int)NameTreeOffset);
+            StringBTree nameBTree = new StringBTree(TableOfContents.Data, (int)TableOfContents.NameTreeOffset);
 
             if (nameBTree.TryFindIndex(key.NameIndex, out StringKey nameKey))
                 entryPath += nameKey.Value;
@@ -300,7 +260,7 @@ namespace GTToolsSharp
             if (key.Flags.HasFlag(EntryKeyFlags.File))
             {
                 // If it's a file, find the extension aswell
-                StringBTree extBTree = new StringBTree(TOCData, (int)FileExtensionTreeOffset);
+                StringBTree extBTree = new StringBTree(TableOfContents.Data, (int)TableOfContents.FileExtensionTreeOffset);
                 
                 if (extBTree.TryFindIndex(key.FileExtensionIndex, out StringKey extKey) && !string.IsNullOrEmpty(extKey.Value))
                     entryPath += extKey.Value;
@@ -322,19 +282,13 @@ namespace GTToolsSharp
         /// <returns></returns>
         private bool DecryptHeader(Span<byte> headerData, uint seed)
         {
-            if (!CryptData(headerData, seed))
+            if (!Keyset.CryptData(headerData, seed))
                 return false;
 
             Span<uint> blocks = MemoryMarshal.Cast<byte, uint>(headerData);
             int end = headerData.Length / sizeof(uint); // 160 / 4
 
             Keyset.DecryptBlocks(blocks, blocks);
-            return true;
-        }
-
-        public bool CryptData(Span<byte> data, uint seed)
-        {
-            Keyset.CryptBytes(data, data, seed);
             return true;
         }
 
@@ -345,136 +299,72 @@ namespace GTToolsSharp
         /// <returns></returns>
         private bool ReadHeader(Span<byte> header)
         {
-            var sr = new SpanReader(header, this.Endian);
-            byte[] magic = sr.ReadBytes(4);
-            if (!magic.AsSpan().SequenceEqual(MAGIC.AsSpan()))
-            {
-                Console.WriteLine($"[X] Volume file Magic did not match, found ({string.Join('-', magic.Select(e => e.ToString("X2") ) )})");
+            GTVolumeHeader volHeader = GTVolumeHeader.FromStream(header);
+            if (volHeader is null)
                 return false;
-            }
 
-            Seed = sr.ReadUInt32();
-            Program.Log($"[>] Volume Seed: {Seed}");
+            Program.Log($"[>] Volume Seed: {volHeader.LastIndex}");
+            Program.Log($"[>] TOC Size: {volHeader.CompressedTOCSize} bytes ({volHeader.TOCSize} decompressed)");
+            Program.Log($"[>] Total Volume Size: {volHeader.TotalVolumeSize}");
+            Program.Log($"[>] Title ID: {volHeader.TitleID}");
+            VolumeHeader = volHeader;
 
-            DataSize = sr.ReadUInt32();
-            uint decompressedTOCSize = sr.ReadUInt32();
-            Program.Log($"[>] TOC Size: {DataSize} bytes ({decompressedTOCSize} decompressed)");
-            Unk = sr.ReadUInt64();
+            return true;
+        }
 
-            TotalVolumeFileSize = sr.ReadUInt64();
-            Program.Log($"[>] Total Volume Size: {TotalVolumeFileSize}");
-
-            TitleID = sr.ReadString0();
-            Program.Log($"[>] Title ID: {TitleID}");
-
-            // Go to the location of the data start
+        private bool DecryptTOC()
+        {
+            if (VolumeHeader is null)
+                throw new InvalidOperationException("Header was not yet loaded");
 
             if (IsPatchVolume)
             {
-                string path = PDIPFSPathResolver.GetPathFromSeed(Seed);
+                string path = PDIPFSPathResolver.GetPathFromSeed(VolumeHeader.LastIndex);
 
                 string localPath = Path.Combine(this.PatchVolumeFolder, path);
                 Program.Log($"[!] Volume Patch Path Table of contents located at: {localPath}", true);
                 if (!File.Exists(localPath))
                 {
-                    Program.Log($"Error: Unable to locate PDIPFS main TOC file on local filesystem. ({path})", true);
+                    Program.Log($"[X] Error: Unable to locate PDIPFS main TOC file on local filesystem. ({path})", true);
                     return false;
                 }
 
                 using var fs = new FileStream(localPath, FileMode.Open);
-                byte[] data = new byte[DataSize];
+                byte[] data = new byte[VolumeHeader.CompressedTOCSize];
                 fs.Read(data);
 
                 // Accessing a new file, we need to decrypt the header again
-                Program.Log($"[-] Using seed {Seed} to decrypt TOC file at {path}", true);
-                CryptData(data, Seed);
+                Program.Log($"[-] Using seed {VolumeHeader.LastIndex} to decrypt TOC file at {path}", true);
+                Keyset.CryptData(data, VolumeHeader.LastIndex);
 
                 Program.Log($"[-] Decompressing Table of contents file..", true);
-                if (!TryInflate(data, decompressedTOCSize, out byte[] deflatedData))
+                if (!MiscUtils.TryInflate(data, VolumeHeader.TOCSize, out byte[] deflatedData))
                     return false;
 
-                TOCData = deflatedData;
+                TableOfContents = new GTVolumeTOC(VolumeHeader, this);
+                TableOfContents.Location = path;
+                TableOfContents.Data = deflatedData;
             }
             else
             {
-                Stream.Seek(SEGMENT_SIZE, SeekOrigin.Begin);
+                Stream.Seek(GTVolumeTOC.SEGMENT_SIZE, SeekOrigin.Begin);
 
                 var br = new BinaryReader(Stream);
-                byte[] data = br.ReadBytes((int)DataSize);
+                byte[] data = br.ReadBytes((int)VolumeHeader.CompressedTOCSize);
 
-                Program.Log($"[-] Using seed {Seed} to decrypt TOC at offset {SEGMENT_SIZE}", true);
+                Program.Log($"[-] Using seed {VolumeHeader.LastIndex} to decrypt TOC at offset {GTVolumeTOC.SEGMENT_SIZE}", true);
 
                 // Decrypt it with the seed that the main header gave us
-                CryptData(data, Seed);
+                Keyset.CryptData(data, VolumeHeader.LastIndex);
 
-                Program.Log($"[-] Decompressing Table of contents within volume.. (offset: {SEGMENT_SIZE})", true);
-                if (!TryInflate(data, decompressedTOCSize, out byte[] deflatedData))
+                Program.Log($"[-] Decompressing Table of contents within volume.. (offset: {GTVolumeTOC.SEGMENT_SIZE})", true);
+                if (!MiscUtils.TryInflate(data, VolumeHeader.TOCSize, out byte[] deflatedData))
                     return false;
 
-                TOCData = deflatedData;
-                DataOffset = Utils.AlignUp(SEGMENT_SIZE + DataSize, SEGMENT_SIZE);
-            }
+                TableOfContents = new GTVolumeTOC(VolumeHeader, this);
+                TableOfContents.Data = deflatedData;
 
-            return true;
-        }
-
-        private bool ParseTableOfContentsSegment()
-        {
-            var sr = new SpanReader(TOCData, this.Endian);
-            byte[] magic = sr.ReadBytes(4);
-            if (!magic.AsSpan().SequenceEqual(SEGMENT_MAGIC.AsSpan()))
-            {
-                Program.Log($"Volume file segment magic did not match, found ({string.Join('-', magic.Select(e => e.ToString("X2")))})");
-                return false;
-            }
-
-            Program.Log("[-] Reading table of contents.", true);
-
-            NameTreeOffset = sr.ReadUInt32();
-            Program.Log($"[>] File names tree offset: {NameTreeOffset}", true);
-
-            FileExtensionTreeOffset = sr.ReadUInt32();
-            Program.Log($"[>] File extensions tree offset: {FileExtensionTreeOffset}", true);
-
-            NodeTreeOffset = sr.ReadUInt32();
-            Program.Log($"[>] Node tree offset: {NodeTreeOffset}", true);
-
-            uint entryTreeCount = sr.ReadUInt32();
-            Program.Log($"[>] Entry count: {entryTreeCount}.", true);
-            RootAndFolderOffsets = new List<uint>((int)entryTreeCount);
-            for (int i = 0; i < entryTreeCount; i++)
-                RootAndFolderOffsets.Add(sr.ReadUInt32());
-
-            return true;
-        }
-
-        public unsafe bool TryInflate(Span<byte> data, ulong outSize, out byte[] deflatedData)
-        {
-            deflatedData = Array.Empty<byte>();
-            if (outSize > uint.MaxValue)
-                return false;
-
-            // Inflated is always little
-            var sr = new SpanReader(data, Endian.Little);
-            uint zlibMagic = sr.ReadUInt32();
-            uint sizeComplement = sr.ReadUInt32();
-
-            if ((long)zlibMagic != ZLIB_MAGIC)
-                return false;
-
-            if ((uint)outSize + sizeComplement != 0)
-                return false;
-
-            const int headerSize = 8;
-            if (sr.Length <= headerSize) // Header size, if it's under, data is missing
-                return false;
-
-            deflatedData = new byte[(int)outSize];
-            fixed (byte* pBuffer = &sr.Span.Slice(headerSize)[0])
-            {
-                using var ums = new UnmanagedMemoryStream(pBuffer, sr.Span.Length - headerSize);
-                using var ds = new DeflateStream(ums, CompressionMode.Decompress);
-                ds.Read(deflatedData, 0, (int)outSize);
+                DataOffset = CryptoUtils.AlignUp(GTVolumeTOC.SEGMENT_SIZE + VolumeHeader.CompressedTOCSize, GTVolumeTOC.SEGMENT_SIZE);
             }
 
             return true;

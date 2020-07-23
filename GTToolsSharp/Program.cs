@@ -11,7 +11,8 @@ namespace GTToolsSharp
     {
         private static StreamWriter sw;
         public static bool PrintToConsole = true;
-
+        public static bool SaveHeader = false;
+        public static bool SaveTOC = false;
         public class Options
         {
             [Option('i', "input", Required = true, HelpText = "Input file volume or folder. Usually GT.VOL, or if game update, a PDIPFS folder.")]
@@ -23,31 +24,36 @@ namespace GTToolsSharp
             [Option('u', "unpack", HelpText = "Extract all the files in the volume file or folder.")]
             public bool Unpack { get; set; }
 
-            [Option("unpacklogonly", HelpText = "Only log volume information while unpacking. (No unpacking will be done)")]
-            public bool OnlyLog { get; set; }
-
             [Option('p', "pack", HelpText = "Pack all files provided in this dir. Needs pack output dir.")]
             public string PackDir { get; set; }
 
             [Option("packoutputdir", HelpText = "Output folder for the files to pack.")]
             public string PackOutputDir { get; set; }
 
+            [Option("packremovefiles", HelpText = "Remove specific files from the volume. Requires a \"files_to_remove.txt\" file in the current folder, each line being an asset path (i.e advertise/gt5-jp/pdi_sd.img)")]
+            public bool PackRemoveFiles { get; set; }
+
             [Option('l', "log", HelpText = "Log file path. Default is log.txt.", Default = "log.txt")]
             public string LogPath { get; set; }
 
-            [Option("decryptvolheader", HelpText = "Decrypts and saves the volume header.", Default = "volume_header.bin")]
-            public string VolumeHeaderPath { get; set; }
-
-            [Option("decrypttocheader", HelpText = "Decrypts and saves the Table of Contents header.", Default = "vol_TOC.bin")]
-            public string VolumeTOCPath { get; set; }
+            [Option("unpacklogonly", HelpText = "Only log volume information while unpacking. (No unpacking will be done)")]
+            public bool OnlyLog { get; set; }
 
             [Option("noprint", HelpText = "Whether to disable printing messages if unpacking. Disabling this can speed up the unpacking process")]
             public bool NoPrint { get; set; }
+
+            [Option("savevolumeheader", HelpText = "Decrypts and saves the volume header (as VolumeHeader.bin)")]
+            public bool SaveVolumeHeader { get; set; }
+
+            [Option("savetocheader", HelpText = "Decrypts and saves the Table of Contents header. (as VolumeTOC.bin)")]
+            public bool SaveTOC { get; set; }
         }
 
         static void Main(string[] args)
         {
-            Console.WriteLine("Gran Turismo 5/6 Volume Tools - (c) Nenkai#9075, ported from flatz");
+            Console.WriteLine("-- Gran Turismo 5/6 Volume Tools - (c) Nenkai#9075, ported from flatz --");
+            Console.WriteLine();
+
             Parser.Default.ParseArguments<Options>(args)
                 .WithParsed(ParseArgs)
                 .WithNotParsed(HandleNotParsedArgs);
@@ -73,7 +79,7 @@ namespace GTToolsSharp
                 try
                 {
                     CreateDefaultKeysFile();
-                    Console.WriteLine($"Error: Key file is missing, A default one was created with GT5 keys. (key.json)");
+                    Console.WriteLine($"Error: Key file is missing, A default one was created with GT5 EU keys. (key.json)");
                     Console.WriteLine($"Change them accordingly to the keys of the game you are trying to unpack.");
                     Console.WriteLine();
                 }
@@ -104,23 +110,24 @@ namespace GTToolsSharp
             GTVolume vol = null;
             if (isFile)
             {
-                vol = GTVolume.Load(keyset, options.InputPath, options.VolumeHeaderPath, options.VolumeTOCPath, false, Syroot.BinaryData.Core.Endian.Big);
+                vol = GTVolume.Load(keyset, options.InputPath, false, Syroot.BinaryData.Core.Endian.Big);
             }
             else if (isDir)
             {
-                string indexFile = Path.Combine(options.InputPath, "K", "4D");
+                string indexFile = Path.Combine(options.InputPath, PDIPFSPathResolver.Default);
                 if (!File.Exists(indexFile))
                 {
-                    Console.WriteLine("Provided folder (assuming PDIPFS) does not contain an Index file. (PDIPFS\\K\\4D).");
+                    Console.WriteLine($"[X] Provided folder (assuming PDIPFS) does not contain an Index file. ({PDIPFSPathResolver.Default}).");
                     return;
                 }
 
-                vol = GTVolume.Load(keyset, options.InputPath, options.VolumeHeaderPath, options.VolumeTOCPath, true, Syroot.BinaryData.Core.Endian.Big);
+                vol = GTVolume.Load(keyset, options.InputPath, true, Syroot.BinaryData.Core.Endian.Big);
             }
 
 
             PrintToConsole = !options.NoPrint;
-
+            SaveTOC = options.SaveTOC;
+            SaveHeader = options.SaveVolumeHeader;
             if (vol is null)
             {
                 Console.WriteLine("Could not process volume file.");
@@ -147,8 +154,12 @@ namespace GTToolsSharp
 
                 Program.Log("[-] Started packing process.");
 
+                string[] filesToRemove = Array.Empty<string>();
+                if (options.PackRemoveFiles && File.Exists("files_to_remove.txt"))
+                    filesToRemove = File.ReadAllLines("files_to_remove.txt");
+
                 vol.RegisterEntriesToRepack(options.PackDir);
-                vol.PackFiles(options.PackOutputDir);
+                vol.PackFiles(options.PackOutputDir, filesToRemove);
             }
 
             Program.Log("Exiting.");

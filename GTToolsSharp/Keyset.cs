@@ -7,10 +7,14 @@ using System.Buffers.Binary;
 
 using System.Runtime.InteropServices;
 
-using static GTToolsSharp.Utils;
+using GTToolsSharp.Utils;
+using static GTToolsSharp.Utils.CryptoUtils;
 
 namespace GTToolsSharp
 {
+    /// <summary>
+    /// Represents a set of keys used to decrypt files.
+    /// </summary>
     public class Keyset
     {
         public string Magic { get; set; }
@@ -23,6 +27,18 @@ namespace GTToolsSharp
         }
 
         /// <summary>
+        /// Encrypts or decrypts a buffer, using a provided seed.
+        /// </summary>
+        /// <param name="data">Data to manipulate.</param>
+        /// <param name="seed">Seed to use.</param>
+        /// <returns></returns>
+        public bool CryptData(Span<byte> data, uint seed)
+        {
+            CryptBytes(data, data, seed);
+            return true;
+        }
+
+        /// <summary>
         /// Creates a key based on a seed.
         /// </summary>
         /// <param name="seed"></param>
@@ -30,7 +46,7 @@ namespace GTToolsSharp
         public Key ComputeKey(uint seed)
         {
             uint c0 = (~CRC32.CRC32_0x04C11DB7(Magic, 0)) ^ seed;
-            
+
             uint c1 = InvertedXorShift(c0, Key.Data[0]);
             uint c2 = InvertedXorShift(c1, Key.Data[1]);
             uint c3 = InvertedXorShift(c2, Key.Data[2]);
@@ -46,36 +62,10 @@ namespace GTToolsSharp
         /// Crypts a buffer using the provided seed which turned into a key during decryption.
         /// Can be used for both encrypting and decrypting.
         /// </summary>
-        /// <param name="data"></param>
-        /// <param name="dest"></param>
-        /// <param name="seed"></param>
+        /// <param name="data">Input buffer.</param>
+        /// <param name="dest">Output buffer.</param>
+        /// <param name="seed">Seed to use.</param>
         public void CryptBytes(Span<byte> data, Span<byte> dest, uint seed)
-        {
-            Key key = ComputeKey(seed);
-
-            for (int i = 0; i < data.Length; i++)
-            {
-                byte d = (byte)(  (((key.Data[0] ^ key.Data[1]) ^ data[i]) ^(key.Data[2] ^ key.Data[3])) & (byte)0xFF  );
-
-                key.Data[0] = ((RotateLeft(key.Data[0], 9) & 0x1FE00u) | (key.Data[0] >> 8));
-                key.Data[1] = ((RotateLeft(key.Data[1], 11) & 0x7F800u) | (key.Data[1] >> 8));
-                key.Data[2] = ((RotateLeft(key.Data[2], 15) & 0x7F8000u) | (key.Data[2] >> 8));
-                key.Data[3] = ((RotateLeft(key.Data[3], 21) & 0x1FE00000u) | (key.Data[3] >> 8));
-
-                dest[i] = d;
-            }
-
-            uint RotateLeft(uint val, int places)
-                => (val << places) | (val >> (32 - places)); // 32 = bit count, size * byte bit size;
-        }
-
-        /// <summary>
-        /// Encrypts a buffer using the provided seed which turned into a key during decryption.
-        /// </summary>
-        /// <param name="data"></param>
-        /// <param name="dest"></param>
-        /// <param name="seed"></param>
-        public void EncryptBytes(Span<byte> data, Span<byte> dest, uint seed)
         {
             Key key = ComputeKey(seed);
 
@@ -135,7 +125,7 @@ namespace GTToolsSharp
         }
 
         private static uint CryptBlock(uint x, uint y)
-            => x ^ Crypto.ShuffleBits(y);
+            => x ^ CryptoUtils.ShuffleBits(y);
 
         private static uint InvertedXorShift(uint x, uint y)
             => ~XorShift(x, y);
