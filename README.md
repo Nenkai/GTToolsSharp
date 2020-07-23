@@ -11,8 +11,12 @@ To unpack/pack certain builds you will need the keys for each one of them. Only 
 
 ## Usage
 * To Unpack: `GTToolsSharp -i <input GT.VOL or PDIPFS path> -o <Folder to extract to> --unpack (--noprint)`
-* To Repack: `GTToolsSharp -i <PDIPFS path only> -p <Folder with source files to pack i.e car/decken/00> --packoutputdir <output of repacked files>`
+  * Example: `GTToolsSharp -i PDIPFS -o PDIPFS_EXTRACTED --unpack`
 
+
+* To Repack: `GTToolsSharp -i <PDIPFS path only> -p <Folder with source files to pack i.e car/decken/00> --packoutputdir <output of repacked files>`
+  * Example: `GTToolsSharp -i PDIPFS -p RepackInput --packoutputdir RepackedFiles`
+  * To Delete files: `GTToolsSharp -i PDIPFS -p RepackInput --packoutputdir RepackedFiles --packremovefiles` (Needs files_to_remove.txt in current folder)
 ## Repacking files
 Does not repack GT.VOL.
 
