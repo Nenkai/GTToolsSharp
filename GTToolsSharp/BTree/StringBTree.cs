@@ -70,7 +70,7 @@ namespace GTToolsSharp.BTree
                             if (offsetAligned + keyTreeBufferWriter.Position + keyLength >= (GTVolumeTOC.SEGMENT_SIZE * 2))
                             {
                                 // This never happens due to the length of strings very likely to be never above the size
-                                throw new NotImplementedException("Last string entry exceeded segment size, unhandled behavior"");
+                                throw new NotImplementedException("Last string entry exceeded segment size, unhandled behavior");
                             }
 
                             currentSegmentOffsets.Add((uint)keyTreeBufferWriter.Position);
