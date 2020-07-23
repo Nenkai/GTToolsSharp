@@ -201,7 +201,7 @@ namespace GTToolsSharp
                         {
                             Program.Log($"[:] Pack: Compressing {file.Key}");
                             fileData = MiscUtils.ZlibCompress(fileData);
-                            key.CompressedSize = (uint)fileData.Length;
+                            newCompressedSize = (uint)fileData.Length;
                         }
 
                         Program.Log($"[:] Pack: Saving and encrypting {file.Key} to {volPath}");
