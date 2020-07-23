@@ -2,7 +2,7 @@
 A port of gttool from flatz for Gran Turismo 5/6 to C#.
 
 
-The motivation for this tool is to port over the near unreadability of the other tool, along with extra features.
+The motivation for this tool is to port over the near unreadability of the other tool, along with extra features. Packing support is implemented, you can add files and edit from the game. There is no support for GT Sport.
 
 Files can be extracted for GT.VOL (main build volume) and PDIPFS (update patches).
 
