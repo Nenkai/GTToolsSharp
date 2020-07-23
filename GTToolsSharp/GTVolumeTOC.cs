@@ -279,6 +279,8 @@ namespace GTToolsSharp
 
             FileInfoKey newKey = new FileInfoKey(this.NextEntryIndex());
             newKey.SegmentIndex = this.NextSegmentIndex();
+            newKey.Flags |= FileInfoKey.FileInfoFlags.Compressed;
+
             FileInfos.Entries.Add(newKey);
             string[] folders = path.Split(Path.AltDirectorySeparatorChar);
 
