@@ -161,10 +161,11 @@ namespace GTToolsSharp
             Dictionary<string, FileEntryKey> tocFiles = GetAllRegisteredFileMap();
             foreach (var file in filesToRemove)
             {
-                if (tocFiles.ContainsKey(file))
+                if (tocFiles.TryGetValue(file, out FileEntryKey fileEntry))
                 {
                     Program.Log($"[:] Pack: Removing file from table of contents: {file}");
-                    RegisterFilePath(file);
+                    if (!TryRemoveFile(FileInfos.GetByFileIndex(fileEntry.EntryIndex)))
+                        Program.Log($"[X] Pack: Attempted to remove file {file}, but did not exist in volume");
                 }
             }
         }
@@ -204,7 +205,7 @@ namespace GTToolsSharp
                             newCompressedSize = (uint)fileData.Length;
                         }
 
-                        Program.Log($"[:] Pack: Saving and encrypting {file.Key} to {volPath}");
+                        Program.Log($"[:] Pack: Saving and encrypting {file.Key} -> {volPath}");
 
                         // Will also update the ones we pre-registered
                         UpdateKeyAndRetroactiveAdjustSegments(key, newCompressedSize, newUncompressedSize);
@@ -238,6 +239,24 @@ namespace GTToolsSharp
                     RegisterFilePath(file.Key);
                 }
             }
+        }
+
+        public bool TryCheckAndFixInvalidSegmentIndexes()
+        {
+            bool valid = true;
+            List<FileInfoKey> segmentSortedFiles = FileInfos.Entries.OrderBy(e => e.SegmentIndex).ToList();
+            for (int i = 0; i < segmentSortedFiles.Count - 1; i++)
+            {
+                FileInfoKey current = segmentSortedFiles[i];
+                FileInfoKey next = segmentSortedFiles[i + 1];
+                double segmentsTakenByCurrent = MathF.Ceiling(current.CompressedSize / (float)SEGMENT_SIZE);
+                if (next.SegmentIndex != current.SegmentIndex + segmentsTakenByCurrent)
+                {
+                    valid = false;
+                    next.SegmentIndex = (uint)(current.SegmentIndex + segmentsTakenByCurrent);
+                }
+            }
+            return valid;
         }
 
         /// <summary>
@@ -422,7 +441,10 @@ namespace GTToolsSharp
                 }
                 else
                 {
-                    files.Add(FileNames.GetByIndex(currentEntry.NameIndex).Value, currentEntry);
+                    string fileName = FileNames.GetByIndex(currentEntry.NameIndex).Value;
+                    if (currentEntry.FileExtensionIndex != 0)
+                        fileName += Extensions.GetByIndex(currentEntry.FileExtensionIndex).Value;
+                    files.Add(fileName, currentEntry);
                     currentIndex++;
                 }
             }
@@ -520,7 +542,7 @@ namespace GTToolsSharp
         public uint NextSegmentIndex()
         {
             FileInfoKey lastSegmentKey = FileInfos.Entries.OrderByDescending(e => e.SegmentIndex).FirstOrDefault();
-            return (uint)(lastSegmentKey.SegmentIndex + Math.Ceiling(lastSegmentKey.CompressedSize / (double)SEGMENT_SIZE)); // Last + Size
+            return (uint)(lastSegmentKey.SegmentIndex + MathF.Ceiling(lastSegmentKey.CompressedSize / (float)SEGMENT_SIZE)); // Last + Size
         }
 
         public ulong GetTotalPatchFileSystemSize(uint compressedTocSize)

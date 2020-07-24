@@ -130,7 +130,6 @@ namespace GTToolsSharp
         /// </summary>
         public void UnpackAllFiles()
         {
-            Program.Log("[-] Unpacking files.");
             FileEntryBTree rootEntries = new FileEntryBTree(this.TableOfContents.Data, (int)TableOfContents.RootAndFolderOffsets[0]);
 
             var unpacker = new EntryUnpacker(this, OutputDirectory, "");
@@ -148,13 +147,19 @@ namespace GTToolsSharp
             Program.Log($"[-] Preparing to pack {FilesToPack.Count} files, and remove {filesToRemove.Length} files");
             TableOfContents.PackFilesForPatchFileSystem(FilesToPack, filesToRemove, outrepackDir);
 
+            Program.Log($"[-] Verifying and fixing Table of Contents segment sizes if needed");
+            if (!TableOfContents.TryCheckAndFixInvalidSegmentIndexes())
+                Program.Log($"[-] Re-ordered segment indexes.");
+            else
+                Program.Log($"[/] Segment sizes are correct.");
+
             Program.Log($"[-] Saving Table of Contents ({PDIPFSPathResolver.GetPathFromSeed(VolumeHeader.LastIndex)})");
             TableOfContents.SaveToPatchFileSystem(outrepackDir, out uint compressedSize, out uint uncompressedSize);
             VolumeHeader.CompressedTOCSize = compressedSize;
             VolumeHeader.TOCSize = uncompressedSize;
             VolumeHeader.TotalVolumeSize = TableOfContents.GetTotalPatchFileSystemSize(compressedSize);
 
-            Program.Log($"[-] Saving main volume header (K/4D)");
+            Program.Log($"[-] Saving main volume header ({PDIPFSPathResolver.Default})");
             byte[] header = VolumeHeader.Serialize();
 
             Span<uint> headerBlocks = MemoryMarshal.Cast<byte, uint>(header);
@@ -166,7 +171,7 @@ namespace GTToolsSharp
 
             File.WriteAllBytes(headerPath, header);
 
-            Program.Log($"[/] Done packing. Note: Could be potentially game breaking, backup your original files!", forceConsolePrint: true);
+            Program.Log($"[/] Done packing. ", forceConsolePrint: true);
         }
 
         public void RegisterEntriesToRepack(string inputDir)
@@ -202,7 +207,7 @@ namespace GTToolsSharp
                 byte[] finalData = null;
                 if (nodeKey.Flags.HasFlag(FileInfoKey.FileInfoFlags.Compressed) && !MiscUtils.TryInflate(data, uncompressedSize, out finalData))
                 {
-                    Program.Log($"[X] Failed to decompress file ({filePath})", forceConsolePrint: true);
+                    Program.Log($"[X] Failed to decompress file ({filePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
                     return false;
                 }
                     
@@ -237,7 +242,7 @@ namespace GTToolsSharp
 
                 if (nodeKey.Flags.HasFlag(FileInfoKey.FileInfoFlags.Compressed) && !MiscUtils.TryInflate(data, uncompressedSize, out finalData))
                 {
-                    Program.Log($"[X] Failed to decompress file {filePath} ({patchFilePath})", forceConsolePrint: true);
+                    Program.Log($"[X] Failed to decompress file {filePath} ({patchFilePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
                     return false;
                 }
 
@@ -305,8 +310,8 @@ namespace GTToolsSharp
 
             Program.Log($"[>] Volume Seed: {volHeader.LastIndex}");
             Program.Log($"[>] TOC Size: {volHeader.CompressedTOCSize} bytes ({volHeader.TOCSize} decompressed)");
-            Program.Log($"[>] Total Volume Size: {volHeader.TotalVolumeSize}");
-            Program.Log($"[>] Title ID: {volHeader.TitleID}");
+            Program.Log($"[>] Total Volume Size: {MiscUtils.BytesToString((long)volHeader.TotalVolumeSize)}");
+            Program.Log($"[>] Title ID: '{volHeader.TitleID}'");
             VolumeHeader = volHeader;
 
             return true;

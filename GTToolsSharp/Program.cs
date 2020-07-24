@@ -68,7 +68,7 @@ namespace GTToolsSharp
                 isDir = Directory.Exists(options.InputPath);
                 if (!isDir)
                 {
-                    Console.WriteLine($"File or Directory \"{options.InputPath}\" does not exist.");
+                    Console.WriteLine($"[X] Volume file or PDIPFS folder \"{options.InputPath}\" does not exist.");
                     return;
                 }
             }
@@ -79,13 +79,13 @@ namespace GTToolsSharp
                 try
                 {
                     CreateDefaultKeysFile();
-                    Console.WriteLine($"Error: Key file is missing, A default one was created with GT5 EU keys. (key.json)");
-                    Console.WriteLine($"Change them accordingly to the keys of the game you are trying to unpack.");
+                    Console.WriteLine($"[X] Error: Key file is missing, A default one was created with GT5 EU keys. (key.json)");
+                    Console.WriteLine($"Change them accordingly to the keys of the game and/or different game region you are trying to unpack.");
                     Console.WriteLine();
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine($"key.json was missing. Tried to create a default one, but unable to create it: {e.Message}");
+                    Console.WriteLine($"[X] key.json was missing. Tried to create a default one, but unable to create it: {e.Message}");
                 }
 
                 return;
@@ -100,7 +100,7 @@ namespace GTToolsSharp
 
             if (!string.IsNullOrEmpty(options.PackDir) && string.IsNullOrEmpty(options.PackOutputDir))
             {
-                Console.WriteLine("Packing output directory is missing.");
+                Console.WriteLine("[X] Packing output directory argument is missing. (example: '-o VOLUME_EXTRACTED')");
                 return;
             }
 
@@ -117,7 +117,7 @@ namespace GTToolsSharp
                 string indexFile = Path.Combine(options.InputPath, PDIPFSPathResolver.Default);
                 if (!File.Exists(indexFile))
                 {
-                    Console.WriteLine($"[X] Provided folder (assuming PDIPFS) does not contain an Index file. ({PDIPFSPathResolver.Default}).");
+                    Console.WriteLine($"[X] Provided folder (assuming PDIPFS) does not contain an Index file. ({PDIPFSPathResolver.Default}) Make sure this folder is actually a PDIPFS folder.");
                     return;
                 }
 
@@ -130,7 +130,7 @@ namespace GTToolsSharp
             SaveHeader = options.SaveVolumeHeader;
             if (vol is null)
             {
-                Console.WriteLine("Could not process volume file.");
+                Console.WriteLine("Could not process volume file. Make sure you are using the proper game decryption keys.");
                 return;
             }
 
@@ -149,6 +149,17 @@ namespace GTToolsSharp
                 if (!vol.IsPatchVolume)
                 {
                     Program.Log("[X] Cannot repack files in single volume files (GT.VOL).");
+                    return;
+                }
+                else if (File.Exists(options.PackDir))
+                {
+                    Program.Log("[X] No, don't put a specific file to repack. Use the whole folder containing files in their proper volume folder." +
+                        "Example: Your input folder is GT5, inside is a file like textdata/gt5/somefile.xml, just use '-p GT5'. ");
+                    return;
+                }
+                else if (!Directory.Exists(options.PackDir))
+                {
+                    Program.Log("[X] Pack directory does not exist, create it first and put the files to pack inside accordingly with their proper game path.");
                     return;
                 }
 
