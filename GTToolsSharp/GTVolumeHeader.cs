@@ -87,7 +87,9 @@ namespace GTToolsSharp
             sw.WriteUInt32(TOCSize);
             sw.WriteUInt64(Unk);
             sw.WriteUInt64(TotalVolumeSize);
-            sw.WriteStringRaw(TitleID.Split('|')[0].TrimEnd() + $" | Last repacked with GTToolsSharp: {DateTimeOffset.UtcNow:G}");
+
+            string newTitle = TitleID.Split('|')[0].TrimEnd() + $" | Last repacked with GTToolsSharp: {DateTimeOffset.UtcNow:G}";
+            sw.WriteStringRaw(newTitle.Length < 128 ? TitleID : newTitle);
 
             return newHeader;
         }
