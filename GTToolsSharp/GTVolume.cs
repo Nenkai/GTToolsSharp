@@ -210,8 +210,8 @@ namespace GTToolsSharp
                     Program.Log($"[X] Failed to decompress file ({filePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
                     return false;
                 }
-                    
 
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                 File.WriteAllBytes(filePath, finalData ?? data);
             }
             else
@@ -240,7 +240,7 @@ namespace GTToolsSharp
                 {
                     if (Encoding.ASCII.GetString(data.AsSpan(0, 7)).StartsWith("BSDIFF"))
                     {
-                        Program.Log($"[X] Detected BSDIFF file for {filePath} ({patchFilePath}, can not unpack yet. (fileID {nodeKey.FileIndex})", forceConsolePrint: true);
+                        Program.Log($"[X] Detected BSDIFF file for {filePath} ({patchFilePath}), can not unpack yet. (fileID {nodeKey.FileIndex})", forceConsolePrint: true);
                         return false;
                     }
                 }
