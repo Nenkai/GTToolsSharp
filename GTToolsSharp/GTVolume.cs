@@ -236,6 +236,15 @@ namespace GTToolsSharp
                 Program.Log($"[:] Unpacking: {patchFilePath} -> {filePath}");
 
                 data = File.ReadAllBytes(localPath);
+                if (data.Length >= 7)
+                {
+                    if (Encoding.ASCII.GetString(data.AsSpan(0, 7)).StartsWith("BSDIFF"))
+                    {
+                        Program.Log($"[X] Detected BSDIFF file for {filePath} ({patchFilePath}, can not unpack yet. (fileID {nodeKey.FileIndex})", forceConsolePrint: true);
+                        return false;
+                    }
+                }
+
                 Keyset.CryptData(data, nodeKey.FileIndex);
 
                 byte[] finalData = null;
