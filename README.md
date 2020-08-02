@@ -38,6 +38,8 @@ Packing files as new means that new file entries are added to the volume table o
 The advantage of doing this is that players of your mods only have to backup this one file when applying your mods instead of all the files which would overwrite. The only inconvinience is that since the file names are scrambled, it is easy to forget which files are actually used or not.
 This method is overall prefered over basic packing to avoid potentially accidental original game file overwrites (as long as your mod is not very sized (>100mb)).
 
+
+**Note:** Doing this means that your output folder becomes your input folder since it will contain the newer files, table of contents, and header.
 ## Compiling
 If you anyhow want to compile this, Visual Studio 2019 Preview & .NET Core 5.0 is required.
 
