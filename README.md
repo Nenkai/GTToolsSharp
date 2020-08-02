@@ -10,18 +10,23 @@ Files can be extracted for GT.VOL (main build volume) and PDIPFS (update patches
 To unpack/pack certain builds you will need the keys for each one of them. Only the keys for GT5 (EU) are provided.
 
 ## Usage
-* To Unpack: `GTToolsSharp -i <input GT.VOL or PDIPFS path> -o <Folder to extract to> --unpack (--noprint)`
-  * Example: `GTToolsSharp -i PDIPFS -o PDIPFS_EXTRACTED --unpack`
 
+### Unpacking
+`GTToolsSharp unpack -i <input GT.VOL or PDIPFS path> -o <Folder to extract to> (--noprint)`
 
-* To Repack: `GTToolsSharp -i <PDIPFS path only> -p <Folder with source files to pack i.e car/decken/00> --packoutputdir <output of repacked files>`
-  * Example: `GTToolsSharp -i PDIPFS -p RepackInput --packoutputdir RepackedFiles`
-  * To Delete files: `GTToolsSharp -i PDIPFS -p RepackInput --packoutputdir RepackedFiles --packremovefiles` (Needs files_to_remove.txt in current folder)
+Examples:
+  * Normal Unpack: `GTToolsSharp unpack -i PDIPFS -o PDIPFS_EXTRACTED`
+
+### Repacking
+`GTToolsSharp pack -i <PDIPFS path only> --folder-to-pack <Folder with source files to pack i.e car/decken/00> -o <output of repacked files>`
+
+Examples:
+  * Normal Pack: `GTToolsSharp pack -i PDIPFS --folder-to-pack RepackInput -o RepackedFiles`
+  * To Delete files: `GTToolsSharp pack -i PDIPFS  --folder-to-pack RepackInput -o RepackedFiles --packremovefiles` (Needs files_to_remove.txt in current folder)
+  
 ## Repacking files
 Does not repack GT.VOL.
-
 Make sure to make backups of the files you are reverting. If you get a black screen upon starting the game, revert your files.
-
 
 ## Compiling
 If you somehow want to compile this, Visual Studio 2019 Preview & .NET Core 5.0 is required.
