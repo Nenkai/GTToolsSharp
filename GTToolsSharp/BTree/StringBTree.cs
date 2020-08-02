@@ -191,7 +191,18 @@ namespace GTToolsSharp.BTree
             entryIndex = (uint)Entries.IndexOf(newKey);
             return true;
         }
-        
+
+        public int GetIndexOfString(string value)
+        {
+            for (int i = 0; i < Entries.Count; i++)
+            {
+                if (Entries[i].Value == value)
+                    return i;
+            }
+
+            return -1;
+        }
+
         private static int StringLengthSorter(StringKey value1, StringKey value2)
         {
             string v1 = value1.Value;

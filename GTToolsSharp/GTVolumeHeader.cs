@@ -23,9 +23,9 @@ namespace GTToolsSharp
         public byte[] Magic { get; private set; } = HeaderMagic;
 
         /// <summary>
-        /// Also used as seed to decrypt the table of contents.
+        /// Entry index for the TOC, also used as the seed to find the toc path.
         /// </summary>
-        public uint LastIndex { get; set; }
+        public uint TOCEntryIndex { get; set; }
 
         /// <summary>
         /// Compressed size in bytes for the segment of the table of contents.
@@ -67,7 +67,7 @@ namespace GTToolsSharp
                 return null;
             }
 
-            gtHeader.LastIndex = sr.ReadUInt32();
+            gtHeader.TOCEntryIndex = sr.ReadUInt32();
             gtHeader.CompressedTOCSize = sr.ReadUInt32();
             gtHeader.TOCSize = sr.ReadUInt32();
             gtHeader.Unk = sr.ReadUInt64();
@@ -82,7 +82,7 @@ namespace GTToolsSharp
             byte[] newHeader = new byte[HeaderSize];
             SpanWriter sw = new SpanWriter(newHeader, Endian.Big);
             sw.WriteBytes(HeaderMagic);
-            sw.WriteUInt32(LastIndex);
+            sw.WriteUInt32(TOCEntryIndex);
             sw.WriteUInt32(CompressedTOCSize);
             sw.WriteUInt32(TOCSize);
             sw.WriteUInt64(Unk);

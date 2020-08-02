@@ -136,7 +136,7 @@ namespace GTToolsSharp
             rootEntries.TraverseAndUnpack(unpacker);
         }
 
-        public void PackFiles(string outrepackDir, string[] filesToRemove)
+        public void PackFiles(string outrepackDir, string[] filesToRemove, bool packAllAsNew)
         {
             if (FilesToPack.Count == 0 && filesToRemove.Length == 0)
             {
@@ -145,7 +145,7 @@ namespace GTToolsSharp
             }
 
             Program.Log($"[-] Preparing to pack {FilesToPack.Count} files, and remove {filesToRemove.Length} files");
-            TableOfContents.PackFilesForPatchFileSystem(FilesToPack, filesToRemove, outrepackDir);
+            TableOfContents.PackFilesForPatchFileSystem(FilesToPack, filesToRemove, outrepackDir, packAllAsNew);
 
             Program.Log($"[-] Verifying and fixing Table of Contents segment sizes if needed");
             if (!TableOfContents.TryCheckAndFixInvalidSegmentIndexes())
@@ -153,7 +153,13 @@ namespace GTToolsSharp
             else
                 Program.Log($"[/] Segment sizes are correct.");
 
-            Program.Log($"[-] Saving Table of Contents ({PDIPFSPathResolver.GetPathFromSeed(VolumeHeader.LastIndex)})");
+            if (packAllAsNew)
+            {
+                VolumeHeader.TOCEntryIndex = TableOfContents.NextEntryIndex();
+                Program.Log($"[-] Packing as new: New TOC Entry Index is {VolumeHeader.TOCEntryIndex}.");
+            }
+
+            Program.Log($"[-] Saving Table of Contents ({PDIPFSPathResolver.GetPathFromSeed(VolumeHeader.TOCEntryIndex)})");
             TableOfContents.SaveToPatchFileSystem(outrepackDir, out uint compressedSize, out uint uncompressedSize);
             VolumeHeader.CompressedTOCSize = compressedSize;
             VolumeHeader.TOCSize = uncompressedSize;
@@ -317,7 +323,7 @@ namespace GTToolsSharp
             if (volHeader is null)
                 return false;
 
-            Program.Log($"[>] Volume Seed: {volHeader.LastIndex}");
+            Program.Log($"[>] Table of Contents Entry Index: {volHeader.TOCEntryIndex}");
             Program.Log($"[>] TOC Size: {volHeader.CompressedTOCSize} bytes ({volHeader.TOCSize} decompressed)");
             Program.Log($"[>] Total Volume Size: {MiscUtils.BytesToString((long)volHeader.TotalVolumeSize)}");
             Program.Log($"[>] Title ID: '{volHeader.TitleID}'");
@@ -333,7 +339,7 @@ namespace GTToolsSharp
 
             if (IsPatchVolume)
             {
-                string path = PDIPFSPathResolver.GetPathFromSeed(VolumeHeader.LastIndex);
+                string path = PDIPFSPathResolver.GetPathFromSeed(VolumeHeader.TOCEntryIndex);
 
                 string localPath = Path.Combine(this.PatchVolumeFolder, path);
                 Program.Log($"[!] Volume Patch Path Table of contents located at: {localPath}", true);
@@ -348,10 +354,10 @@ namespace GTToolsSharp
                 fs.Read(data);
 
                 // Accessing a new file, we need to decrypt the header again
-                Program.Log($"[-] Using seed {VolumeHeader.LastIndex} to decrypt TOC file at {path}", true);
-                Keyset.CryptData(data, VolumeHeader.LastIndex);
+                Program.Log($"[-] TOC Entry is {VolumeHeader.TOCEntryIndex} which is at {path} - decrypting it", true);
+                Keyset.CryptData(data, VolumeHeader.TOCEntryIndex);
 
-                Program.Log($"[-] Decompressing Table of contents file..", true);
+                Program.Log($"[-] Decompressing TOC file..", true);
                 if (!MiscUtils.TryInflate(data, VolumeHeader.TOCSize, out byte[] deflatedData))
                     return false;
 
@@ -366,12 +372,12 @@ namespace GTToolsSharp
                 var br = new BinaryReader(Stream);
                 byte[] data = br.ReadBytes((int)VolumeHeader.CompressedTOCSize);
 
-                Program.Log($"[-] Using seed {VolumeHeader.LastIndex} to decrypt TOC at offset {GTVolumeTOC.SEGMENT_SIZE}", true);
+                Program.Log($"[-] TOC Entry is {VolumeHeader.TOCEntryIndex} which is at offset {GTVolumeTOC.SEGMENT_SIZE}", true);
 
                 // Decrypt it with the seed that the main header gave us
-                Keyset.CryptData(data, VolumeHeader.LastIndex);
+                Keyset.CryptData(data, VolumeHeader.TOCEntryIndex);
 
-                Program.Log($"[-] Decompressing Table of contents within volume.. (offset: {GTVolumeTOC.SEGMENT_SIZE})", true);
+                Program.Log($"[-] Decompressing TOC within volume.. (offset: {GTVolumeTOC.SEGMENT_SIZE})", true);
                 if (!MiscUtils.TryInflate(data, VolumeHeader.TOCSize, out byte[] deflatedData))
                     return false;
 

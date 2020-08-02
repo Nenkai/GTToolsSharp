@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Buffers.Binary;
-
 using System.Runtime.InteropServices;
 
 using GTToolsSharp.Utils;

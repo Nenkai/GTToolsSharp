@@ -57,7 +57,7 @@ namespace GTToolsSharp
             byte[] magic = sr.ReadBytes(4);
             if (!magic.AsSpan().SequenceEqual(SEGMENT_MAGIC.AsSpan()))
             {
-                Program.Log($"Volume toc magic did not match, found ({string.Join('-', magic.Select(e => e.ToString("X2")))})");
+                Program.Log($"Volume TOC magic did not match, found ({string.Join('-', magic.Select(e => e.ToString("X2")))})");
                 return false;
             }
 
@@ -105,9 +105,9 @@ namespace GTToolsSharp
             uncompressedSize = (uint)tocSerialized.Length;
             compressedTocSize = (uint)compressedToc.Length;
 
-            ParentVolume.Keyset.CryptData(compressedToc, ParentHeader.LastIndex);
+            ParentVolume.Keyset.CryptData(compressedToc, ParentHeader.TOCEntryIndex);
 
-            string path = Path.Combine(outputDir, PDIPFSPathResolver.GetPathFromSeed(ParentHeader.LastIndex));
+            string path = Path.Combine(outputDir, PDIPFSPathResolver.GetPathFromSeed(ParentHeader.TOCEntryIndex));
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             File.WriteAllBytes(path, compressedToc);
         }
@@ -163,7 +163,7 @@ namespace GTToolsSharp
             {
                 if (tocFiles.TryGetValue(file, out FileEntryKey fileEntry))
                 {
-                    Program.Log($"[:] Pack: Removing file from table of contents: {file}");
+                    Program.Log($"[:] Pack: Removing file from TOC: {file}");
                     if (!TryRemoveFile(FileInfos.GetByFileIndex(fileEntry.EntryIndex)))
                         Program.Log($"[X] Pack: Attempted to remove file {file}, but did not exist in volume");
                 }
@@ -175,7 +175,7 @@ namespace GTToolsSharp
         /// </summary>
         /// <param name="FilesToPack">Files to pack.</param>
         /// <param name="outputDir">Main output dir to use to expose the packed files.</param>
-        public void PackFilesForPatchFileSystem(Dictionary<string, InputPackEntry> FilesToPack, string[] filesToRemove, string outputDir)
+        public void PackFilesForPatchFileSystem(Dictionary<string, InputPackEntry> FilesToPack, string[] filesToRemove, string outputDir, bool packAllAsNewEntries)
         {
             if (filesToRemove.Length > 0)
                 RemoveFilesFromTOC(filesToRemove);
@@ -192,6 +192,14 @@ namespace GTToolsSharp
                     {
                         Program.Log($"[:] Pack: Processing {file.Key}");
                         FileInfoKey key = FileInfos.GetByFileIndex(entryKey.EntryIndex);
+
+                        if (packAllAsNewEntries)
+                        {
+                            uint oldEntryFileIndex = key.FileIndex;
+                            key = ModifyExistingEntryAsNew(key, file.Key);
+                            Program.Log($"[:] Entry key for {file.Key} changed as new: {oldEntryFileIndex} -> {key.FileIndex}");
+                        }
+
                         string volPath = PDIPFSPathResolver.GetPathFromSeed(entryKey.EntryIndex);
 
                         uint newUncompressedSize = file.Value.FileSize;
@@ -215,11 +223,9 @@ namespace GTToolsSharp
                         Directory.CreateDirectory(Path.GetDirectoryName(outputFile));
 
                         File.WriteAllBytes(outputFile, fileData);
-
                     }
                 }
             }
-
         }
         
         /// <summary>
@@ -235,10 +241,84 @@ namespace GTToolsSharp
             {
                 if (!tocFiles.ContainsKey(file.Key))
                 {
-                    Program.Log($"[:] Pack: Adding new file to table of contents: {file.Key}");
+                    Program.Log($"[:] Pack: Adding new file to TOC: {file.Key}");
                     RegisterFilePath(file.Key);
                 }
             }
+        }
+
+        /// <summary>
+        /// Modifies a current key as a new entry. 
+        /// </summary>
+        /// <param name="infoKey">Entry to modify.</param>
+        /// <param name="newEntryPath">Path for the entry.</param>
+        /// <returns></returns>
+        private FileInfoKey ModifyExistingEntryAsNew(FileInfoKey infoKey, string newEntryPath)
+        {
+            // Check paths
+            string[] pathParts = newEntryPath.Split('/');
+            FileEntryBTree currentSubTree = Files[0];
+
+            uint newKeyIndex = NextEntryIndex();
+
+            // Find the entry key and update it
+            for (int i = 0; i < pathParts.Length; i++)
+            {
+                if (i != pathParts.Length - 1)
+                {
+                    // Check actual folders
+                    int keyIndex = FileNames.GetIndexOfString(pathParts[i]);
+                    if (keyIndex == -1)
+                        throw new ArgumentNullException($"Entry Key for file info key ({infoKey}) has missing file name key: {pathParts[i]}");
+
+                    FileEntryKey subTreeKey = currentSubTree.GetFolderEntryByNameIndex((uint)keyIndex);
+
+                    if (subTreeKey is null)
+                        throw new InvalidOperationException($"Tried to modify existing key {newEntryPath} (str index: {keyIndex}), but missing in entries");
+                    else if (!subTreeKey.Flags.HasFlag(EntryKeyFlags.Directory))
+                        throw new InvalidOperationException($"Tried to modify existing key {newEntryPath} but entry key ({subTreeKey}) is not marked as directory. Is the volume corrupted?");
+
+                    currentSubTree = Files[(int)subTreeKey.EntryIndex];
+                }
+                else
+                {
+                    // Got the location for the subtree
+
+                    // Get our actual file entry key
+                    FileEntryKey entryKey = currentSubTree.Entries.FirstOrDefault(e => e.EntryIndex == infoKey.FileIndex);
+                    if (entryKey is null)
+                        throw new ArgumentNullException($"Entry Key for file info key ({infoKey}) is missing while modifying.");
+
+                    // Update it actually
+                    entryKey.EntryIndex = newKeyIndex;
+                }
+            }
+
+            // Find the original entry key, copy from it, add to the tree
+            foreach (FileEntryBTree tree in Files)
+            {
+                foreach (FileEntryKey child in tree.Entries)
+                {
+                    if (child.EntryIndex == infoKey.FileIndex) // If the entry key exists, add it
+                    {
+                        var fileInfo = new FileInfoKey(newKeyIndex);
+                        fileInfo.CompressedSize = infoKey.CompressedSize;
+                        fileInfo.UncompressedSize = infoKey.UncompressedSize;
+                        fileInfo.SegmentIndex = NextSegmentIndex(); // Pushed to the end, so technically the segment is new, will be readjusted at the end anyway
+                        fileInfo.Flags = infoKey.Flags;
+                        FileInfos.Entries.Add(fileInfo);
+                        return fileInfo;
+                    }
+                }
+            }
+
+            // If it wasn't found, then we already have it
+            infoKey.FileIndex = newKeyIndex;
+
+            // Move it to the last
+            FileInfos.Entries.Remove(infoKey);
+            FileInfos.Entries.Add(infoKey);
+            return infoKey;
         }
 
         public bool TryCheckAndFixInvalidSegmentIndexes()
@@ -532,7 +612,9 @@ namespace GTToolsSharp
         public uint NextEntryIndex()
         {
             uint lastIndex = FileInfos.Entries.Max(e => e.FileIndex);
-            return Math.Max(ParentHeader.LastIndex + 1, lastIndex + 1);
+
+            // TOC also counts as an entry, even if its not registered.
+            return Math.Max(ParentHeader.TOCEntryIndex + 1, lastIndex + 1);
         }
 
         /// <summary>

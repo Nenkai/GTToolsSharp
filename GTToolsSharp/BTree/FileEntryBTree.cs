@@ -97,6 +97,17 @@ namespace GTToolsSharp.BTree
         public void ResortByNameIndexes()
             => Entries.Sort((x, y) => x.NameIndex.CompareTo(y.NameIndex));
 
+        public FileEntryKey GetFolderEntryByNameIndex(uint nameIndex)
+        {
+            foreach (var entry in Entries)
+            {
+                if (entry.NameIndex == nameIndex && entry.FileExtensionIndex == 0)
+                    return entry;
+            }
+
+            return null;
+        }
+
         public void Serialize(BinaryStream bTreeWriter, uint fileNameCount, uint extensionCount)
         {
             uint lastKeyIndex = 0;
