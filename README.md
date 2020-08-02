@@ -26,13 +26,12 @@ Input: `GTToolsSharp pack -i <PDIPFS> --folder-to-pack <Folder with source files
 Examples:
   * Normal Pack: `GTToolsSharp pack -i PDIPFS --folder-to-pack RepackInput -o RepackedFiles`
   * To Delete files: `GTToolsSharp pack -i PDIPFS  --folder-to-pack RepackInput -o RepackedFiles --packremovefiles` (Needs files_to_remove.txt in current folder)
-  
 Recommended usage is to **not** to pack to the same input folder. If your input folder is PDIPFS (original), your output folder should not also be PDIPFS.
 
 **Make sure to make backups of the files you are reverting. If you get a black screen upon starting the game, revert your files.**
 
 ## Packing files as new (Advanced users/modders)
-Packing files as new means that new file entries are added to the volume table of contents pointing to the same old game files, rather than edited. That means that upon packing, new scrambled file names are generated, and do not interfere with any of the other original game files. The only file that is edited is the volume header file which is always located at `PDIPFS/K/4D`. 
+Packing files as new with `pack-all-as-new` means that new file entries are added to the volume table of contents pointing to the same old game files, rather than edited. That means that upon packing, new scrambled file names are generated, and do not interfere with any of the other original game files. The only file that is edited is the volume header file which is always located at `PDIPFS/K/4D`. 
 
 
 The advantage of doing this is that players of your mods only have to backup this one file when applying your mods instead of all the files which would overwrite. The only inconvinience is that since the file names are scrambled, it is easy to forget which files are actually used or not.
@@ -40,6 +39,9 @@ This method is overall prefered over basic packing to avoid potentially accident
 
 
 **Note:** Doing this means that your output folder becomes your input folder since it will contain the newer files, table of contents, and header.
+First pack: `GTToolsSharp pack -i PDIPFS --folder-to-pack MyModdedFiles -o PDIPFS_NEW`
+Next packs: `GTToolsSharp pack -i PDIPFS_NEW --folder-to-pack MyModdedFiles -o PDIPFS_NEW2`
+
 ## Compiling
 If you anyhow want to compile this, Visual Studio 2019 Preview & .NET Core 5.0 is required.
 
