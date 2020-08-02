@@ -39,9 +39,10 @@ This method is overall prefered over basic packing to avoid potentially accident
 
 
 **Note:** Doing this means that your output folder becomes your input folder since it will contain the newer files, table of contents, and header.
-* First pack: `GTToolsSharp pack -i PDIPFS --folder-to-pack MyModdedFiles -o PDIPFS_NEW`
+* First pack: `GTToolsSharp pack -i PDIPFS --folder-to-pack MyModdedFiles -o PDIPFS_NEW --pack-all-as-new`
 * Next packs: `GTToolsSharp pack -i PDIPFS_NEW --folder-to-pack MyModdedFiles -o PDIPFS_NEW or PDIPFS_NEW2 (for a new folder again)`
 
+Try to keep it one packing only, from your original PDIPFS to your final pack folder.
 ## Compiling
 If you anyhow want to compile this, Visual Studio 2019 Preview & .NET Core 5.0 is required.
 
