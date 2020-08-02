@@ -28,10 +28,12 @@ Examples:
   * To Delete files: `GTToolsSharp pack -i PDIPFS  --folder-to-pack RepackInput -o RepackedFiles --packremovefiles` (Needs files_to_remove.txt in current folder)
   
 Recommended usage is to **not** to pack to the same input folder. If your input folder is PDIPFS (original), your output folder should not also be PDIPFS.
+
 **Make sure to make backups of the files you are reverting. If you get a black screen upon starting the game, revert your files.**
 
 #### Packing files as new (Advanced users/modders)
 Packing files as new means that new file entries are added to the volume table of contents pointing to the same old game files, rather than edited. That means that upon packing, new scrambled file names are generated, and do not interfere with any of the other original game files. The only file that is edited is the volume header file which is always located at `PDIPFS/K/4D`. 
+
 
 The advantage of doing this is that players of your mods only have to backup this one file when applying your mods instead of all the files which would overwrite. The only inconvinience is that since the file names are scrambled, it is easy to forget which files are actually used or not.
 This method is overall prefered over basic packing to avoid potentially accidental original game file overwrites (as long as your mod is not very sized (>100mb)).
