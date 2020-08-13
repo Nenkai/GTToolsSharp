@@ -206,7 +206,7 @@ namespace GTToolsSharp
                         uint newCompressedSize = file.Value.FileSize;
 
                         byte[] fileData = File.ReadAllBytes(file.Value.FullPath);
-                        if (key.Flags.HasFlag(FileInfoKey.FileInfoFlags.Compressed))
+                        if (key.Flags.HasFlag(FileInfoFlags.Compressed))
                         {
                             Program.Log($"[:] Pack: Compressing {file.Key}");
                             fileData = MiscUtils.ZlibCompress(fileData);
@@ -378,7 +378,7 @@ namespace GTToolsSharp
 
             FileInfoKey newKey = new FileInfoKey(this.NextEntryIndex());
             newKey.SegmentIndex = this.NextSegmentIndex();
-            newKey.Flags |= FileInfoKey.FileInfoFlags.Compressed;
+            newKey.Flags |= FileInfoFlags.Compressed;
 
             FileInfos.Entries.Add(newKey);
             string[] folders = path.Split(Path.AltDirectorySeparatorChar);

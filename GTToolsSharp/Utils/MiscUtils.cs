@@ -11,6 +11,7 @@ using Syroot.BinaryData;
 using Syroot.BinaryData.Core;
 using Syroot.BinaryData.Memory;
 
+using ICSharpCode.SharpZipLib.Zip.Compression;
 namespace GTToolsSharp.Utils
 {
     public class MiscUtils
@@ -32,11 +33,22 @@ namespace GTToolsSharp.Utils
             using var ms = new MemoryStream(input.Length);
             using var bs = new BinaryStream(ms);
             bs.WriteUInt32(Constants.ZLIB_MAGIC);
-            bs.WriteUInt32(0u - (uint)input.Length);
+            bs.WriteInt32(-input.Length);
 
-            using var ds = new DeflateStream(ms, CompressionMode.Compress);
+            /* For some reason System.IO.Compression has issues making the game load these files?
+            using var ds = new DeflateStream(ms, CompressionLevel.Optimal);
             ds.Write(input, 0, input.Length);
             ds.Flush();
+            */
+
+            // Fall back to ICSharpCode
+            var d = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
+            d.SetInput(input);
+            d.Finish();
+
+            int count = d.Deflate(input);
+            bs.Write(input, 0, count);
+
             return ms.ToArray();
         }
 
@@ -57,7 +69,7 @@ namespace GTToolsSharp.Utils
             if ((uint)outSize + sizeComplement != 0)
                 return false;
 
-            const int headerSize = 8;
+            const int headerSize = 8;       
             if (sr.Length <= headerSize) // Header size, if it's under, data is missing
                 return false;
 

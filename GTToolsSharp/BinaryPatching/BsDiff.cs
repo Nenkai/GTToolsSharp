@@ -174,7 +174,7 @@ namespace GTToolsSharp.BinaryPatching
 				return Search(I, old, oldsize, newB, newsize, st, x, out pos);
 		}
 
-		void CreatePatch(string oldFile, string newFile, string outputPatchFilePath)
+		public static void CreatePatch(string oldFile, string newFile, string outputPatchFilePath)
 		{
 			byte[] oldBuffer = File.ReadAllBytes(oldFile);
 			int oldSize = oldBuffer.Length;
@@ -297,6 +297,7 @@ namespace GTToolsSharp.BinaryPatching
 					lastoffset = pos - scan;
 				}
 			}
+
 			bzs.Flush();
 
 			long endPos = patchFileStream.Position;

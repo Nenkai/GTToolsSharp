@@ -79,11 +79,12 @@ namespace GTToolsSharp.BTree
         public override string ToString()
             => $"Flags: {Flags} FileIndex: {FileIndex} ({PDIPFSPathResolver.GetPathFromSeed(FileIndex)}), SegmentIndex: {SegmentIndex}, CompressedSize: {CompressedSize}, UncompSize: {UncompressedSize}";
 
-        [Flags]
-        public enum FileInfoFlags
-        {
-            Uncompressed,
-            Compressed
-        }
+    }
+
+    [Flags]
+    public enum FileInfoFlags
+    {
+        Uncompressed,
+        Compressed
     }
 }

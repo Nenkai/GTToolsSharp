@@ -211,7 +211,7 @@ namespace GTToolsSharp
                 Keyset.CryptData(data, nodeKey.FileIndex);
 
                 byte[] finalData = null;
-                if (nodeKey.Flags.HasFlag(FileInfoKey.FileInfoFlags.Compressed) && !MiscUtils.TryInflate(data, uncompressedSize, out finalData))
+                if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed) && !MiscUtils.TryInflate(data, uncompressedSize, out finalData))
                 {
                     Program.Log($"[X] Failed to decompress file ({filePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
                     return false;
@@ -255,7 +255,7 @@ namespace GTToolsSharp
 
                 byte[] finalData = null;
 
-                if (nodeKey.Flags.HasFlag(FileInfoKey.FileInfoFlags.Compressed) && !MiscUtils.TryInflate(data, uncompressedSize, out finalData))
+                if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed) && !MiscUtils.TryInflate(data, uncompressedSize, out finalData))
                 {
                     Program.Log($"[X] Failed to decompress file {filePath} ({patchFilePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
                     return false;
