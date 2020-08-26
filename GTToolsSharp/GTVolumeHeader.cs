@@ -49,6 +49,7 @@ namespace GTToolsSharp
         /// </summary>
         public string TitleID { get; set; }
 
+        public bool HasCustomGameID { get; set; }
         /// <summary>
         /// Reads a header from a byte buffer.
         /// </summary>
@@ -62,10 +63,7 @@ namespace GTToolsSharp
 
             byte[] magic = sr.ReadBytes(4);
             if (!magic.AsSpan().SequenceEqual(HeaderMagic.AsSpan()))
-            {
-                Console.WriteLine($"[X] Volume file Magic did not match, found ({string.Join('-', magic.Select(e => e.ToString("X2")))}) - make sure your keys are valid.");
                 return null;
-            }
 
             gtHeader.TOCEntryIndex = sr.ReadUInt32();
             gtHeader.CompressedTOCSize = sr.ReadUInt32();
@@ -88,8 +86,13 @@ namespace GTToolsSharp
             sw.WriteUInt64(Unk);
             sw.WriteUInt64(TotalVolumeSize);
 
-            string newTitle = TitleID.Split('|')[0].TrimEnd() + $" | Last repacked with GTToolsSharp: {DateTimeOffset.UtcNow:G}";
-            sw.WriteStringRaw(newTitle.Length < 128 ? newTitle : TitleID);
+            if (HasCustomGameID)
+                sw.WriteStringRaw(TitleID);
+            else
+            {
+                string newTitle = TitleID.Split('|')[0].TrimEnd() + $" | Last repacked with GTToolsSharp: {DateTimeOffset.UtcNow:G}";
+                sw.WriteStringRaw(newTitle.Length < 128 ? newTitle : TitleID);
+            }
 
             return newHeader;
         }

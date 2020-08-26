@@ -16,12 +16,14 @@ namespace GTToolsSharp
         private GTVolume _volume;
         private string ParentDirectory;
         private string OutDir;
+        private List<int> _fileIndexesToExtract;
 
-        public EntryUnpacker(GTVolume baseVolume, string outDir, string parentDir)
+        public EntryUnpacker(GTVolume baseVolume, string outDir, string parentDir, List<int> fileIndexesToExtract)
         {
             _volume = baseVolume;
             OutDir = outDir;
             ParentDirectory = parentDir;
+            _fileIndexesToExtract = fileIndexesToExtract;
         }
 
         public void UnpackFromKey(FileEntryKey entryKey)
@@ -36,19 +38,22 @@ namespace GTToolsSharp
             string fullEntryPath = Path.Combine(OutDir ?? string.Empty, entryPath);
             if (entryKey.Flags.HasFlag(EntryKeyFlags.Directory))
             {
-                if (!_volume.IsPatchVolume || _volume.NoUnpack)
-                    Program.Log($"DIR: {entryPath}");
-
-                if (_volume.NoUnpack)
-                    Directory.CreateDirectory(fullEntryPath);
+                if (_fileIndexesToExtract.Count == 0) // Make sure not to spam when not needed
+                {
+                    if (!_volume.IsPatchVolume || _volume.NoUnpack)
+                        Program.Log($"DIR: {entryPath}");
+                }
 
                 var childEntryBTree = new FileEntryBTree(_volume.TableOfContents.Data, (int)_volume.TableOfContents.RootAndFolderOffsets[(int)entryKey.EntryIndex]);
-                var childUnpacker = new EntryUnpacker(_volume, OutDir, entryPath);
+                var childUnpacker = new EntryUnpacker(_volume, OutDir, entryPath, _fileIndexesToExtract);
                 childEntryBTree.TraverseAndUnpack(childUnpacker);
             }
             else if (entryKey.Flags.HasFlag(EntryKeyFlags.File))
             {
-                if (!_volume.IsPatchVolume || _volume.NoUnpack)
+                if (_fileIndexesToExtract.Count != 0 && !_fileIndexesToExtract.Contains((int)entryKey.EntryIndex))
+                    return;
+
+                if (!_volume.IsPatchVolume && _volume.NoUnpack)
                     Program.Log($"FILE: {entryPath}");
 
                 var nodeBTree = new FileInfoBTree(_volume.TableOfContents.Data, (int)_volume.TableOfContents.NodeTreeOffset);
@@ -57,9 +62,7 @@ namespace GTToolsSharp
                 uint nodeIndex = nodeBTree.SearchIndexByKey(nodeKey);
 
                 if (nodeIndex != FileInfoKey.InvalidIndex)
-                {
                      _volume.UnpackNode(nodeKey, fullEntryPath);
-                }
             }
         }
 

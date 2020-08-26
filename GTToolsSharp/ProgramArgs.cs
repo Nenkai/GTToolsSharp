@@ -33,6 +33,9 @@ namespace GTToolsSharp
         [Option('l', "log", HelpText = "Log file path. Default is log.txt.", Default = "log.txt")]
         public string LogPath { get; set; }
 
+        [Option("indexes", HelpText = "List of file specific entry indexes to extract")]
+        public IEnumerable<int> FileIndexesToExtract { get; set; }
+
         [Usage(ApplicationAlias = "GTToolsSharp")]
         public static IEnumerable<Example> Examples
         {
@@ -68,6 +71,9 @@ namespace GTToolsSharp
         [Option("pack-all-as-new", HelpText = "Advanced users only. This marks all the files provided to pack, including existing ones in the volume as new files. " +
             "This is useful when creating a mod that add or modifies file content from the game without actually modifying files, just adding new ones, so only a volume header (K/4D) backup is required to revert all of the changes.")]
         public bool PackAllAsNew { get; set; }
+
+        [Option("custom-game-id", HelpText = "Custom Game-ID/Description to assign to the volume header. Must not be above 128 characters.")]
+        public string CustomGameID { get; set; }
 
         [Usage(ApplicationAlias = "GTToolsSharp")]
         public static IEnumerable<Example> Examples

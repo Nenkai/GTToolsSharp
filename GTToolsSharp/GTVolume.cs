@@ -76,7 +76,7 @@ namespace GTToolsSharp
         /// <returns></returns>
         public static GTVolume Load(Keyset keyset, string path, bool isPatchVolume, Endian endianness)
         {
-            var fs = new FileStream(!isPatchVolume ? path : Path.Combine(path, "K", "4D"), FileMode.Open);
+            using var fs = new FileStream(!isPatchVolume ? path : Path.Combine(path, PDIPFSPathResolver.Default), FileMode.Open);
 
             GTVolume vol;
             if (isPatchVolume)
@@ -86,7 +86,7 @@ namespace GTToolsSharp
             vol.SetKeyset(keyset);
 
             if (fs.Length < HeaderSize)
-                throw new IndexOutOfRangeException($"File size is smaller than expected header size ({HeaderSize}).");
+                throw new IndexOutOfRangeException($"Volume header file size is smaller than expected header size ({HeaderSize}). Ensure that your volume file is not corrupt.");
 
             vol.VolumeHeaderData = new byte[HeaderSize];
             fs.Read(vol.VolumeHeaderData);
@@ -128,15 +128,15 @@ namespace GTToolsSharp
         /// <summary>
         /// Unpacks all the files within the volume.
         /// </summary>
-        public void UnpackAllFiles()
+        public void UnpackFiles(IEnumerable<int> fileIndexesToExtract)
         {
             FileEntryBTree rootEntries = new FileEntryBTree(this.TableOfContents.Data, (int)TableOfContents.RootAndFolderOffsets[0]);
 
-            var unpacker = new EntryUnpacker(this, OutputDirectory, "");
+            var unpacker = new EntryUnpacker(this, OutputDirectory, "", fileIndexesToExtract.ToList());
             rootEntries.TraverseAndUnpack(unpacker);
         }
 
-        public void PackFiles(string outrepackDir, string[] filesToRemove, bool packAllAsNew)
+        public void PackFiles(string outrepackDir, string[] filesToRemove, bool packAllAsNew, string customTitleID)
         {
             if (FilesToPack.Count == 0 && filesToRemove.Length == 0)
             {
@@ -161,6 +161,13 @@ namespace GTToolsSharp
 
             Program.Log($"[-] Saving Table of Contents ({PDIPFSPathResolver.GetPathFromSeed(VolumeHeader.TOCEntryIndex)})");
             TableOfContents.SaveToPatchFileSystem(outrepackDir, out uint compressedSize, out uint uncompressedSize);
+
+            if (!string.IsNullOrEmpty(customTitleID) && customTitleID.Length <= 128)
+            {
+                VolumeHeader.HasCustomGameID = true;
+                VolumeHeader.TitleID = customTitleID;
+            }
+
             VolumeHeader.CompressedTOCSize = compressedSize;
             VolumeHeader.TOCSize = uncompressedSize;
             VolumeHeader.TotalVolumeSize = TableOfContents.GetTotalPatchFileSystemSize(compressedSize);
@@ -202,7 +209,6 @@ namespace GTToolsSharp
 
             if (!IsPatchVolume)
             {
-                Program.Log(nodeKey.ToString());
                 if (NoUnpack)
                     return false;
 
@@ -222,20 +228,17 @@ namespace GTToolsSharp
             }
             else
             {
-                /* I'm really not sure if there's a better way to do this.
-                 * Volume files, at least nodes don't seem to even store any special flag whether
-                 * it is located within an actual volume file or a patch volume. The only thing that is different is the sector index.. Sometimes node index when it's updated
-                 * It's slow, but somewhat works I guess..
-                 * */
                 string patchFilePath = PDIPFSPathResolver.GetPathFromSeed(nodeKey.FileIndex);
                 string localPath = this.PatchVolumeFolder+"/"+patchFilePath;
 
                 if (NoUnpack)
-                {
-                    Program.Log(nodeKey.ToString());
                     return false;
-                }
 
+                /* I'm really not sure if there's a better way to do this.
+                * Volume files, at least nodes don't seem to even store any special flag whether
+                * it is located within an actual volume file or a patch volume. The only thing that is different is the sector index.. Sometimes node index when it's updated
+                * It's slow, but somewhat works I guess..
+                * */
                 if (!File.Exists(localPath))
                     return false;
 

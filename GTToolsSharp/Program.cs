@@ -43,7 +43,19 @@ namespace GTToolsSharp
                 }
             }
 
-            Keyset keyset;
+            if (File.Exists(options.FolderToRepack))
+            {
+                Program.Log("[X] No, don't put a specific file to repack. Use the whole folder containing files in their proper volume folder." +
+                    "Example: Your input folder is GT5, inside is a file like textdata/gt5/somefile.xml, just use '-p GT5'. ");
+                return;
+            }
+            else if (!Directory.Exists(options.FolderToRepack))
+            {
+                Program.Log("[X] Folder to pack directory does not exist, create it first and put the files to pack inside accordingly with their proper game path.");
+                return;
+            }
+
+            Keyset[] keyset;
             if (!File.Exists("key.json"))
             {
                 try
@@ -62,55 +74,52 @@ namespace GTToolsSharp
             }
             else
             {
-                keyset = ReadKeyset();
+                keyset = ReadKeysets();
                 if (keyset is null)
                     return;
+
+                if (keyset.Length == 0)
+                {
+                    Console.WriteLine("No keys found in key.json.");
+                    return;
+                }
             }
 
             if (!string.IsNullOrEmpty(options.LogPath))
                 sw = new StreamWriter(options.LogPath);
 
-            GTVolume vol = null;
-            if (isFile)
+            if (!string.IsNullOrEmpty(options.CustomGameID) && options.CustomGameID.Length > 128)
             {
-                vol = GTVolume.Load(keyset, options.InputPath, false, Syroot.BinaryData.Core.Endian.Big);
+                Console.WriteLine($"[X] Custom Game ID must not be above 128 characters.");
+                return;
             }
-            else if (isDir)
-            {
-                string indexFile = Path.Combine(options.InputPath, PDIPFSPathResolver.Default);
-                if (!File.Exists(indexFile))
-                {
-                    Console.WriteLine($"[X] Provided input folder (assuming PDIPFS) does not contain an Index file. ({PDIPFSPathResolver.Default}) Make sure this folder is actually a PDIPFS folder.");
-                    return;
-                }
 
-                vol = GTVolume.Load(keyset, options.InputPath, true, Syroot.BinaryData.Core.Endian.Big);
+            bool found = false;
+            GTVolume vol = null;
+            foreach (var k in keyset)
+            {
+                vol = GTVolume.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Big);
+                if (vol != null)
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+            {
+                Console.WriteLine($"[X] Could not decrypt volume to read information for packing. Make sure that you have a valid game key/seed in your key.json.");
+                return;
             }
 
             PrintToConsole = true;
-            if (vol is null)
-            {
-                Console.WriteLine("Could not process volume file. Make sure you are using the proper game decryption keys.");
-                return;
-            }
 
             if (!vol.IsPatchVolume)
             {
                 Program.Log("[X] Cannot repack files in single volume files (GT.VOL).");
                 return;
             }
-            else if (File.Exists(options.FolderToRepack))
-            {
-                Program.Log("[X] No, don't put a specific file to repack. Use the whole folder containing files in their proper volume folder." +
-                    "Example: Your input folder is GT5, inside is a file like textdata/gt5/somefile.xml, just use '-p GT5'. ");
-                return;
-            }
-            else if (!Directory.Exists(options.FolderToRepack))
-            {
-                Program.Log("[X] Folder to pack directory does not exist, create it first and put the files to pack inside accordingly with their proper game path.");
-                return;
-            }
-
+            
             Program.Log("[-] Started packing process.");
 
             string[] filesToRemove = Array.Empty<string>();
@@ -118,7 +127,7 @@ namespace GTToolsSharp
                 filesToRemove = File.ReadAllLines("files_to_remove.txt");
 
             vol.RegisterEntriesToRepack(options.FolderToRepack);
-            vol.PackFiles(options.OutputPath, filesToRemove, options.PackAllAsNew);
+            vol.PackFiles(options.OutputPath, filesToRemove, options.PackAllAsNew, options.CustomGameID);
         }
 
         public static void Unpack(UnpackVerbs options)
@@ -137,7 +146,7 @@ namespace GTToolsSharp
             }
             
 
-            Keyset keyset;
+            Keyset[] keyset;
             if (!File.Exists("key.json"))
             {
                 try
@@ -156,9 +165,15 @@ namespace GTToolsSharp
             }
             else
             {
-                keyset = ReadKeyset();
+                keyset = ReadKeysets();
                 if (keyset is null)
                     return;
+
+                if (keyset.Length == 0)
+                {
+                    Console.WriteLine("No keys found in key.json.");
+                    return;
+                }
             }
 
 
@@ -167,12 +182,7 @@ namespace GTToolsSharp
 
             SaveTOC = options.SaveTOC;
             SaveHeader = options.SaveVolumeHeader;
-            GTVolume vol = null;
-            if (isFile)
-            {
-                vol = GTVolume.Load(keyset, options.InputPath, false, Syroot.BinaryData.Core.Endian.Big);
-            }
-            else if (isDir)
+            if (isDir)
             {
                 string indexFile = Path.Combine(options.InputPath, PDIPFSPathResolver.Default);
                 if (!File.Exists(indexFile))
@@ -180,17 +190,32 @@ namespace GTToolsSharp
                     Console.WriteLine($"[X] Provided input folder (assuming PDIPFS) does not contain an Index file. ({PDIPFSPathResolver.Default}) Make sure this folder is actually a PDIPFS folder.");
                     return;
                 }
-
-                vol = GTVolume.Load(keyset, options.InputPath, true, Syroot.BinaryData.Core.Endian.Big);
             }
 
+            bool found = false;
+            GTVolume vol = null;
+            foreach (var k in keyset)
+            {
+                vol = GTVolume.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Big);
+                if (vol != null)
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+            {
+                Console.WriteLine($"[X] Could not unpack volume. Make sure that you have a valid game key/seed in your key.json.");
+                return;
+            }
 
             Program.Log("[-] Started unpacking process.");
             vol.SetOutputDirectory(options.OutputPath);
             if (options.OnlyLog)
                 vol.NoUnpack = true;
 
-            vol.UnpackAllFiles();
+            vol.UnpackFiles(options.FileIndexesToExtract);
         }
 
         public static void Log(string message, bool forceConsolePrint = false)
@@ -203,15 +228,15 @@ namespace GTToolsSharp
 
         public static void CreateDefaultKeysFile()
         {
-            string json = JsonSerializer.Serialize(GTVolume.DefaultKeyset, new JsonSerializerOptions() { WriteIndented = true });
+            string json = JsonSerializer.Serialize(new[] { GTVolume.DefaultKeyset }, new JsonSerializerOptions() { WriteIndented = true });
             File.WriteAllText("key.json", json);
         }
 
-        public static Keyset ReadKeyset()
+        public static Keyset[] ReadKeysets()
         {
             try
             {
-                return JsonSerializer.Deserialize<Keyset>(File.ReadAllText("key.json"));
+                return JsonSerializer.Deserialize<Keyset[]>(File.ReadAllText("key.json"));
             }
             catch (Exception e)
             {

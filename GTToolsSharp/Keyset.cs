@@ -3,8 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Buffers.Binary;
-using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 using GTToolsSharp.Utils;
 using static GTToolsSharp.Utils.CryptoUtils;
@@ -31,6 +30,7 @@ namespace GTToolsSharp
         /// <param name="data">Data to manipulate.</param>
         /// <param name="seed">Seed to use.</param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool CryptData(Span<byte> data, uint seed)
         {
             CryptBytes(data, data, seed);
@@ -64,6 +64,7 @@ namespace GTToolsSharp
         /// <param name="data">Input buffer.</param>
         /// <param name="dest">Output buffer.</param>
         /// <param name="seed">Seed to use.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void CryptBytes(Span<byte> data, Span<byte> dest, uint seed)
         {
             Key key = ComputeKey(seed);
@@ -79,10 +80,11 @@ namespace GTToolsSharp
 
                 dest[i] = d;
             }
-
-            uint RotateLeft(uint val, int places)
-                => (val << places) | (val >> (32 - places)); // 32 = bit count, size * byte bit size;
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private uint RotateLeft(uint val, int places)
+            => (val << places) | (val >> (32 - places)); // 32 = bit count, size * byte bit size;
 
         public void DecryptBlocks(Span<uint> data, Span<uint> dest)
         {
@@ -123,12 +125,15 @@ namespace GTToolsSharp
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static uint CryptBlock(uint x, uint y)
             => x ^ CryptoUtils.ShuffleBits(y);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static uint InvertedXorShift(uint x, uint y)
             => ~XorShift(x, y);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static uint XorShift(uint x, uint y)
         {
             uint result = x;
