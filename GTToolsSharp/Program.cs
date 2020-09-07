@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.Json;
+using System.Linq;
+
 using CommandLine;
 using CommandLine.Text;
 
-using System.Text.Json;
 
 namespace GTToolsSharp
 {
@@ -20,9 +22,10 @@ namespace GTToolsSharp
             Console.WriteLine("-- Gran Turismo 5/6 Volume Tools - (c) Nenkai#9075, ported from flatz --");
             Console.WriteLine();
 
-            Parser.Default.ParseArguments<PackVerbs, UnpackVerbs>(args)
+            Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, CryptVerbs>(args)
                 .WithParsed<PackVerbs>(Pack)
                 .WithParsed<UnpackVerbs>(Unpack)
+                .WithParsed<CryptVerbs>(Crypt)
                 .WithNotParsed(HandleNotParsedArgs);
 
             Program.Log("Exiting.");
@@ -55,35 +58,9 @@ namespace GTToolsSharp
                 return;
             }
 
-            Keyset[] keyset;
-            if (!File.Exists("key.json"))
-            {
-                try
-                {
-                    CreateDefaultKeysFile();
-                    Console.WriteLine($"[X] Error: Key file is missing, A default one was created with GT5 EU keys. (key.json)");
-                    Console.WriteLine($"Change them accordingly to the keys of the game and/or different game region you are trying to unpack.");
-                    Console.WriteLine();
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine($"[X] key.json was missing. Tried to create a default one, but unable to create it: {e.Message}");
-                }
-
+            Keyset[] keyset = CheckKeys();
+            if (keyset is null)
                 return;
-            }
-            else
-            {
-                keyset = ReadKeysets();
-                if (keyset is null)
-                    return;
-
-                if (keyset.Length == 0)
-                {
-                    Console.WriteLine("No keys found in key.json.");
-                    return;
-                }
-            }
 
             if (!string.IsNullOrEmpty(options.LogPath))
                 sw = new StreamWriter(options.LogPath);
@@ -144,37 +121,11 @@ namespace GTToolsSharp
                     return;
                 }
             }
-            
 
-            Keyset[] keyset;
-            if (!File.Exists("key.json"))
-            {
-                try
-                {
-                    CreateDefaultKeysFile();
-                    Console.WriteLine($"[X] Error: Key file is missing, A default one was created with GT5 EU keys. (key.json)");
-                    Console.WriteLine($"Change them accordingly to the keys of the game and/or different game region you are trying to unpack.");
-                    Console.WriteLine();
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine($"[X] key.json was missing. Tried to create a default one, but unable to create it: {e.Message}");
-                }
 
+            Keyset[] keyset = CheckKeys();
+            if (keyset is null)
                 return;
-            }
-            else
-            {
-                keyset = ReadKeysets();
-                if (keyset is null)
-                    return;
-
-                if (keyset.Length == 0)
-                {
-                    Console.WriteLine("No keys found in key.json.");
-                    return;
-                }
-            }
 
 
             if (!string.IsNullOrEmpty(options.LogPath))
@@ -218,6 +169,30 @@ namespace GTToolsSharp
             vol.UnpackFiles(options.FileIndexesToExtract);
         }
 
+        public static void Crypt(CryptVerbs options)
+        {
+            if (!File.Exists(options.InputPath))
+            {
+                Console.WriteLine("[X] File to encrypt does not exist.");
+                return;
+            }
+
+            Keyset[] keysets = CheckKeys();
+            if (keysets is null)
+                return;
+
+            Keyset keys = keysets.Where(e => e.GameCode.Equals(options.GameCode, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+            if (keys is null)
+            {
+                Console.WriteLine($"Keyset with GameCode '{options.GameCode}' does not exist in the keyset file.");
+                return;
+            }
+
+            byte[] input = File.ReadAllBytes(options.InputPath);
+            keys.CryptData(input, 0);
+            File.WriteAllBytes(options.OutputPath, input);
+        }
+
         public static void Log(string message, bool forceConsolePrint = false)
         {
             if (PrintToConsole || forceConsolePrint)
@@ -230,6 +205,40 @@ namespace GTToolsSharp
         {
             string json = JsonSerializer.Serialize(new[] { GTVolume.DefaultKeyset }, new JsonSerializerOptions() { WriteIndented = true });
             File.WriteAllText("key.json", json);
+        }
+
+        public static Keyset[] CheckKeys()
+        {
+            if (!File.Exists("key.json"))
+            {
+                try
+                {
+                    CreateDefaultKeysFile();
+                    Console.WriteLine($"[X] Error: Key file is missing, A default one was created with GT5 EU keys. (key.json)");
+                    Console.WriteLine($"Change them accordingly to the keys of the game and/or different game region you are trying to unpack.");
+                    Console.WriteLine();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine($"[X] key.json was missing. Tried to create a default one, but unable to create it: {e.Message}");
+                }
+
+                return null;
+            }
+            else
+            {
+                Keyset[] keyset = ReadKeysets();
+                if (keyset is null)
+                    return null;
+
+                if (keyset.Length == 0)
+                {
+                    Console.WriteLine("No keys found in key.json.");
+                    return null;
+                }
+
+                return keyset;
+            }
         }
 
         public static Keyset[] ReadKeysets()

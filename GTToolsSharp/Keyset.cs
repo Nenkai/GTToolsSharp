@@ -15,6 +15,9 @@ namespace GTToolsSharp
     /// </summary>
     public class Keyset
     {
+        public const string DEFAULT_GAMECODE = "GT5_EU";
+
+        public string GameCode { get; set; } = DEFAULT_GAMECODE;
         public string Magic { get; set; }
         public Key Key { get; set; }
 

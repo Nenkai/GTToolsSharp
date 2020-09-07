@@ -50,6 +50,19 @@ namespace GTToolsSharp
         }
     }
 
+    [Verb("crypt", HelpText = "Decrypts/Encrypts a file.")]
+    public class CryptVerbs
+    {
+        [Option('g', "gamecode", Required = true, HelpText = "GameCode - Key to use within your key file.")]
+        public string GameCode { get; set; }
+
+        [Option('i', "input", Required = true, HelpText = "Input file to encrypt or decrypt.")]
+        public string InputPath { get; set; }
+        
+        [Option('o', "output", Required = true, HelpText = "Output file.", Default = "out.bin")]
+        public string OutputPath { get; set; }
+    }
+
     [Verb("pack", HelpText = "Packs a volume file.")]
     public class PackVerbs
     {
