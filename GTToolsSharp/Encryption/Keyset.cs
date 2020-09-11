@@ -19,6 +19,8 @@ namespace GTToolsSharp.Encryption
         public string Magic { get; set; }
         public Key Key { get; set; }
 
+        public Keyset() { }
+
         public Keyset(string gameCode, string magic, Key key)
         {
             GameCode = gameCode;
