@@ -8,18 +8,23 @@ using System.Runtime.CompilerServices;
 using GTToolsSharp.Utils;
 using static GTToolsSharp.Utils.CryptoUtils;
 
-namespace GTToolsSharp
+namespace GTToolsSharp.Encryption
 {
     /// <summary>
     /// Represents a set of keys used to decrypt files.
     /// </summary>
     public class Keyset
     {
-        public const string DEFAULT_GAMECODE = "GT5_EU";
-
-        public string GameCode { get; set; } = DEFAULT_GAMECODE;
+        public string GameCode { get; set; }
         public string Magic { get; set; }
         public Key Key { get; set; }
+
+        public Keyset(string gameCode, string magic, Key key)
+        {
+            GameCode = gameCode;
+            Magic = magic;
+            Key = key;
+        }
 
         public Keyset(string magic, Key key)
         {

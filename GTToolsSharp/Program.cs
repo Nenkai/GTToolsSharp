@@ -3,10 +3,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 
 using CommandLine;
 using CommandLine.Text;
 
+using GTToolsSharp.Encryption;
+using GTToolsSharp.Utils;
 
 namespace GTToolsSharp
 {
@@ -177,20 +181,47 @@ namespace GTToolsSharp
                 return;
             }
 
-            Keyset[] keysets = CheckKeys();
-            if (keysets is null)
-                return;
-
-            Keyset keys = keysets.Where(e => e.GameCode.Equals(options.GameCode, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-            if (keys is null)
+            byte[] input = File.ReadAllBytes(options.InputPath);
+            if (!string.IsNullOrEmpty(options.Salsa20KeyEncrypt))
             {
-                Console.WriteLine($"Keyset with GameCode '{options.GameCode}' does not exist in the keyset file.");
-                return;
+                byte[] keyBytes = MiscUtils.StringToByteArray(options.Salsa20KeyEncrypt);
+                using SymmetricAlgorithm salsa20 = new Salsa20();
+                byte[] dataKey = new byte[8];
+
+                Console.WriteLine("[:] Encrypting..");
+                using var decrypt = salsa20.CreateDecryptor(keyBytes, dataKey);
+                decrypt.TransformBlock(input, 0, input.Length, input, 0);
+            }
+            else if (!string.IsNullOrEmpty(options.Salsa20KeyDecrypt))
+            {
+                byte[] keyBytes = MiscUtils.StringToByteArray(options.Salsa20KeyDecrypt);
+                using SymmetricAlgorithm salsa20 = new Salsa20();
+                byte[] dataKey = new byte[8];
+
+                Console.WriteLine("[:] Decrypting..");
+                using var encrypt = salsa20.CreateEncryptor(keyBytes, dataKey);
+                encrypt.TransformBlock(input, 0, input.Length, input, 0);
+            }
+            else
+            {
+                Keyset[] keysets = CheckKeys();
+                if (keysets is null)
+                    return;
+
+                Keyset keys = keysets.Where(e => e.GameCode.Equals(options.GameCode, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                if (keys is null)
+                {
+                    Console.WriteLine($"Keyset with GameCode '{options.GameCode}' does not exist in the keyset file.");
+                    return;
+                }
+
+                Console.WriteLine("[!] Crypting..");
+                keys.CryptData(input, 0);
             }
 
-            byte[] input = File.ReadAllBytes(options.InputPath);
-            keys.CryptData(input, 0);
+            Console.WriteLine($"[:] Saving file as {options.OutputPath}..");
             File.WriteAllBytes(options.OutputPath, input);
+            Console.WriteLine("[/] Done.");
         }
 
         public static void Log(string message, bool forceConsolePrint = false)
@@ -203,7 +234,7 @@ namespace GTToolsSharp
 
         public static void CreateDefaultKeysFile()
         {
-            string json = JsonSerializer.Serialize(new[] { GTVolume.DefaultKeyset }, new JsonSerializerOptions() { WriteIndented = true });
+            string json = JsonSerializer.Serialize(new[] { GTVolume.Keyset_GT5_EU, GTVolume.Keyset_GT5_US, GTVolume.Keyset_GT6 }, new JsonSerializerOptions() { WriteIndented = true }); ;
             File.WriteAllText("key.json", json);
         }
 
@@ -214,8 +245,8 @@ namespace GTToolsSharp
                 try
                 {
                     CreateDefaultKeysFile();
-                    Console.WriteLine($"[X] Error: Key file is missing, A default one was created with GT5 EU keys. (key.json)");
-                    Console.WriteLine($"Change them accordingly to the keys of the game and/or different game region you are trying to unpack.");
+                    Console.WriteLine($"[X] Error: Key file is missing, A default one was created with GT5 EU, US and GT6 keys. (key.json)");
+                    Console.WriteLine($"Change them accordingly to the keys of the game and/or different game region you are trying to unpack if needed.");
                     Console.WriteLine();
                 }
                 catch (Exception e)

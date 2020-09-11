@@ -13,7 +13,7 @@ using Syroot.BinaryData.Core;
 
 using GTToolsSharp.BTree;
 using GTToolsSharp.Utils;
-
+using GTToolsSharp.Encryption;
 namespace GTToolsSharp
 {
     /// <summary>
@@ -21,7 +21,7 @@ namespace GTToolsSharp
     /// </summary>
     public class GTVolume
     {
-        public const int BASE_VOLUME_SEED = 1;
+        public const int BASE_VOLUME_ENTRY_INDEX = 1;
         // 160 Bytes
         private const int HeaderSize = 0xA0;
 
@@ -33,8 +33,9 @@ namespace GTToolsSharp
         /// <summary>
         /// Default keys, Gran Turismo 5
         /// </summary>
-        public static readonly Keyset DefaultKeyset = new Keyset("KALAHARI-37863889", new Key(0x2DEE26A7, 0x412D99F5, 0x883C94E9, 0x0F1A7069));
-
+        public static readonly Keyset Keyset_GT5_EU = new Keyset("GT5_EU", "KALAHARI-37863889", new Key(0x2DEE26A7, 0x412D99F5, 0x883C94E9, 0x0F1A7069));
+        public static readonly Keyset Keyset_GT5_US = new Keyset("GT5_US", "PATAGONIAN-22798263", new Key(0x5A1A59E5, 0x4D3546AB, 0xF30AF68B, 0x89F08D0D));
+        public static readonly Keyset Keyset_GT6 = new Keyset("GT6", "PISCINAS-323419048", new Key(0xAA1B6A59, 0xE70B6FB3, 0x62DC6095, 0x6A594A25));
 
         public readonly Endian Endian;
 
@@ -91,7 +92,7 @@ namespace GTToolsSharp
             vol.VolumeHeaderData = new byte[HeaderSize];
             fs.Read(vol.VolumeHeaderData);
 
-            if (!vol.DecryptHeader(vol.VolumeHeaderData, BASE_VOLUME_SEED))
+            if (!vol.DecryptHeader(vol.VolumeHeaderData, BASE_VOLUME_ENTRY_INDEX))
                 return null;
 
             if (!vol.ReadHeader(vol.VolumeHeaderData))
@@ -177,7 +178,7 @@ namespace GTToolsSharp
 
             Span<uint> headerBlocks = MemoryMarshal.Cast<byte, uint>(header);
             Keyset.EncryptBlocks(headerBlocks, headerBlocks);
-            Keyset.CryptData(header, BASE_VOLUME_SEED);
+            Keyset.CryptData(header, BASE_VOLUME_ENTRY_INDEX);
 
             string headerPath = Path.Combine(outrepackDir, PDIPFSPathResolver.Default);
             Directory.CreateDirectory(Path.GetDirectoryName(headerPath));

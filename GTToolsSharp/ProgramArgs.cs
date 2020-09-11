@@ -61,6 +61,12 @@ namespace GTToolsSharp
         
         [Option('o', "output", Required = true, HelpText = "Output file.", Default = "out.bin")]
         public string OutputPath { get; set; }
+
+        [Option("salsaencrypt", HelpText = "Salsa key (hex string) to use to encrypt.")]
+        public string Salsa20KeyEncrypt { get; set; }
+
+        [Option("salsadecrypt", Required = true, HelpText = "Salsa key (hex string) to use to decrypt.")]
+        public string Salsa20KeyDecrypt { get; set; }
     }
 
     [Verb("pack", HelpText = "Packs a volume file.")]
