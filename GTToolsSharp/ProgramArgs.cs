@@ -59,13 +59,13 @@ namespace GTToolsSharp
         [Option('i', "input", Required = true, HelpText = "Input file to encrypt or decrypt.")]
         public string InputPath { get; set; }
         
-        [Option('o', "output", Required = true, HelpText = "Output file.", Default = "out.bin")]
+        [Option('o', "output", HelpText = "Output file.", Default = "out.bin")]
         public string OutputPath { get; set; }
 
-        [Option("salsaencrypt", HelpText = "Salsa key (hex string) to use to encrypt.")]
+        [Option("salsaencrypt", HelpText = "Advanced users. Salsa key (hex string) to use to encrypt. Do not provide to use default file volume encryption.")]
         public string Salsa20KeyEncrypt { get; set; }
 
-        [Option("salsadecrypt", Required = true, HelpText = "Salsa key (hex string) to use to decrypt.")]
+        [Option("salsadecrypt", HelpText = "Advanced users. Salsa key (hex string) to use to decrypt. Do not provide to use default file volume encryption.")]
         public string Salsa20KeyDecrypt { get; set; }
     }
 
@@ -75,7 +75,7 @@ namespace GTToolsSharp
         [Option('i', "input", Required = true, HelpText = "Input file volume or folder to use as base. Usually GT.VOL, or if game update, a PDIPFS folder.")]
         public string InputPath { get; set; }
 
-        [Option('o', "output", Required = true, HelpText = "Output folder for the files to pack.", Default = "RepackedPDIPFS")]
+        [Option('o', "output", HelpText = "Output folder for the files to pack.", Default = "RepackedPDIPFS")]
         public string OutputPath { get; set; }
 
         [Option('p', "folder-to-pack", Required = true, HelpText = "Folder which contains all the files to be repacked.")]
