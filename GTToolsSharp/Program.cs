@@ -26,10 +26,11 @@ namespace GTToolsSharp
             Console.WriteLine("-- Gran Turismo 5/6 Volume Tools - (c) Nenkai#9075, ported from flatz --");
             Console.WriteLine();
 
-            Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, CryptVerbs>(args)
+            Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, CryptVerbs, ListVerbs>(args)
                 .WithParsed<PackVerbs>(Pack)
                 .WithParsed<UnpackVerbs>(Unpack)
                 .WithParsed<CryptVerbs>(Crypt)
+                .WithParsed<ListVerbs>(List)
                 .WithNotParsed(HandleNotParsedArgs);
 
             Program.Log("Exiting.");
@@ -107,8 +108,11 @@ namespace GTToolsSharp
             if (options.PackRemoveFiles && File.Exists("files_to_remove.txt"))
                 filesToRemove = File.ReadAllLines("files_to_remove.txt");
 
+            if (options.PackAllAsNew)
+                Program.Log("[!] Note: --pack-all-as-new provided - packing as new is now on by default. To use overwrite mode, use --pack-as-overwrite");
+
             vol.RegisterEntriesToRepack(options.FolderToRepack);
-            vol.PackFiles(options.OutputPath, filesToRemove, options.PackAllAsNew, options.CustomGameID);
+            vol.PackFiles(options.OutputPath, filesToRemove, !options.PackAsOverwrite, options.CustomGameID);
         }
 
         public static void Unpack(UnpackVerbs options)
@@ -222,6 +226,58 @@ namespace GTToolsSharp
             Console.WriteLine($"[:] Saving file as {options.OutputPath}..");
             File.WriteAllBytes(options.OutputPath, input);
             Console.WriteLine("[/] Done.");
+        }
+
+        public static void List(ListVerbs options)
+        {
+            bool isFile = File.Exists(options.InputPath);
+            bool isDir = false;
+
+            if (!isFile)
+            {
+                isDir = Directory.Exists(options.InputPath);
+                if (!isDir)
+                {
+                    Console.WriteLine($"[X] Volume file or PDIPFS folder \"{options.InputPath}\" does not exist.");
+                    return;
+                }
+            }
+
+
+            Keyset[] keyset = CheckKeys();
+            if (keyset is null)
+                return;
+
+            bool found = false;
+            GTVolume vol = null;
+            foreach (var k in keyset)
+            {
+                vol = GTVolume.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Big);
+                if (vol != null)
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+            {
+                Console.WriteLine($"[X] Could not unpack volume. Make sure that you have a valid game key/seed in your key.json.");
+                return;
+            }
+
+            using var sw = new StreamWriter(options.OutputPath);
+
+            var entries = vol.TableOfContents.GetAllRegisteredFileMap();
+            foreach (var entry in entries)
+            {
+                if (vol.IsPatchVolume)
+                    sw.WriteLine($"{entry.Key} ({entry.Value.EntryIndex}) - {PDIPFSPathResolver.GetPathFromSeed(entry.Value.EntryIndex)}");
+                else
+                    sw.WriteLine($"{entry.Key} ({entry.Value.EntryIndex})");
+            }
+
+            sw.WriteLine($"[!] Wrote {entries.Count} at {options.OutputPath}.");
         }
 
         public static void Log(string message, bool forceConsolePrint = false)

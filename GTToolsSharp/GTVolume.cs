@@ -14,6 +14,8 @@ using Syroot.BinaryData.Core;
 using GTToolsSharp.BTree;
 using GTToolsSharp.Utils;
 using GTToolsSharp.Encryption;
+using System.ComponentModel.Design;
+
 namespace GTToolsSharp
 {
     /// <summary>
@@ -145,6 +147,22 @@ namespace GTToolsSharp
                 return;
             }
 
+            if (Directory.Exists(outrepackDir))
+            {
+                if (Directory.EnumerateFileSystemEntries(outrepackDir).Any())
+                {
+                    Program.Log("");
+                    Program.Log("[!] Output folder is not empty and should be cleared to avoid overwriting unwanted files.", forceConsolePrint: true);
+                    Program.Log(">> Press any key twice to clear it. MAKE SURE THAT THE FOLDER IS A PACKING ONLY FOLDER to avoid any file loss.", forceConsolePrint: true);
+                    Console.ReadKey();
+                    Console.ReadKey();
+
+                    Directory.Delete(outrepackDir, true);
+                }
+            }
+
+            Directory.CreateDirectory(outrepackDir);
+
             Program.Log($"[-] Preparing to pack {FilesToPack.Count} files, and remove {filesToRemove.Length} files");
             TableOfContents.PackFilesForPatchFileSystem(FilesToPack, filesToRemove, outrepackDir, packAllAsNew);
 
@@ -206,26 +224,31 @@ namespace GTToolsSharp
             ulong offset = DataOffset + (ulong)nodeKey.SegmentIndex * GTVolumeTOC.SEGMENT_SIZE;
             uint uncompressedSize = nodeKey.UncompressedSize;
 
-            byte[] data;
-
             if (!IsPatchVolume)
             {
                 if (NoUnpack)
                     return false;
 
-                data = new byte[nodeKey.CompressedSize];
+                byte[] data = new byte[nodeKey.CompressedSize];
                 Stream.ReadBytesAt(data, offset, (int)nodeKey.CompressedSize);
                 Keyset.CryptData(data, nodeKey.FileIndex);
 
-                byte[] finalData = null;
-                if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed) && !MiscUtils.TryInflate(data, uncompressedSize, out finalData))
+                if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
                 {
-                    Program.Log($"[X] Failed to decompress file ({filePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
-                    return false;
-                }
+                    if (!MiscUtils.CheckCompression(data, uncompressedSize))
+                    {
+                        Program.Log($"[X] Failed to decompress file ({filePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
+                        return false;
+                    }
 
-                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                File.WriteAllBytes(filePath, finalData ?? data);
+                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                    MiscUtils.InflateToFile(data, filePath);
+                }
+                else
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                    File.WriteAllBytes(filePath, data);
+                }
             }
             else
             {
@@ -245,7 +268,7 @@ namespace GTToolsSharp
 
                 Program.Log($"[:] Unpacking: {patchFilePath} -> {filePath}");
 
-                data = File.ReadAllBytes(localPath);
+                byte[] data = File.ReadAllBytes(localPath);
                 if (data.Length >= 7)
                 {
                     if (Encoding.ASCII.GetString(data.AsSpan(0, 7)).StartsWith("BSDIFF"))
@@ -257,16 +280,23 @@ namespace GTToolsSharp
 
                 Keyset.CryptData(data, nodeKey.FileIndex);
 
-                byte[] finalData = null;
 
-                if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed) && !MiscUtils.TryInflate(data, uncompressedSize, out finalData))
+                if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
                 {
-                    Program.Log($"[X] Failed to decompress file {filePath} ({patchFilePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
-                    return false;
-                }
+                    if (!MiscUtils.CheckCompression(data, uncompressedSize))
+                    {
+                        Program.Log($"[X] Failed to decompress file {filePath} ({patchFilePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
+                        return false;
+                    }
 
-                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                File.WriteAllBytes(filePath, finalData ?? data);
+                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                    MiscUtils.InflateToFile(data, filePath);
+                }
+                else
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                    File.WriteAllBytes(filePath, data);
+                }
             }
 
             return true;
@@ -362,7 +392,7 @@ namespace GTToolsSharp
                 Keyset.CryptData(data, VolumeHeader.TOCEntryIndex);
 
                 Program.Log($"[-] Decompressing TOC file..", true);
-                if (!MiscUtils.TryInflate(data, VolumeHeader.TOCSize, out byte[] deflatedData))
+                if (!MiscUtils.TryInflateInMemory(data, VolumeHeader.TOCSize, out byte[] deflatedData))
                     return false;
 
                 TableOfContents = new GTVolumeTOC(VolumeHeader, this);
@@ -382,7 +412,7 @@ namespace GTToolsSharp
                 Keyset.CryptData(data, VolumeHeader.TOCEntryIndex);
 
                 Program.Log($"[-] Decompressing TOC within volume.. (offset: {GTVolumeTOC.SEGMENT_SIZE})", true);
-                if (!MiscUtils.TryInflate(data, VolumeHeader.TOCSize, out byte[] deflatedData))
+                if (!MiscUtils.TryInflateInMemory(data, VolumeHeader.TOCSize, out byte[] deflatedData))
                     return false;
 
                 TableOfContents = new GTVolumeTOC(VolumeHeader, this);

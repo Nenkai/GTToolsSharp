@@ -87,9 +87,12 @@ namespace GTToolsSharp
         [Option('l', "log", HelpText = "Log file path. Default is log.txt.", Default = "log.txt")]
         public string LogPath { get; set; }
 
-        [Option("pack-all-as-new", HelpText = "Advanced users only. This marks all the files provided to pack, including existing ones in the volume as new files. " +
+        [Option("pack-all-as-new", HelpText = "ON BY DEFAULT. This marks all the files provided to pack, including existing ones in the volume as new files. " +
             "This is useful when creating a mod that add or modifies file content from the game without actually modifying files, just adding new ones, so only a volume header (K/4D) backup is required to revert all of the changes.")]
         public bool PackAllAsNew { get; set; }
+
+        [Option("pack-as-overwrite", HelpText = "Advanced users only. Instead of packing files as new files and leaving original entries untouched, they are overwritten.")]
+        public bool PackAsOverwrite { get; set; }
 
         [Option("custom-game-id", HelpText = "Custom Game-ID/Description to assign to the volume header. Must not be above 128 characters.")]
         public string CustomGameID { get; set; }
@@ -105,5 +108,15 @@ namespace GTToolsSharp
                     };
             }
         }
+    }
+
+    [Verb("listfiles", HelpText = "List all volume entries into a file.")]
+    public class ListVerbs
+    {
+        [Option('i', "input", Required = true, HelpText = "Input file volume or folder to use as base. Usually GT.VOL, or if game update, a PDIPFS folder.")]
+        public string InputPath { get; set; }
+
+        [Option('o', "output", HelpText = "Output folder for the files to pack.", Default = "volume_entries.txt")]
+        public string OutputPath { get; set; }
     }
 }

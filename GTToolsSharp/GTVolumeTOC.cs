@@ -235,10 +235,11 @@ namespace GTToolsSharp
         private void PreRegisterNewFilesToPack(Dictionary<string, InputPackEntry> FilesToPack)
         {
             Dictionary<string, FileEntryKey> tocFiles = GetAllRegisteredFileMap();
-
+            
             // Add Files, these files will have their sizes adjusted later on during repack process
             foreach (var file in FilesToPack)
             {
+                
                 if (!tocFiles.ContainsKey(file.Key))
                 {
                     Program.Log($"[:] Pack: Adding new file to TOC: {file.Key}");
@@ -383,14 +384,17 @@ namespace GTToolsSharp
             FileInfos.Entries.Add(newKey);
             string[] folders = path.Split(Path.AltDirectorySeparatorChar);
 
-            uint dirEntryIndex = 0;
+            uint baseDirEntryIndex = 0;
             for (uint i = 0; i < folders.Length - 1; i++) // Do not include file name
             {
-                if (!DirectoryExists(Files[(int)dirEntryIndex], folders[i], out dirEntryIndex))
-                    dirEntryIndex = RegisterDirectory(dirEntryIndex, folders[i]);
+                // If the dir doesn't exist, create a new one - we have a new index that is the last current folder
+                if (!DirectoryExists(Files[(int)baseDirEntryIndex], folders[i], out uint parentDirEntryIndex))
+                    baseDirEntryIndex = RegisterDirectory(baseDirEntryIndex, folders[i]);
+                else
+                    baseDirEntryIndex = parentDirEntryIndex; // Already there, update the current folder index
             }
 
-            RegisterFile(dirEntryIndex, Path.GetFileNameWithoutExtension(path), ext);
+            RegisterFile(baseDirEntryIndex, Path.GetFileNameWithoutExtension(path), ext);
         }
 
         /// <summary>
@@ -424,20 +428,23 @@ namespace GTToolsSharp
         {
             uint dirNameIndex = RegisterFilename(dirName);
             uint entryIndex = 0;
-            var dirEntries = Files[(int)dirIndex].Entries.Where(e => e.Flags.HasFlag(EntryKeyFlags.Directory));
-            if (dirEntries.Count() > 1)
+
+            // Grab the next file/folder entry of the one we just added, will be used for sorting
+            var subDirsInBaseDir = Files[(int)dirIndex].Entries.Where(e => e.Flags.HasFlag(EntryKeyFlags.Directory));
+            if (subDirsInBaseDir.Count() > 1)
             {
-                FileEntryKey k = dirEntries.FirstOrDefault(e => e.NameIndex > dirNameIndex);
+                // Find the first entry whose names appear after the current folder
+                FileEntryKey k = subDirsInBaseDir.FirstOrDefault(e => e.NameIndex > dirNameIndex);
                 entryIndex = k?.EntryIndex ?? 0;
             }
 
             if (entryIndex == 0)
             {
-                if (!dirEntries.Any())
+                if (!subDirsInBaseDir.Any())
                     entryIndex = dirIndex + 1; // New one
                 else
                 {
-                    uint lastDirIndex = dirEntries.Max(e => e.EntryIndex);
+                    uint lastDirIndex = subDirsInBaseDir.Max(e => e.EntryIndex);
                     Math.Max(lastDirIndex, Files[(int)lastDirIndex].Entries
                         .Where(e => e.Flags.HasFlag(EntryKeyFlags.Directory))
                         .Max(t => t.EntryIndex));
@@ -446,14 +453,15 @@ namespace GTToolsSharp
             }
 
             // Update the trees if needed
+            uint currentIndex = entryIndex;
             foreach (var tree in Files)
             {
                 foreach (var child in tree.Entries)
                 {
                     if (child.Flags.HasFlag(EntryKeyFlags.Directory) && child.EntryIndex >= entryIndex)
                     {
-                        entryIndex = child.EntryIndex;
-                        child.EntryIndex = entryIndex + 1;
+                        currentIndex = child.EntryIndex;
+                        child.EntryIndex = currentIndex + 1;
                     }
                 }
             }
@@ -463,9 +471,11 @@ namespace GTToolsSharp
             newEntry.NameIndex = dirNameIndex;
             newEntry.EntryIndex = entryIndex;
             Files[(int)dirIndex].Entries.Add(newEntry);
-
             Files[(int)dirIndex].ResortByNameIndexes();
-            Files.Add(new FileEntryBTree());
+
+            // Basically add the new empty folder
+            Files.Insert((int)entryIndex, new FileEntryBTree());
+
             return dirIndex;
         }
 
@@ -516,6 +526,8 @@ namespace GTToolsSharp
                 if (currentEntry.Flags.HasFlag(EntryKeyFlags.Directory))
                 {
                     string baseDir = FileNames.GetByIndex(currentEntry.NameIndex).Value + '/';
+                    if (baseDir.StartsWith("projects"))
+                        ;
                     uint dirIndex = currentEntry.EntryIndex;
                     TraverseNestedTreeAndList(files, baseDir, ref dirIndex, ref currentIndex);
                 }
@@ -590,7 +602,7 @@ namespace GTToolsSharp
         {
             if (FileNames.TryAddNewString(name, out uint keyIndex))
             {
-                // Each new key after the file name needs increased index
+                // We inserted a key possibly in the middle of the tree since its sorted - every keys after that one needs to be increased
                 foreach (var tree in Files)
                 {
                     foreach (var entry in tree.Entries)

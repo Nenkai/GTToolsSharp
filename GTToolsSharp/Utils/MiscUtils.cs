@@ -12,6 +12,8 @@ using Syroot.BinaryData.Core;
 using Syroot.BinaryData.Memory;
 
 using ICSharpCode.SharpZipLib.Zip.Compression;
+using System.IO.IsolatedStorage;
+
 namespace GTToolsSharp.Utils
 {
     public class MiscUtils
@@ -79,9 +81,55 @@ namespace GTToolsSharp.Utils
             return ms.ToArray();
         }
 
-        public unsafe static bool TryInflate(Span<byte> data, ulong outSize, out byte[] deflatedData)
+        public unsafe static bool TryInflateInMemory(Span<byte> data, ulong outSize, out byte[] deflatedData)
         {
             deflatedData = Array.Empty<byte>();
+            if (outSize > uint.MaxValue)
+                return false;
+
+            // Inflated is always little
+            var sr = new SpanReader(data, Endian.Little);
+            uint zlibMagic = sr.ReadUInt32();
+            uint sizeComplement = sr.ReadUInt32();
+
+            if ((long)zlibMagic != Constants.ZLIB_MAGIC)
+                return false;
+
+            if ((uint)outSize + sizeComplement != 0)
+                return false;
+
+            const int headerSize = 8;
+            if (sr.Length <= headerSize) // Header size, if it's under, data is missing
+                return false;
+
+            deflatedData = new byte[(int)outSize];
+            fixed (byte* pBuffer = &sr.Span.Slice(headerSize)[0]) // Vol Header Size
+            {
+                using var ums = new UnmanagedMemoryStream(pBuffer, sr.Span.Length - headerSize);
+                using var ds = new DeflateStream(ums, CompressionMode.Decompress);
+                ds.Read(deflatedData, 0, (int)outSize);
+            }
+
+            return true;
+        }
+
+        public unsafe static void InflateToFile(Span<byte> data, string outPath)
+        {
+            const int headerSize = 8;
+
+            using (FileStream fs = new FileStream(outPath, FileMode.Create))
+            {
+                fixed (byte* pBuffer = &data.Slice(headerSize)[0]) // Vol Header Size
+                {
+                    using var ums = new UnmanagedMemoryStream(pBuffer, data.Length - headerSize);
+                    using var ds = new DeflateStream(ums, CompressionMode.Decompress);
+                    ds.CopyTo(fs);
+                }
+            }
+        }
+
+        public unsafe static bool CheckCompression(Span<byte> data, ulong outSize)
+        {
             if (outSize > uint.MaxValue)
                 return false;
 
@@ -99,14 +147,6 @@ namespace GTToolsSharp.Utils
             const int headerSize = 8;       
             if (sr.Length <= headerSize) // Header size, if it's under, data is missing
                 return false;
-
-            deflatedData = new byte[(int)outSize];
-            fixed (byte* pBuffer = &sr.Span.Slice(headerSize)[0])
-            {
-                using var ums = new UnmanagedMemoryStream(pBuffer, sr.Span.Length - headerSize);
-                using var ds = new DeflateStream(ums, CompressionMode.Decompress);
-                ds.Read(deflatedData, 0, (int)outSize);
-            }
 
             return true;
         }
