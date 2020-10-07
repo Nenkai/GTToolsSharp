@@ -19,7 +19,7 @@ Examples:
   * Normal Unpack: `GTToolsSharp unpack -i PDIPFS -o PDIPFS_EXTRACTED`
 
 ### (Re)Packing (PDIPFS only)
-Input: `GTToolsSharp pack -i <PDIPFS> --folder-to-pack <Folder with source files to pack> -o <output of repacked files>`
+Input: `GTToolsSharp pack -i <PDIPFS> -p <Folder with source files to pack> -o <output of repacked files>`
 
 Examples:
   * Normal Pack: `GTToolsSharp pack -i PDIPFS --folder-to-pack RepackInput -o RepackedFiles`
@@ -42,8 +42,8 @@ Files packed as new with means that new entries numbers are appended to last one
 The advantage of doing this is that players of your mods only have to backup this one file when applying your mods instead of all the files which would overwrite. To revert, players can simply revert their original `PDIPFS/K/4D` file. You can provide the original `PDIPFS/K/4D` file inside your mod as a way for them to revert if they did not back it up.
 
 If you want to use an existing mod as a base mod use the base mod's `PDIPFS` since it will contain the newer files, TOC, and header.
-* First pack: `GTToolsSharp pack -i PDIPFS --folder-to-pack MyModdedFiles -o PDIPFS_MOD --pack-all-as-new`
-* Next packs: `GTToolsSharp pack -i PDIPFS_MOD --folder-to-pack MyModdedFiles -o PDIPFS_MOD2 (for a new folder again)`
+* First pack: `GTToolsSharp pack -i PDIPFS -p MyModdedFiles -o PDIPFS_MOD`
+* Next packs: `GTToolsSharp pack -i PDIPFS_MOD -p MyModdedFiles -o PDIPFS_MOD2 (for a new folder again)`
 
 Unless you are using a mod as base (and don't have the source files of the mod), keep it one packing only, from your original PDIPFS to your final pack folder.
 
