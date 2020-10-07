@@ -30,18 +30,18 @@ Recommended usage is to **not** to pack to the same input folder. If your input 
 **Make sure to make backups of the files you are reverting. If you get a black screen upon starting the game, revert your files.**
 
 ## Advanced Packing Notes (Modders Read)
-The Gran Turismo 5 and above uses a file system that allows editing existing files while keeping the actual original files intact. This allows for extremely easy modding an easy revert method.
+The Gran Turismo 5 and above uses a file system that allows editing existing files while keeping the actual original files intact. This allows for extremely easy modding and easy revert method.
 
 Important things to know:
 1. *Main Volume Header File* - **Always** `PDIPFS/K/4D`
-2. Table of Contents file (*TOC*) which contains all the data (each file being an *entry number*) that indicates where an original file is located in the scrambled PDIPFS - location of TOC determined by the master file.
+2. Table of Contents file (*TOC*) which contains all of the data and file entries (each having an *entry number*) that indicates where an original file is located in the scrambled PDIPFS - location of TOC determined by the master file.
 3. The *entry number* is used to determine the PDIPFS scrambled path.
 
-Files packed as new with means that new entries numbers are appended to last one in *TOC* which are the same original paths, but with new entry numbers thus new files are generated, and the older file entries used for these paths are unused. That means that upon packing, new scrambled file names are generated, and do not interfere with any of the other original game files. The only file that is edited is the volume header file which is always located at the *Main Volume Header File*.
+Files packed as new with means that new entries numbers are appended to last one in *TOC* which are the same original paths, but with new entry numbers thus new files are generated, and the older file entries used for these paths are unused. That means that upon packing, new scrambled file names are generated, and do not interfere with any of the other original game files. The only file that is edited is the *Main Volume Header File* which is always located at `PDIPFS/K/4D`.
 
-The advantage of doing this is that players of your mods only have to backup this one file when applying your mods instead of all the files which would overwrite. To revert, players can simply revert their original `PDIPFS/K/4D` file.
+The advantage of doing this is that players of your mods only have to backup this one file when applying your mods instead of all the files which would overwrite. To revert, players can simply revert their original `PDIPFS/K/4D` file. You can provide the original `PDIPFS/K/4D` file inside your mod as a way for them to revert if they did not back it up.
 
-**Note:** Doing this means that your output folder becomes your input folder if you want to use an existing mod as a base mod since it will contain the newer files, table of contents, and header.
+If you want to use an existing mod as a base mod use the base mod's `PDIPFS` since it will contain the newer files, TOC, and header.
 * First pack: `GTToolsSharp pack -i PDIPFS --folder-to-pack MyModdedFiles -o PDIPFS_MOD --pack-all-as-new`
 * Next packs: `GTToolsSharp pack -i PDIPFS_MOD --folder-to-pack MyModdedFiles -o PDIPFS_MOD2 (for a new folder again)`
 
