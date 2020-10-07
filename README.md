@@ -34,7 +34,7 @@ The Gran Turismo 5 and above uses a file system that allows editing existing fil
 
 Important things to know:
 1. *Main Volume Header File* - **Always** `PDIPFS/K/4D`
-2. Table of Contents file (*TOC*) which contains all of the data and file entries (each having an *entry number*) that indicates where an original file is located in the scrambled PDIPFS - location of TOC determined by the master file.
+2. Table of Contents file (*TOC*) which contains all of file entries (each having an *entry number*) that indicates where an original file is located in the scrambled PDIPFS - location of TOC determined by the master file.
 3. The *entry number* is used to determine the PDIPFS scrambled path.
 
 Files packed as new with means that new entries numbers are appended to last one in *TOC* which are the same original paths, but with new entry numbers thus new files are generated, and the older file entries used for these paths are unused. That means that upon packing, new scrambled file names are generated, and do not interfere with any of the other original game files. The only file that is edited is the *Main Volume Header File* which is always located at `PDIPFS/K/4D`.
