@@ -46,7 +46,8 @@ If you want to use an existing mod as a base mod use the base mod's `PDIPFS` sin
 * Next packs: `GTToolsSharp pack -i PDIPFS_MOD --folder-to-pack MyModdedFiles -o PDIPFS_MOD2 (for a new folder again)`
 
 Unless you are using a mod as base (and don't have the source files of the mod), keep it one packing only, from your original PDIPFS to your final pack folder.
-**As of 2.0.3 this behavior is default**. If you would like your mod to actually overwrite *TOC* files and original files, use `--pack-as-overwrite`.
+
+If you would like your mod to actually overwrite *TOC* files and original files, use `--pack-as-overwrite`.
 
 ## Compiling
 If you anyhow want to compile this, Visual Studio 2019 Preview & .NET Core 5.0 is required.
