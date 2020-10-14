@@ -79,7 +79,7 @@ namespace GTToolsSharp
         /// <returns></returns>
         public static GTVolume Load(Keyset keyset, string path, bool isPatchVolume, Endian endianness)
         {
-            using var fs = new FileStream(!isPatchVolume ? path : Path.Combine(path, PDIPFSPathResolver.Default), FileMode.Open);
+            var fs = new FileStream(!isPatchVolume ? path : Path.Combine(path, PDIPFSPathResolver.Default), FileMode.Open);
 
             GTVolume vol;
             if (isPatchVolume)
@@ -95,10 +95,16 @@ namespace GTToolsSharp
             fs.Read(vol.VolumeHeaderData);
 
             if (!vol.DecryptHeader(vol.VolumeHeaderData, BASE_VOLUME_ENTRY_INDEX))
+            {
+                vol.Stream?.Dispose();
                 return null;
+            }
 
             if (!vol.ReadHeader(vol.VolumeHeaderData))
+            {
+                vol.Stream?.Dispose();
                 return null;
+            }
 
             if (Program.SaveHeader)
                 File.WriteAllBytes("VolumeHeader.bin", vol.VolumeHeaderData);
@@ -106,10 +112,16 @@ namespace GTToolsSharp
             Program.Log("[-] Reading table of contents.", true);
 
             if (!vol.DecryptTOC())
+            {
+                vol.Stream?.Dispose();
                 return null;
+            }
 
             if (!vol.TableOfContents.LoadTOC())
+            {
+                vol.Stream?.Dispose();
                 return null;
+            }
 
             Program.Log($"[>] File names tree offset: {vol.TableOfContents.NameTreeOffset}", true);
             Program.Log($"[>] File extensions tree offset: {vol.TableOfContents.FileExtensionTreeOffset}", true);
@@ -229,25 +241,23 @@ namespace GTToolsSharp
                 if (NoUnpack)
                     return false;
 
-                byte[] data = new byte[nodeKey.CompressedSize];
-                Stream.ReadBytesAt(data, offset, (int)nodeKey.CompressedSize);
-                Keyset.CryptData(data, nodeKey.FileIndex);
-
+                Stream.Position = (long)offset;
                 if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
                 {
-                    if (!MiscUtils.CheckCompression(data, uncompressedSize))
+                    if (!MiscUtils.DecryptCheckCompression(Stream, Keyset, nodeKey.FileIndex, uncompressedSize))
                     {
                         Program.Log($"[X] Failed to decompress file ({filePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
                         return false;
                     }
 
                     Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                    MiscUtils.InflateToFile(data, filePath);
+                    Stream.Position -= 8;
+                    MiscUtils.DecryptAndInflateToFile(Keyset, Stream, nodeKey.FileIndex, uncompressedSize, filePath, false);
                 }
                 else
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                    File.WriteAllBytes(filePath, data);
+                    MiscUtils.DecryptToFile(Keyset, Stream, nodeKey.FileIndex, uncompressedSize, filePath, false);
                 }
             }
             else
@@ -268,34 +278,37 @@ namespace GTToolsSharp
 
                 Program.Log($"[:] Unpacking: {patchFilePath} -> {filePath}");
 
-                byte[] data = File.ReadAllBytes(localPath);
-                if (data.Length >= 7)
+                using var fs = new FileStream(localPath, FileMode.Open);
+                if (fs.Length >= 7)
                 {
-                    if (Encoding.ASCII.GetString(data.AsSpan(0, 7)).StartsWith("BSDIFF"))
+                    Span<byte> magic = new byte[6];
+                    fs.Read(magic);
+                    if (Encoding.ASCII.GetString(magic).StartsWith("BSDIFF"))
                     {
                         Program.Log($"[X] Detected BSDIFF file for {filePath} ({patchFilePath}), can not unpack yet. (fileID {nodeKey.FileIndex})", forceConsolePrint: true);
                         return false;
                     }
-                }
 
-                Keyset.CryptData(data, nodeKey.FileIndex);
+                    fs.Position = 0;
+                }
 
 
                 if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
                 {
-                    if (!MiscUtils.CheckCompression(data, uncompressedSize))
+                    if (!MiscUtils.DecryptCheckCompression(fs, Keyset, nodeKey.FileIndex, uncompressedSize))
                     {
                         Program.Log($"[X] Failed to decompress file {filePath} ({patchFilePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
                         return false;
                     }
 
                     Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                    MiscUtils.InflateToFile(data, filePath);
+                    fs.Position = 0;          
+                    MiscUtils.DecryptAndInflateToFile(Keyset, fs, nodeKey.FileIndex, filePath);
                 }
                 else
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                    File.WriteAllBytes(filePath, data);
+                    MiscUtils.DecryptToFile(Keyset, fs, nodeKey.FileIndex, filePath);
                 }
             }
 

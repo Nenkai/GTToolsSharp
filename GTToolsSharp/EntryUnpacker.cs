@@ -48,12 +48,12 @@ namespace GTToolsSharp
                 var childUnpacker = new EntryUnpacker(_volume, OutDir, entryPath, _fileIndexesToExtract);
                 childEntryBTree.TraverseAndUnpack(childUnpacker);
             }
-            else if (entryKey.Flags.HasFlag(EntryKeyFlags.File))
+            else 
             {
                 if (_fileIndexesToExtract.Count != 0 && !_fileIndexesToExtract.Contains((int)entryKey.EntryIndex))
                     return;
 
-                if (!_volume.IsPatchVolume && _volume.NoUnpack)
+                if (!_volume.IsPatchVolume || _volume.NoUnpack)
                     Program.Log($"FILE: {entryPath}");
 
                 var nodeBTree = new FileInfoBTree(_volume.TableOfContents.Data, (int)_volume.TableOfContents.NodeTreeOffset);

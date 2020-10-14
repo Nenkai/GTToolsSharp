@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Buffers;
 
 using System.IO;
 using System.IO.Compression;
@@ -12,7 +13,11 @@ using Syroot.BinaryData.Core;
 using Syroot.BinaryData.Memory;
 
 using ICSharpCode.SharpZipLib.Zip.Compression;
-using System.IO.IsolatedStorage;
+
+
+using GTToolsSharp.Encryption;
+using System.Security.Cryptography;
+using System.Buffers.Binary;
 
 namespace GTToolsSharp.Utils
 {
@@ -64,7 +69,7 @@ namespace GTToolsSharp.Utils
             bs.WriteUInt32(Constants.ZLIB_MAGIC);
             bs.WriteInt32(-input.Length);
 
-            /* For some reason System.IO.Compression has issues making the game load these files?
+            /* For some reason System.IO.Compression has issues making the games load these files?
             using var ds = new DeflateStream(ms, CompressionLevel.Optimal);
             ds.Write(input, 0, input.Length);
             ds.Flush();
@@ -81,6 +86,15 @@ namespace GTToolsSharp.Utils
             return ms.ToArray();
         }
 
+        // Just used to seek and skip the compress header
+        private static byte[] _tmpBuff = new byte[8];
+        /// <summary>
+        /// Decompresses a file (in memory, unsuited for large files).
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="outSize"></param>
+        /// <param name="deflatedData"></param>
+        /// <returns></returns>
         public unsafe static bool TryInflateInMemory(Span<byte> data, ulong outSize, out byte[] deflatedData)
         {
             deflatedData = Array.Empty<byte>();
@@ -113,21 +127,121 @@ namespace GTToolsSharp.Utils
             return true;
         }
 
-        public unsafe static void InflateToFile(Span<byte> data, string outPath)
-        {
-            const int headerSize = 8;
 
-            using (FileStream fs = new FileStream(outPath, FileMode.Create))
+        /// <summary>
+        /// Decrypts and decompress a file in a stream and saves it to the provided path.
+        /// </summary>
+        /// <param name="keyset"></param>
+        /// <param name="fs"></param>
+        /// <param name="seed"></param>
+        /// <param name="outPath"></param>
+        public unsafe static void DecryptAndInflateToFile(Keyset keyset, FileStream fs, uint seed, string outPath, bool closeStream = true)
+        {
+            // Our new file
+            using (var newFileStream = new FileStream(outPath, FileMode.Create))
             {
-                fixed (byte* pBuffer = &data.Slice(headerSize)[0]) // Vol Header Size
-                {
-                    using var ums = new UnmanagedMemoryStream(pBuffer, data.Length - headerSize);
-                    using var ds = new DeflateStream(ums, CompressionMode.Decompress);
-                    ds.CopyTo(fs);
-                }
+                var decryptStream = new CryptoStream(fs, new VolumeCryptoTransform(keyset, seed), CryptoStreamMode.Read);
+                decryptStream.Read(_tmpBuff, 0, 8); // Compress Ignore header
+                var ds = new DeflateStream(decryptStream, CompressionMode.Decompress);
+                ds.CopyTo(newFileStream);
             }
+
+            if (closeStream)
+                fs.Dispose();
         }
 
+        /// <summary>
+        /// Decrypts and decompress a file in a segmented stream and saves it to the provided path.
+        /// </summary>
+        /// <param name="keyset"></param>
+        /// <param name="fs"></param>
+        /// <param name="seed"></param>
+        /// <param name="outPath"></param>
+        public unsafe static void DecryptAndInflateToFile(Keyset keyset, FileStream fs, uint seed, uint uncompressedSize, string outPath, bool closeStream = true)
+        {
+            // Our new file
+            using (var newFileStream = new FileStream(outPath, FileMode.Create))
+            {
+                var decryptStream = new CryptoStream(fs, new VolumeCryptoTransform(keyset, seed), CryptoStreamMode.Read);
+                decryptStream.Read(_tmpBuff, 0, 8); // Compress Ignore header
+
+                var ds = new DeflateStream(decryptStream, CompressionMode.Decompress);
+                int countToRead = (int)uncompressedSize;
+
+                const int bufSize = 81_920;
+                byte[] buffer = ArrayPool<byte>.Shared.Rent(bufSize);
+                while (countToRead > 0)
+                {
+                    int toRead = countToRead > bufSize ? bufSize : countToRead;
+                    ds.Read(buffer, 0, toRead);
+                    newFileStream.Write(buffer, 0, toRead);
+                    countToRead -= toRead;
+                }
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
+
+            if (closeStream)
+                fs.Dispose();
+        }
+
+        /// <summary>
+        /// Decrypt a file stream and saves it to the provided path.
+        /// </summary>
+        /// <param name="keyset"></param>
+        /// <param name="fs"></param>
+        /// <param name="seed"></param>
+        /// <param name="outPath"></param>
+        public unsafe static void DecryptToFile(Keyset keyset, FileStream fs, uint seed, string outPath, bool closeStream = true)
+        {
+            // Our new file
+            using (var newFileStream = new FileStream(outPath, FileMode.Create))
+            {
+                var decryptStream = new CryptoStream(fs, new VolumeCryptoTransform(keyset, seed), CryptoStreamMode.Read);
+                decryptStream.CopyTo(newFileStream);
+            }
+
+            if (closeStream)
+                fs.Dispose();
+        }
+
+        /// <summary>
+        /// Decrypts a segmented file within a stream and saves it to the provided path.
+        /// </summary>
+        /// <param name="keyset"></param>
+        /// <param name="fs"></param>
+        /// <param name="seed"></param>
+        /// <param name="outPath"></param>
+        public unsafe static void DecryptToFile(Keyset keyset, FileStream fs, uint seed, uint outSize, string outPath, bool closeStream = true)
+        {
+            // Our new file
+            using (var newFileStream = new FileStream(outPath, FileMode.Create))
+            {
+                var decryptStream = new CryptoStream(fs, new VolumeCryptoTransform(keyset, seed), CryptoStreamMode.Read);
+
+                int countToRead = (int)outSize;
+
+                const int bufSize = 81_920;
+                byte[] buffer = ArrayPool<byte>.Shared.Rent(bufSize);
+                while (countToRead > 0)
+                {
+                    int toRead = bufSize > countToRead ? countToRead : bufSize;
+                    decryptStream.Read(buffer, 0, toRead);
+                    newFileStream.Write(buffer, 0, toRead);
+                    countToRead -= toRead;
+                }
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
+
+            if (closeStream)
+                fs.Dispose();
+        }
+
+        /// <summary>
+        /// Checks if compression is valid for the buffer.
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="outSize"></param>
+        /// <returns></returns>
         public unsafe static bool CheckCompression(Span<byte> data, ulong outSize)
         {
             if (outSize > uint.MaxValue)
@@ -146,6 +260,40 @@ namespace GTToolsSharp.Utils
 
             const int headerSize = 8;       
             if (sr.Length <= headerSize) // Header size, if it's under, data is missing
+                return false;
+
+            return true;
+        }
+
+        /// <summary>
+        /// Checks if compression is valid for the stream.
+        /// </summary>
+        /// <param name="fs"></param>
+        /// <param name="keyset"></param>
+        /// <param name="seed"></param>
+        /// <param name="outSize"></param>
+        /// <returns></returns>
+        public unsafe static bool DecryptCheckCompression(FileStream fs, Keyset keyset, uint seed, ulong outSize)
+        {
+            if (outSize > uint.MaxValue)
+                return false;
+
+            Span<byte> header = new byte[8];
+            fs.Read(header);
+            keyset.CryptData(header, seed);
+
+            // Inflated is always little
+            uint zlibMagic = BinaryPrimitives.ReadUInt32LittleEndian(header);
+            uint sizeComplement = BinaryPrimitives.ReadUInt32LittleEndian(header[4..]);
+
+            if ((long)zlibMagic != Constants.ZLIB_MAGIC)
+                return false;
+
+            if ((uint)outSize + sizeComplement != 0)
+                return false;
+
+            const int headerSize = 8;
+            if (fs.Length <= headerSize) // Header size, if it's under, data is missing
                 return false;
 
             return true;
