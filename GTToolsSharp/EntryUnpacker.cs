@@ -41,7 +41,7 @@ namespace GTToolsSharp
                 if (_fileIndexesToExtract.Count == 0) // Make sure not to spam when not needed
                 {
                     if (!_volume.IsPatchVolume || _volume.NoUnpack)
-                        Program.Log($"DIR: {entryPath}");
+                        Program.Log($"[:] Entering Directory: {entryPath}");
                 }
 
                 var childEntryBTree = new FileEntryBTree(_volume.TableOfContents.Data, (int)_volume.TableOfContents.RootAndFolderOffsets[(int)entryKey.EntryIndex]);
@@ -54,7 +54,7 @@ namespace GTToolsSharp
                     return;
 
                 if (!_volume.IsPatchVolume || _volume.NoUnpack)
-                    Program.Log($"FILE: {entryPath}");
+                    Program.Log($"[:] Extracting: {entryPath}");
 
                 var nodeBTree = new FileInfoBTree(_volume.TableOfContents.Data, (int)_volume.TableOfContents.NodeTreeOffset);
                 var nodeKey = new FileInfoKey(entryKey.EntryIndex);

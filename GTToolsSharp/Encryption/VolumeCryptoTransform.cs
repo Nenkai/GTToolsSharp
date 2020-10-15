@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
+using System.Runtime.CompilerServices;
 
 namespace GTToolsSharp.Encryption
 {
@@ -16,6 +17,7 @@ namespace GTToolsSharp.Encryption
             this.currentKey = keyset.ComputeKey(seed);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int TransformBlock(byte[] inputBuffer, int inputOffset, int inputCount, byte[] outputBuffer, int outputOffset)
         {
             for (int i = 0; i < inputCount; i++)

@@ -96,13 +96,13 @@ namespace GTToolsSharp
 
             if (!vol.DecryptHeader(vol.VolumeHeaderData, BASE_VOLUME_ENTRY_INDEX))
             {
-                vol.Stream?.Dispose();
+                fs?.Dispose();
                 return null;
             }
 
             if (!vol.ReadHeader(vol.VolumeHeaderData))
             {
-                vol.Stream?.Dispose();
+                fs?.Dispose();
                 return null;
             }
 
@@ -113,13 +113,13 @@ namespace GTToolsSharp
 
             if (!vol.DecryptTOC())
             {
-                vol.Stream?.Dispose();
+                fs?.Dispose();
                 return null;
             }
 
             if (!vol.TableOfContents.LoadTOC())
             {
-                vol.Stream?.Dispose();
+                fs?.Dispose();
                 return null;
             }
 

@@ -86,8 +86,6 @@ namespace GTToolsSharp.Utils
             return ms.ToArray();
         }
 
-        // Just used to seek and skip the compress header
-        private static byte[] _tmpBuff = new byte[8];
         /// <summary>
         /// Decompresses a file (in memory, unsuited for large files).
         /// </summary>
@@ -166,17 +164,18 @@ namespace GTToolsSharp.Utils
                 decryptStream.Read(_tmpBuff, 0, 8); // Compress Ignore header
 
                 var ds = new DeflateStream(decryptStream, CompressionMode.Decompress);
-                int countToRead = (int)uncompressedSize;
 
+                int bytes = (int)uncompressedSize;
+                int read;
                 const int bufSize = 81_920;
                 byte[] buffer = ArrayPool<byte>.Shared.Rent(bufSize);
-                while (countToRead > 0)
+                while (bytes > 0 && (read = ds.Read(buffer, 0, Math.Min(buffer.Length, (int)bytes))) > 0)
                 {
-                    int toRead = countToRead > bufSize ? bufSize : countToRead;
-                    ds.Read(buffer, 0, toRead);
-                    newFileStream.Write(buffer, 0, toRead);
-                    countToRead -= toRead;
+                    ds.Read(buffer, 0, read);
+                    newFileStream.Write(buffer, 0, read);
+                    bytes -= read;
                 }
+
                 ArrayPool<byte>.Shared.Return(buffer);
             }
 
@@ -218,17 +217,17 @@ namespace GTToolsSharp.Utils
             {
                 var decryptStream = new CryptoStream(fs, new VolumeCryptoTransform(keyset, seed), CryptoStreamMode.Read);
 
-                int countToRead = (int)outSize;
-
+                int bytes = (int)outSize;
+                int read;
                 const int bufSize = 81_920;
                 byte[] buffer = ArrayPool<byte>.Shared.Rent(bufSize);
-                while (countToRead > 0)
+                while (outSize > 0 && (read = decryptStream.Read(buffer, 0, Math.Min(buffer.Length, (int)bytes))) > 0)
                 {
-                    int toRead = bufSize > countToRead ? countToRead : bufSize;
-                    decryptStream.Read(buffer, 0, toRead);
-                    newFileStream.Write(buffer, 0, toRead);
-                    countToRead -= toRead;
+                    decryptStream.Read(buffer, 0, read);
+                    newFileStream.Write(buffer, 0, read);
+                    bytes -= read;
                 }
+
                 ArrayPool<byte>.Shared.Return(buffer);
             }
 
@@ -265,6 +264,8 @@ namespace GTToolsSharp.Utils
             return true;
         }
 
+        // Just used to seek and skip the compress header
+        private static byte[] _tmpBuff = new byte[8];
         /// <summary>
         /// Checks if compression is valid for the stream.
         /// </summary>
@@ -278,13 +279,13 @@ namespace GTToolsSharp.Utils
             if (outSize > uint.MaxValue)
                 return false;
 
-            Span<byte> header = new byte[8];
-            fs.Read(header);
-            keyset.CryptData(header, seed);
+            Span<byte> _tmpBuff = new byte[8];
+            fs.Read(_tmpBuff);
+            keyset.CryptData(_tmpBuff, seed);
 
             // Inflated is always little
-            uint zlibMagic = BinaryPrimitives.ReadUInt32LittleEndian(header);
-            uint sizeComplement = BinaryPrimitives.ReadUInt32LittleEndian(header[4..]);
+            uint zlibMagic = BinaryPrimitives.ReadUInt32LittleEndian(_tmpBuff);
+            uint sizeComplement = BinaryPrimitives.ReadUInt32LittleEndian(_tmpBuff[4..]);
 
             if ((long)zlibMagic != Constants.ZLIB_MAGIC)
                 return false;
