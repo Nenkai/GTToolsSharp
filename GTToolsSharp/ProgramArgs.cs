@@ -119,4 +119,17 @@ namespace GTToolsSharp
         [Option('o', "output", HelpText = "Output folder for the files to pack.", Default = "volume_entries.txt")]
         public string OutputPath { get; set; }
     }
+
+    [Verb("compress", HelpText = "Custom compresses a file (also known as PS2ZIP)")]
+    public class CompressVerbs
+    {
+        [Option('i', "input", Required = true, HelpText = "Input file to compress")]
+        public string InputPath { get; set; }
+
+        [Option('o', "output", HelpText = "Output file, compressed", Default = "")]
+        public string OutputPath { get; set; }
+
+        [Option("b64", HelpText = "Encode the compressed file as base64.")]
+        public bool Base64Encode { get; set; }
+    }
 }

@@ -26,11 +26,12 @@ namespace GTToolsSharp
             Console.WriteLine("-- Gran Turismo 5/6 Volume Tools - (c) Nenkai#9075, ported from flatz --");
             Console.WriteLine();
 
-            Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, CryptVerbs, ListVerbs>(args)
+            Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, CryptVerbs, ListVerbs, CompressVerbs>(args)
                 .WithParsed<PackVerbs>(Pack)
                 .WithParsed<UnpackVerbs>(Unpack)
                 .WithParsed<CryptVerbs>(Crypt)
                 .WithParsed<ListVerbs>(List)
+                .WithParsed<CompressVerbs>(Compress)
                 .WithNotParsed(HandleNotParsedArgs);
 
             Program.Log("Exiting.");
@@ -267,7 +268,6 @@ namespace GTToolsSharp
             }
 
             using var sw = new StreamWriter(options.OutputPath);
-
             var entries = vol.TableOfContents.GetAllRegisteredFileMap();
             foreach (var entry in entries)
             {
@@ -278,6 +278,42 @@ namespace GTToolsSharp
             }
 
             sw.WriteLine($"[!] Wrote {entries.Count} at {options.OutputPath}.");
+        }
+
+        public static void Compress(CompressVerbs options)
+        {
+            bool isFile = File.Exists(options.InputPath);
+            bool isDir = false;
+
+            if (!isFile)
+            {
+                Console.WriteLine($"[X] Not a file.");
+                return;
+            }
+
+            Console.WriteLine("[:] Compressing..");
+            var file = File.ReadAllBytes(options.InputPath);
+            var compressed = MiscUtils.ZlibCompress(file);
+
+            if (string.IsNullOrEmpty(options.OutputPath))
+                options.OutputPath = options.InputPath;
+
+            if (options.Base64Encode)
+            {
+                var b64 = Convert.ToBase64String(compressed);
+                var b64Bytes = Encoding.ASCII.GetBytes(b64);
+
+                string outpath = Path.ChangeExtension(options.OutputPath, ".b64");
+                File.WriteAllBytes(outpath, b64Bytes);
+                Console.WriteLine($"[/] Done compressing & encoding as Base64 to {options.OutputPath}.");
+            }
+            else
+            {
+                string outpath = Path.ChangeExtension(options.OutputPath, ".cmp");
+                File.WriteAllBytes(outpath, compressed);
+                Console.WriteLine($"[/] Done compressing to {options.OutputPath}.");
+            }
+           
         }
 
         public static void Log(string message, bool forceConsolePrint = false)
