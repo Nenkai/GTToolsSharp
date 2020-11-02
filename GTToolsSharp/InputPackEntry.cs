@@ -21,6 +21,11 @@ namespace GTToolsSharp
         /// <summary>
         /// Uncompressed file size of this entry.
         /// </summary>
-        public uint FileSize { get; set; }
+        public long FileSize { get; set; }
+
+        /// <summary>
+        /// When the file was last modified to use against packing cache.
+        /// </summary>
+        public DateTime LastModified { get; set; }
     }
 }

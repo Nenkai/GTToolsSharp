@@ -14,13 +14,13 @@ namespace GTToolsSharp
 		private const string Charset = "K59W4S6H7DOVJPERUQMT8BAIC2YLG30Z1FNX";
 
 		private static string _default;
-		public static string Default 
-		{ 
+		public static string Default
+		{
 			get
-            {
+			{
 				_default ??= GetPathFromSeed(1);
 				return _default;
-            } 
+			}
 		}
 
 

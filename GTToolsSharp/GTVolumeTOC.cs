@@ -175,11 +175,12 @@ namespace GTToolsSharp
         /// </summary>
         /// <param name="FilesToPack">Files to pack.</param>
         /// <param name="outputDir">Main output dir to use to expose the packed files.</param>
-        public void PackFilesForPatchFileSystem(Dictionary<string, InputPackEntry> FilesToPack, string[] filesToRemove, string outputDir, bool packAllAsNewEntries)
+        public PackCache PackFilesForPatchFileSystem(Dictionary<string, InputPackEntry> FilesToPack, PackCache packCache, string[] filesToRemove, string outputDir, bool packAllAsNewEntries)
         {
             if (filesToRemove.Length > 0)
                 RemoveFilesFromTOC(filesToRemove);
 
+            var newCache = new PackCache();
             if (FilesToPack.Count > 0)
             {
                 // Pick up files we're going to add if there's any
@@ -200,10 +201,30 @@ namespace GTToolsSharp
                             Program.Log($"[:] Entry key for {file.Key} changed as new: {oldEntryFileIndex} -> {key.FileIndex}");
                         }
 
-                        string volPath = PDIPFSPathResolver.GetPathFromSeed(entryKey.EntryIndex);
+                        uint newUncompressedSize = (uint)file.Value.FileSize;
+                        uint newCompressedSize = (uint)file.Value.FileSize;
+                        string pfsFilePath = PDIPFSPathResolver.GetPathFromSeed(entryKey.EntryIndex);
 
-                        uint newUncompressedSize = file.Value.FileSize;
-                        uint newCompressedSize = file.Value.FileSize;
+                        // Check for cached file
+                        if (ParentVolume.UsePackingCache && packCache.HasValidCachedEntry(file.Value, key.FileIndex, out PackedCacheEntry validCacheEntry))
+                        {
+                            string oldFilePath = Path.Combine(outputDir, pfsFilePath);
+                            if (File.Exists(oldFilePath))
+                            {
+                                newCache.Entries.Add(file.Key, validCacheEntry);
+                                Program.Log($"[:] Pack: {file.Key} found in cache file, does not need compressing/encrypting");
+
+                                string movePath = Path.Combine($"{outputDir}_temp", pfsFilePath);
+                                Directory.CreateDirectory(Path.GetDirectoryName(movePath));
+                                File.Move(oldFilePath, Path.Combine($"{outputDir}_temp", pfsFilePath));
+                                UpdateKeyAndRetroactiveAdjustSegments(key, (uint)validCacheEntry.CompressedFileSize, (uint)validCacheEntry.FileSize);
+                                continue;
+                            }
+                            else
+                            {
+                                Program.Log($"[:] Pack: {file.Key} found in cache file but actual file is missing ({pfsFilePath}) - recreating it");
+                            }
+                        }
 
                         byte[] fileData = File.ReadAllBytes(file.Value.FullPath);
                         if (key.Flags.HasFlag(FileInfoFlags.Compressed))
@@ -213,19 +234,34 @@ namespace GTToolsSharp
                             newCompressedSize = (uint)fileData.Length;
                         }
 
-                        Program.Log($"[:] Pack: Saving and encrypting {file.Key} -> {volPath}");
+                        Program.Log($"[:] Pack: Saving and encrypting {file.Key} -> {pfsFilePath}");
 
                         // Will also update the ones we pre-registered
                         UpdateKeyAndRetroactiveAdjustSegments(key, newCompressedSize, newUncompressedSize);
                         ParentVolume.Keyset.CryptBytes(fileData, fileData, key.FileIndex);
 
-                        string outputFile = Path.Combine(outputDir, volPath);
+                        string outputFile = Path.Combine($"{outputDir}_temp", pfsFilePath);
                         Directory.CreateDirectory(Path.GetDirectoryName(outputFile));
 
                         File.WriteAllBytes(outputFile, fileData);
+
+                        // Add to our new cache
+                        var fileInfo = new FileInfo(outputFile);
+                        var newCacheEntry = new PackedCacheEntry()
+                        {
+                            FileIndex = entryKey.EntryIndex,
+                            FileSize = newUncompressedSize,
+                            LastModified = file.Value.LastModified,
+                            VolumePath = file.Key,
+                            CompressedFileSize = newCompressedSize,
+                        };
+
+                        newCache.Entries.Add(file.Key, newCacheEntry);
                     }
                 }
             }
+
+            return newCache;
         }
         
         /// <summary>

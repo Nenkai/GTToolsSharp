@@ -44,9 +44,15 @@ namespace GTToolsSharp
         public bool IsPatchVolume { get; set; }
         public string PatchVolumeFolder { get; set; }
         public bool NoUnpack { get; set; }
+        public bool UsePackingCache { get; set; }
         public string OutputDirectory { get; private set; }
 
         public Dictionary<string, InputPackEntry> FilesToPack = new Dictionary<string, InputPackEntry>();
+
+        /// <summary>
+        /// The packing cache to use to speed up packing which ignores already properly packed files.
+        /// </summary>
+        private PackCache _packCache { get; set; } = new PackCache();
 
         public GTVolumeHeader VolumeHeader { get; set; }
         public byte[] VolumeHeaderData { get; private set; }
@@ -159,24 +165,22 @@ namespace GTToolsSharp
                 return;
             }
 
-            if (Directory.Exists(outrepackDir))
-            {
-                if (Directory.EnumerateFileSystemEntries(outrepackDir).Any())
-                {
-                    Program.Log("");
-                    Program.Log("[!] Output folder is not empty and should be cleared to avoid overwriting unwanted files.", forceConsolePrint: true);
-                    Program.Log(">> Press any key twice to clear it. MAKE SURE THAT THE FOLDER IS A PACKING ONLY FOLDER to avoid any file loss.", forceConsolePrint: true);
-                    Console.ReadKey();
-                    Console.ReadKey();
+            // Leftover?
+            if (Directory.Exists($"{outrepackDir}_temp"))
+                Directory.Delete($"{outrepackDir}_temp", true);
 
-                    Directory.Delete(outrepackDir, true);
-                }
-            }
-
-            Directory.CreateDirectory(outrepackDir);
+            // Create temp to make sure we aren't transfering user leftovers
+            Directory.CreateDirectory($"{outrepackDir}_temp");
 
             Program.Log($"[-] Preparing to pack {FilesToPack.Count} files, and remove {filesToRemove.Length} files");
-            TableOfContents.PackFilesForPatchFileSystem(FilesToPack, filesToRemove, outrepackDir, packAllAsNew);
+            PackCache newCache = TableOfContents.PackFilesForPatchFileSystem(FilesToPack, _packCache, filesToRemove, outrepackDir, packAllAsNew);
+            newCache.Save(".pack_cache");
+
+            // Delete main one if needed
+            if (Directory.Exists(outrepackDir))
+                Directory.Delete(outrepackDir, true);
+
+            Directory.Move($"{outrepackDir}_temp", outrepackDir);
 
             Program.Log($"[-] Verifying and fixing Table of Contents segment sizes if needed");
             if (!TableOfContents.TryCheckAndFixInvalidSegmentIndexes())
@@ -215,18 +219,46 @@ namespace GTToolsSharp
 
             File.WriteAllBytes(headerPath, header);
 
-            Program.Log($"[/] Done packing. ", forceConsolePrint: true);
+            Program.Log($"[/] Done packing.", forceConsolePrint: true);
+        }
+
+        /// <summary>
+        /// Reads the specified packing cache, used to speed up the packing process by ignoring files that are already properly packed..
+        /// </summary>
+        /// <param name="path"></param>
+        public void ReadPackingCache(string path)
+        {
+            using var ts = File.OpenText(path);
+            while (!ts.EndOfStream)
+            {
+                var entry = new PackedCacheEntry();
+                string line = ts.ReadLine();
+                string[] args = line.Split("\t");
+                entry.VolumePath = args[0];
+                entry.FileIndex = uint.Parse(args[1]);
+                entry.LastModified = DateTime.Parse(args[2]);
+                entry.FileSize = long.Parse(args[3]);
+                entry.CompressedFileSize = long.Parse(args[4]);
+                _packCache.Entries.Add(entry.VolumePath, entry);
+            }
         }
 
         public void RegisterEntriesToRepack(string inputDir)
         {
-            string[] files = Directory.GetFiles(inputDir, "*", SearchOption.AllDirectories);
+            FileInfo[] files = Directory.GetFiles(inputDir, "*", SearchOption.AllDirectories)
+                .Select(fileName => new FileInfo(fileName)) 
+                .OrderBy(file => file.LastWriteTime) // For cache purposes, important!
+                .ToArray();
+
             foreach (var file in files)
             {
                 var entry = new InputPackEntry();
-                entry.FullPath = file;
-                entry.VolumeDirPath = file.AsSpan(inputDir.Length).TrimStart('\\').ToString().Replace('\\', '/');
-                entry.FileSize = (uint)new FileInfo(entry.FullPath).Length;
+                entry.FullPath = file.FullName;
+                entry.VolumeDirPath = file.FullName.AsSpan(inputDir.Length).TrimStart('\\').ToString().Replace('\\', '/');
+                entry.FileSize = file.Length;
+
+                entry.LastModified = new DateTime(file.LastWriteTime.Year, file.LastWriteTime.Month, file.LastWriteTime.Day,
+                    file.LastWriteTime.Hour, file.LastWriteTime.Minute, file.LastWriteTime.Second, DateTimeKind.Unspecified);
                 FilesToPack.Add(entry.VolumeDirPath, entry);
             }
         }
@@ -281,7 +313,7 @@ namespace GTToolsSharp
                 using var fs = new FileStream(localPath, FileMode.Open);
                 if (fs.Length >= 7)
                 {
-                    Span<byte> magic = new byte[6];
+                    Span<byte> magic = stackalloc byte[6];
                     fs.Read(magic);
                     if (Encoding.ASCII.GetString(magic).StartsWith("BSDIFF"))
                     {
@@ -353,8 +385,6 @@ namespace GTToolsSharp
                 return false;
 
             Span<uint> blocks = MemoryMarshal.Cast<byte, uint>(headerData);
-            int end = headerData.Length / sizeof(uint); // 160 / 4
-
             Keyset.DecryptBlocks(blocks, blocks);
             return true;
         }
@@ -436,6 +466,5 @@ namespace GTToolsSharp
 
             return true;
         }
-
     }
 }

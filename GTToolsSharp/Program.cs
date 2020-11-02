@@ -102,7 +102,11 @@ namespace GTToolsSharp
                 Program.Log("[X] Cannot repack files in single volume files (GT.VOL).");
                 return;
             }
-            
+
+            if (options.NoCache)
+                Program.Log("[!] Not using cache.");
+            vol.UsePackingCache = !options.NoCache;
+
             Program.Log("[-] Started packing process.");
 
             string[] filesToRemove = Array.Empty<string>();
@@ -111,6 +115,9 @@ namespace GTToolsSharp
 
             if (options.PackAllAsNew)
                 Program.Log("[!] Note: --pack-all-as-new provided - packing as new is now on by default. To use overwrite mode, use --pack-as-overwrite");
+
+            if (File.Exists(".pack_cache"))
+                vol.ReadPackingCache(".pack_cache");
 
             vol.RegisterEntriesToRepack(options.FolderToRepack);
             vol.PackFiles(options.OutputPath, filesToRemove, !options.PackAsOverwrite, options.CustomGameID);
@@ -282,12 +289,9 @@ namespace GTToolsSharp
 
         public static void Compress(CompressVerbs options)
         {
-            bool isFile = File.Exists(options.InputPath);
-            bool isDir = false;
-
-            if (!isFile)
+            if (!File.Exists(options.InputPath))
             {
-                Console.WriteLine($"[X] Not a file.");
+                Console.WriteLine($"[X] File does not exist.");
                 return;
             }
 
