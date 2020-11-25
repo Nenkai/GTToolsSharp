@@ -177,6 +177,10 @@ namespace GTToolsSharp
         /// <param name="outputDir">Main output dir to use to expose the packed files.</param>
         public PackCache PackFilesForPatchFileSystem(Dictionary<string, InputPackEntry> FilesToPack, PackCache packCache, string[] filesToRemove, string outputDir, bool packAllAsNewEntries)
         {
+            // If we are packing as new, ensure the TOC is before all the files (that will come after it)
+            if (packAllAsNewEntries)
+                ParentHeader.TOCEntryIndex = NextEntryIndex();
+
             if (filesToRemove.Length > 0)
                 RemoveFilesFromTOC(filesToRemove);
 
@@ -187,83 +191,97 @@ namespace GTToolsSharp
                 PreRegisterNewFilesToPack(FilesToPack);
 
                 Dictionary<string, FileEntryKey> tocFiles = GetAllRegisteredFileMap();
-                foreach (var file in FilesToPack)
+
+                // Pack Non-Added files first
+                foreach (var tocFile in tocFiles)
                 {
-                    if (tocFiles.TryGetValue(file.Key, out FileEntryKey entryKey))
-                    {
-                        Program.Log($"[:] Pack: Processing {file.Key}");
-                        FileInfoKey key = FileInfos.GetByFileIndex(entryKey.EntryIndex);
+                    if (FilesToPack.TryGetValue(tocFile.Key, out InputPackEntry file) && !file.IsAddedFile) 
+                        PackFile(packCache, outputDir, packAllAsNewEntries, newCache, tocFile.Value, file);
+                }
 
-                        if (packAllAsNewEntries)
-                        {
-                            uint oldEntryFileIndex = key.FileIndex;
-                            key = ModifyExistingEntryAsNew(key, file.Key);
-                            Program.Log($"[:] Entry key for {file.Key} changed as new: {oldEntryFileIndex} -> {key.FileIndex}");
-                        }
-
-                        uint newUncompressedSize = (uint)file.Value.FileSize;
-                        uint newCompressedSize = (uint)file.Value.FileSize;
-                        string pfsFilePath = PDIPFSPathResolver.GetPathFromSeed(entryKey.EntryIndex);
-
-                        // Check for cached file
-                        if (ParentVolume.UsePackingCache && packCache.HasValidCachedEntry(file.Value, key.FileIndex, out PackedCacheEntry validCacheEntry))
-                        {
-                            string oldFilePath = Path.Combine(outputDir, pfsFilePath);
-                            if (File.Exists(oldFilePath))
-                            {
-                                newCache.Entries.Add(file.Key, validCacheEntry);
-                                Program.Log($"[:] Pack: {file.Key} found in cache file, does not need compressing/encrypting");
-
-                                string movePath = Path.Combine($"{outputDir}_temp", pfsFilePath);
-                                Directory.CreateDirectory(Path.GetDirectoryName(movePath));
-                                File.Move(oldFilePath, Path.Combine($"{outputDir}_temp", pfsFilePath));
-                                UpdateKeyAndRetroactiveAdjustSegments(key, (uint)validCacheEntry.CompressedFileSize, (uint)validCacheEntry.FileSize);
-                                continue;
-                            }
-                            else
-                            {
-                                Program.Log($"[:] Pack: {file.Key} found in cache file but actual file is missing ({pfsFilePath}) - recreating it");
-                            }
-                        }
-
-                        byte[] fileData = File.ReadAllBytes(file.Value.FullPath);
-                        if (key.Flags.HasFlag(FileInfoFlags.Compressed))
-                        {
-                            Program.Log($"[:] Pack: Compressing {file.Key}");
-                            fileData = MiscUtils.ZlibCompress(fileData);
-                            newCompressedSize = (uint)fileData.Length;
-                        }
-
-                        Program.Log($"[:] Pack: Saving and encrypting {file.Key} -> {pfsFilePath}");
-
-                        // Will also update the ones we pre-registered
-                        UpdateKeyAndRetroactiveAdjustSegments(key, newCompressedSize, newUncompressedSize);
-                        ParentVolume.Keyset.CryptBytes(fileData, fileData, key.FileIndex);
-
-                        string outputFile = Path.Combine($"{outputDir}_temp", pfsFilePath);
-                        Directory.CreateDirectory(Path.GetDirectoryName(outputFile));
-
-                        File.WriteAllBytes(outputFile, fileData);
-
-                        // Add to our new cache
-                        var fileInfo = new FileInfo(outputFile);
-                        var newCacheEntry = new PackedCacheEntry()
-                        {
-                            FileIndex = entryKey.EntryIndex,
-                            FileSize = newUncompressedSize,
-                            LastModified = file.Value.LastModified,
-                            VolumePath = file.Key,
-                            CompressedFileSize = newCompressedSize,
-                        };
-
-                        newCache.Entries.Add(file.Key, newCacheEntry);
-                    }
+                // Pack then added files
+                foreach (var addedFile in FilesToPack.Where(e => e.Value.IsAddedFile))
+                {
+                    var tocFile = tocFiles[addedFile.Value.VolumeDirPath];
+                    PackFile(packCache, outputDir, packAllAsNewEntries, newCache, tocFile, addedFile.Value);
                 }
             }
 
             return newCache;
         }
-        
+
+        private void PackFile(PackCache packCache, string outputDir, bool packAllAsNewEntries, PackCache newCache, FileEntryKey tocFile, InputPackEntry file)
+        {
+            Program.Log($"[:] Pack: Processing {file.VolumeDirPath}");
+            FileInfoKey key = FileInfos.GetByFileIndex(tocFile.EntryIndex);
+
+            if (packAllAsNewEntries && !file.IsAddedFile)
+            {
+                uint oldEntryFileIndex = key.FileIndex;
+                key = ModifyExistingEntryAsNew(key, file.VolumeDirPath);
+                Program.Log($"[:] Entry key for {file.VolumeDirPath} changed as new: {oldEntryFileIndex} -> {key.FileIndex}");
+            }
+
+            uint newUncompressedSize = (uint)file.FileSize;
+            uint newCompressedSize = (uint)file.FileSize;
+            string pfsFilePath = PDIPFSPathResolver.GetPathFromSeed(tocFile.EntryIndex);
+
+            // Check for cached file
+            if (ParentVolume.UsePackingCache && packCache.HasValidCachedEntry(file, key.FileIndex, out PackedCacheEntry validCacheEntry))
+            {
+                string oldFilePath = Path.Combine(outputDir, pfsFilePath);
+                if (File.Exists(oldFilePath))
+                {
+                    newCache.Entries.Add(file.VolumeDirPath, validCacheEntry);
+                    Program.Log($"[:] Pack: {file.VolumeDirPath} found in cache file, does not need compressing/encrypting");
+
+                    string movePath = Path.Combine($"{outputDir}_temp", pfsFilePath);
+                    Directory.CreateDirectory(Path.GetDirectoryName(movePath));
+                    File.Move(oldFilePath, Path.Combine($"{outputDir}_temp", pfsFilePath));
+                    UpdateKeyAndRetroactiveAdjustSegments(key, (uint)validCacheEntry.CompressedFileSize, (uint)validCacheEntry.FileSize);
+                    return;
+                }
+                else
+                {
+                    Program.Log($"[:] Pack: {file.VolumeDirPath} found in cache file but actual file is missing ({pfsFilePath}) - recreating it");
+                }
+            }
+
+            byte[] fileData = File.ReadAllBytes(file.FullPath);
+            if (key.Flags.HasFlag(FileInfoFlags.Compressed))
+            {
+                Program.Log($"[:] Pack: Compressing {file.VolumeDirPath}");
+                fileData = MiscUtils.ZlibCompress(fileData);
+                newCompressedSize = (uint)fileData.Length;
+            }
+
+            Program.Log($"[:] Pack: Saving and encrypting {file.VolumeDirPath} -> {pfsFilePath}");
+
+            // Will also update the ones we pre-registered
+            UpdateKeyAndRetroactiveAdjustSegments(key, newCompressedSize, newUncompressedSize);
+            ParentVolume.Keyset.CryptBytes(fileData, fileData, key.FileIndex);
+
+            string outputFile = Path.Combine($"{outputDir}_temp", pfsFilePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(outputFile));
+
+            File.WriteAllBytes(outputFile, fileData);
+
+            if (ParentVolume.UsePackingCache)
+            {
+                // Add to our new cache
+                var newCacheEntry = new PackedCacheEntry()
+                {
+                    FileIndex = tocFile.EntryIndex,
+                    FileSize = newUncompressedSize,
+                    LastModified = file.LastModified,
+                    VolumePath = file.VolumeDirPath,
+                    CompressedFileSize = newCompressedSize,
+                };
+
+                newCache.Entries.Add(file.VolumeDirPath, newCacheEntry);
+            }
+        }
+
         /// <summary>
         /// Add files to be registered within the table of contents later on and their sizes filled.
         /// </summary>
@@ -275,11 +293,11 @@ namespace GTToolsSharp
             // Add Files, these files will have their sizes adjusted later on during repack process
             foreach (var file in FilesToPack)
             {
-                
                 if (!tocFiles.ContainsKey(file.Key))
                 {
                     Program.Log($"[:] Pack: Adding new file to TOC: {file.Key}");
                     RegisterFilePath(file.Key);
+                    file.Value.IsAddedFile = true;
                 }
             }
         }
@@ -293,7 +311,7 @@ namespace GTToolsSharp
         private FileInfoKey ModifyExistingEntryAsNew(FileInfoKey infoKey, string newEntryPath)
         {
             // Check paths
-            string[] pathParts = newEntryPath.Split('/');
+            string[] pathParts = newEntryPath.Split(Path.AltDirectorySeparatorChar);
             FileEntryBTree currentSubTree = Files[0];
 
             uint newKeyIndex = NextEntryIndex();
@@ -416,6 +434,14 @@ namespace GTToolsSharp
             FileInfoKey newKey = new FileInfoKey(this.NextEntryIndex());
             newKey.SegmentIndex = this.NextSegmentIndex();
             newKey.Flags |= FileInfoFlags.Compressed;
+            newKey.CompressedSize = 1; // Important for segments to count as at least one
+            newKey.UncompressedSize = 1; // Same
+
+            /* TODO: Needs more investigation on compressed files
+            if (   (path.StartsWith("crs/") && !path.EndsWith("stream"))
+                || (path.StartsWith("car/") && !path.EndsWith("bin"))
+                || (!path.StartsWith("replay/") && !path.StartsWith("carsound/") && !path.StartsWith("car")))
+                newKey.Flags |= FileInfoFlags.Compressed; */
 
             FileInfos.Entries.Add(newKey);
             string[] folders = path.Split(Path.AltDirectorySeparatorChar);
@@ -562,8 +588,6 @@ namespace GTToolsSharp
                 if (currentEntry.Flags.HasFlag(EntryKeyFlags.Directory))
                 {
                     string baseDir = FileNames.GetByIndex(currentEntry.NameIndex).Value + '/';
-                    if (baseDir.StartsWith("projects"))
-                        ;
                     uint dirIndex = currentEntry.EntryIndex;
                     TraverseNestedTreeAndList(files, baseDir, ref dirIndex, ref currentIndex);
                 }
@@ -672,7 +696,11 @@ namespace GTToolsSharp
         public uint NextSegmentIndex()
         {
             FileInfoKey lastSegmentKey = FileInfos.Entries.OrderByDescending(e => e.SegmentIndex).FirstOrDefault();
-            return (uint)(lastSegmentKey.SegmentIndex + MathF.Ceiling(lastSegmentKey.CompressedSize / (float)SEGMENT_SIZE)); // Last + Size
+
+            int minSize = 1;
+            if (lastSegmentKey.CompressedSize > minSize)
+                minSize = (int)lastSegmentKey.CompressedSize;
+            return (uint)(lastSegmentKey.SegmentIndex + MathF.Ceiling(minSize / (float)SEGMENT_SIZE)); // Last + Size
         }
 
         public ulong GetTotalPatchFileSystemSize(uint compressedTocSize)

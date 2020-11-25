@@ -52,13 +52,12 @@ namespace GTToolsSharp.Utils
 
         public static ushort GetBitsAt(ref SpanReader sr, uint offset)
         {
-            uint offsetAligned = (offset * 12) / 8;
+            uint offsetAligned = (offset * 0x10 - offset * 4) / 8;
             ushort result = CryptoUtils.ReadUInt16AtOffset(ref sr, offsetAligned);
             if ((offset & 0x1) == 0)
                 result >>= 4;
-            var res = (ushort)(result & 0xFFFu);
 
-            return res;
+            return (ushort)(result & 0xFFF);
         }
 
         public static void WriteBitsAt(BinaryStream bs, uint data, uint offset)

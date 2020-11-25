@@ -174,7 +174,8 @@ namespace GTToolsSharp
 
             Program.Log($"[-] Preparing to pack {FilesToPack.Count} files, and remove {filesToRemove.Length} files");
             PackCache newCache = TableOfContents.PackFilesForPatchFileSystem(FilesToPack, _packCache, filesToRemove, outrepackDir, packAllAsNew);
-            newCache.Save(".pack_cache");
+            if (UsePackingCache)
+                newCache.Save(".pack_cache");
 
             // Delete main one if needed
             if (Directory.Exists(outrepackDir))
@@ -189,10 +190,7 @@ namespace GTToolsSharp
                 Program.Log($"[/] Segment sizes are correct.");
 
             if (packAllAsNew)
-            {
-                VolumeHeader.TOCEntryIndex = TableOfContents.NextEntryIndex();
                 Program.Log($"[-] Packing as new: New TOC Entry Index is {VolumeHeader.TOCEntryIndex}.");
-            }
 
             Program.Log($"[-] Saving Table of Contents ({PDIPFSPathResolver.GetPathFromSeed(VolumeHeader.TOCEntryIndex)})");
             TableOfContents.SaveToPatchFileSystem(outrepackDir, out uint compressedSize, out uint uncompressedSize);
@@ -245,9 +243,11 @@ namespace GTToolsSharp
 
         public void RegisterEntriesToRepack(string inputDir)
         {
-            FileInfo[] files = Directory.GetFiles(inputDir, "*", SearchOption.AllDirectories)
-                .Select(fileName => new FileInfo(fileName)) 
-                .OrderBy(file => file.LastWriteTime) // For cache purposes, important!
+            string[] fileNames = Directory.GetFiles(inputDir, "*", SearchOption.AllDirectories);
+            Array.Sort(fileNames, StringComparer.OrdinalIgnoreCase);
+            var files = fileNames.Select(fileName => new FileInfo(fileName))
+                //.OrderBy(e => e.FullName)
+                //.OrderBy(file => file.LastWriteTime) // For cache purposes, important!
                 .ToArray();
 
             foreach (var file in files)

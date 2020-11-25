@@ -14,7 +14,6 @@ using Syroot.BinaryData.Memory;
 
 using ICSharpCode.SharpZipLib.Zip.Compression;
 
-
 using GTToolsSharp.Encryption;
 using System.Security.Cryptography;
 using System.Buffers.Binary;

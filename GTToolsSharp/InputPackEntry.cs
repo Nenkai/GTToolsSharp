@@ -27,5 +27,7 @@ namespace GTToolsSharp
         /// When the file was last modified to use against packing cache.
         /// </summary>
         public DateTime LastModified { get; set; }
+
+        public bool IsAddedFile { get; set; }
     }
 }

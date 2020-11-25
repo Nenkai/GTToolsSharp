@@ -103,9 +103,9 @@ namespace GTToolsSharp
                 return;
             }
 
-            if (options.NoCache)
-                Program.Log("[!] Not using cache.");
-            vol.UsePackingCache = !options.NoCache;
+            if (options.Cache)
+                Program.Log("[!] Using packing cache.");
+            vol.UsePackingCache = options.Cache;
 
             Program.Log("[-] Started packing process.");
 
@@ -116,7 +116,7 @@ namespace GTToolsSharp
             if (options.PackAllAsNew)
                 Program.Log("[!] Note: --pack-all-as-new provided - packing as new is now on by default. To use overwrite mode, use --pack-as-overwrite");
 
-            if (File.Exists(".pack_cache"))
+            if (vol.UsePackingCache && File.Exists(".pack_cache"))
                 vol.ReadPackingCache(".pack_cache");
 
             vol.RegisterEntriesToRepack(options.FolderToRepack);

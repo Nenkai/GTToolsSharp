@@ -76,46 +76,40 @@ namespace GTToolsSharp
 		}
 
 
-		private static string GetSubPathName(uint seed, int charShiftCount)
+		private static string GetSubPathName(uint seed, int subpathLength)
 		{
 			string pathName = string.Empty;
 
 			// Max 16 chars
-			char[] chars = new char[charShiftCount + 1];
+			char[] chars = new char[subpathLength];
 
-			if (charShiftCount != 0)
+			if (subpathLength != 0)
 			{
-				int index = 1;
-				int charCnt = charShiftCount;
-				do
-				{
+				for (int i = 0; i < subpathLength; i++)
+                {
 					char c = Charset[(int)(seed % 36)];
 					seed /= 36;
-					chars[index++] = c;
-					charCnt--;
-				} while (charCnt != 0);
+					chars[i] = c;
+				}
 
-				if ((charShiftCount & 1) == 0)
+				int pos = subpathLength - 1;
+				if (subpathLength % 2 == 0)
 				{
-					for (charCnt = charShiftCount; charCnt != 0; charCnt -= 2)
-					{
-						pathName += '/';
-						pathName += chars[charCnt];
-						pathName += chars[charCnt - 1];
-					}
+					pathName += '/';
+					pathName += chars[pos];
+					pos--;
 				}
-				else
-				{
-					charCnt = charShiftCount - 1;
-					for (pathName += chars[charCnt + 1], charShiftCount = charCnt; charCnt != 0;)
-					{
-						pathName += '/';
-						charCnt = charShiftCount - 2;
-						pathName += chars[charShiftCount];
-						charShiftCount = charCnt;
-						pathName += chars[charCnt + 1];
-					}
+
+				while (true)
+                {
+					pathName += chars[pos];
+					if (pos == 0)
+						break;
+					pathName += '/';
+					pathName += chars[pos - 1];
+					pos -= 2;
 				}
+
 			}
 
 			return pathName;

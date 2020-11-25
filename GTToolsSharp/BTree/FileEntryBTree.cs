@@ -95,7 +95,14 @@ namespace GTToolsSharp.BTree
         }
 
         public void ResortByNameIndexes()
-            => Entries.Sort((x, y) => x.NameIndex.CompareTo(y.NameIndex));
+        {
+            /* Well, quicksort can go to hell. 
+             * Wasted 2 days of mine because this crap would reorder entries that werent needed to be 
+             * OrderBy doesnt touch them as it should be 
+             */
+            // Entries.Sort((x, y) => x.NameIndex.CompareTo(y.NameIndex)); 
+            Entries = Entries.OrderBy(e => e.NameIndex).ToList();
+        }
 
         public FileEntryKey GetFolderEntryByNameIndex(uint nameIndex)
         {
@@ -141,7 +148,7 @@ namespace GTToolsSharp.BTree
 
                 while (keySegmentIndex < Entries.Count)
                 {
-                    uint offsetAligned = ((keysThisSegment + 4u) * 12) / 8u;
+                    uint offsetAligned = ((keysThisSegment + 4) * 0x10 - (keysThisSegment + 4) * 4) / 8U;
                     // Is Odd
                     if ((keysThisSegment + 4 & 1) == 0)
                         offsetAligned--;
@@ -190,11 +197,12 @@ namespace GTToolsSharp.BTree
                         CryptoUtils.WriteBitsAt(offsetsBufferWriter, keysThisSegment + GTVolumeTOC.SEGMENT_SIZE, 0);
 
                         // Write "high", the node count
+                        uint offs = ((keysThisSegment + 3) * 0x10 - (keysThisSegment + 3) * 4) / 8 - 1;
                         for (int o = 0; o < keysThisSegment; o++)
-                            CryptoUtils.WriteBitsAt(offsetsBufferWriter, currentSegmentOffsets[o] + (((keysThisSegment + 3) * 12) / 8) - 1, (uint)o + 1u);
+                            CryptoUtils.WriteBitsAt(offsetsBufferWriter, currentSegmentOffsets[o] + offs, (uint)o + 1u);
 
-                        offsetAligned = (((keysThisSegment + 3) * 12) / 8) - 1;
-                        CryptoUtils.WriteBitsAt(offsetsBufferWriter, offsetAligned + (uint)keyTreeBuffer.Length, keysThisSegment + 1);
+                        //offsetAligned = (((keysThisSegment + 3) * 12) / 8) - 1;
+                        CryptoUtils.WriteBitsAt(offsetsBufferWriter, offs + (uint)keyTreeBuffer.Length, keysThisSegment + 1);
                         bTreeWriter.Write(offsetsBuffer.ToArray());
                         bTreeWriter.Write(keyTreeBuffer.ToArray());
 

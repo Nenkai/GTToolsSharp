@@ -52,7 +52,6 @@ namespace GTToolsSharp.BTree
                 for (uint j = 0; j < keyCount; j++)
                 {
                     uint offset = GetBitsAt(ref sr, j + 1);
-
                     var data = sr.GetReaderAtOffset((int)offset);
 
                     TKey key = new TKey();

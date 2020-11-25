@@ -84,8 +84,8 @@ namespace GTToolsSharp
         [Option("remove-files", HelpText = "Remove specific files from the volume. Requires a \"files_to_remove.txt\" file in the current folder, each line being an asset path (i.e advertise/gt5-jp/pdi_sd.img)")]
         public bool PackRemoveFiles { get; set; }
 
-        [Option("no-cache", HelpText = "Disable packing cache by default.")]
-        public bool NoCache { get; set; }
+        [Option("cache", HelpText = "Enable packing cache.")]
+        public bool Cache { get; set; }
 
         [Option('l', "log", HelpText = "Log file path. Default is log.txt.", Default = "log.txt")]
         public string LogPath { get; set; }
