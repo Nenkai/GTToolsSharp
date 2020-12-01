@@ -248,6 +248,9 @@ namespace GTToolsSharp
             }
 
             byte[] fileData = File.ReadAllBytes(file.FullPath);
+            if (ParentVolume.NoCompress)
+                key.Flags &= ~FileInfoFlags.Compressed;
+
             if (key.Flags.HasFlag(FileInfoFlags.Compressed))
             {
                 Program.Log($"[:] Pack: Compressing {file.VolumeDirPath}");
@@ -433,7 +436,9 @@ namespace GTToolsSharp
 
             FileInfoKey newKey = new FileInfoKey(this.NextEntryIndex());
             newKey.SegmentIndex = this.NextSegmentIndex();
-            newKey.Flags |= FileInfoFlags.Compressed;
+
+            if (!ParentVolume.NoCompress)
+                newKey.Flags |= FileInfoFlags.Compressed;
             newKey.CompressedSize = 1; // Important for segments to count as at least one
             newKey.UncompressedSize = 1; // Same
 

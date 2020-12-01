@@ -45,6 +45,7 @@ namespace GTToolsSharp
         public string PatchVolumeFolder { get; set; }
         public bool NoUnpack { get; set; }
         public bool UsePackingCache { get; set; }
+        public bool NoCompress { get; set; }
         public string OutputDirectory { get; private set; }
 
         public Dictionary<string, InputPackEntry> FilesToPack = new Dictionary<string, InputPackEntry>();
@@ -162,7 +163,9 @@ namespace GTToolsSharp
             if (FilesToPack.Count == 0 && filesToRemove.Length == 0)
             {
                 Program.Log("[X] Found no files to pack or remove from volume.", forceConsolePrint: true);
-                return;
+                Console.WriteLine("[?] Continue? (Y/N)");
+                if (Console.ReadKey().Key != ConsoleKey.Y)
+                    return;
             }
 
             // Leftover?

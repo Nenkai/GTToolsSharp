@@ -100,6 +100,9 @@ namespace GTToolsSharp
         [Option("custom-game-id", HelpText = "Custom Game-ID/Description to assign to the volume header. Must not be above 128 characters.")]
         public string CustomGameID { get; set; }
 
+        [Option("no-compress", HelpText = "Newly packed files won't be compressed, and will be marked as such in the TOC.")]
+        public bool NoCompress { get; set; }
+
         [Usage(ApplicationAlias = "GTToolsSharp")]
         public static IEnumerable<Example> Examples
         {
