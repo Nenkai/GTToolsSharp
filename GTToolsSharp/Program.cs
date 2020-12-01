@@ -119,6 +119,7 @@ namespace GTToolsSharp
             if (vol.UsePackingCache && File.Exists(".pack_cache"))
                 vol.ReadPackingCache(".pack_cache");
 
+            vol.NoCompress = options.NoCompress;
             vol.RegisterEntriesToRepack(options.FolderToRepack);
             vol.PackFiles(options.OutputPath, filesToRemove, !options.PackAsOverwrite, options.CustomGameID);
         }

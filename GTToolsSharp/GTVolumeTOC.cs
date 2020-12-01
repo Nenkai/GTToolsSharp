@@ -250,8 +250,7 @@ namespace GTToolsSharp
             byte[] fileData = File.ReadAllBytes(file.FullPath);
             if (ParentVolume.NoCompress)
                 key.Flags &= ~FileInfoFlags.Compressed;
-
-            if (key.Flags.HasFlag(FileInfoFlags.Compressed))
+            else if (key.Flags.HasFlag(FileInfoFlags.Compressed))
             {
                 Program.Log($"[:] Pack: Compressing {file.VolumeDirPath}");
                 fileData = MiscUtils.ZlibCompress(fileData);
