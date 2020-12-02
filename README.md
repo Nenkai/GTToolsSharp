@@ -11,6 +11,8 @@ The main motivation for writing this tool was the near unreadability of the main
 Files can be extracted for GT.VOL (main build volume) and PDIPFS (update patches).
 To unpack/pack certain builds you will need the keys for each one of them. Only the keys for GT5 (EU/US) and GT6 are provided.
 
+# **DOWNLOADS IN THE RELEASES -> **
+
 ## Usage
 ### Unpacking
 Input: `GTToolsSharp unpack -i <input GT.VOL or PDIPFS path> -o <Folder to extract to> (--noprint)`
