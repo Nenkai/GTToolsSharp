@@ -487,44 +487,44 @@ namespace GTToolsSharp
         /// <summary>
         /// Registers a directory.
         /// </summary>
-        /// <param name="dirIndex"></param>
+        /// <param name="parentDirIndex"></param>
         /// <param name="dirName"></param>
         /// <returns></returns>
-        public uint RegisterDirectory(uint dirIndex, string dirName)
+        public uint RegisterDirectory(uint parentDirIndex, string dirName)
         {
             uint dirNameIndex = RegisterFilename(dirName);
-            uint entryIndex = 0;
+            uint dirIndex = 0;
 
             // Grab the next file/folder entry of the one we just added, will be used for sorting
-            var subDirsInBaseDir = Files[(int)dirIndex].Entries.Where(e => e.Flags.HasFlag(EntryKeyFlags.Directory));
+            var subDirsInBaseDir = Files[(int)parentDirIndex].Entries.Where(e => e.Flags.HasFlag(EntryKeyFlags.Directory));
             if (subDirsInBaseDir.Count() > 1)
             {
                 // Find the first entry whose names appear after the current folder
                 FileEntryKey k = subDirsInBaseDir.FirstOrDefault(e => e.NameIndex > dirNameIndex);
-                entryIndex = k?.EntryIndex ?? 0;
+                dirIndex = k?.EntryIndex ?? 0;
             }
 
-            if (entryIndex == 0)
+            if (dirIndex == 0)
             {
                 if (!subDirsInBaseDir.Any())
-                    entryIndex = dirIndex + 1; // New one
+                    dirIndex = parentDirIndex + 1; // New one
                 else
                 {
                     uint lastDirIndex = subDirsInBaseDir.Max(e => e.EntryIndex);
                     Math.Max(lastDirIndex, Files[(int)lastDirIndex].Entries
                         .Where(e => e.Flags.HasFlag(EntryKeyFlags.Directory))
                         .Max(t => t.EntryIndex));
-                    entryIndex = lastDirIndex + 1;
+                    dirIndex = lastDirIndex + 1;
                 }
             }
 
             // Update the trees if needed
-            uint currentIndex = entryIndex;
+            uint currentIndex = dirIndex;
             foreach (var tree in Files)
             {
                 foreach (var child in tree.Entries)
                 {
-                    if (child.Flags.HasFlag(EntryKeyFlags.Directory) && child.EntryIndex >= entryIndex)
+                    if (child.Flags.HasFlag(EntryKeyFlags.Directory) && child.EntryIndex >= dirIndex)
                     {
                         currentIndex = child.EntryIndex;
                         child.EntryIndex = currentIndex + 1;
@@ -535,12 +535,12 @@ namespace GTToolsSharp
             var newEntry = new FileEntryKey();
             newEntry.Flags = EntryKeyFlags.Directory;
             newEntry.NameIndex = dirNameIndex;
-            newEntry.EntryIndex = entryIndex;
-            Files[(int)dirIndex].Entries.Add(newEntry);
-            Files[(int)dirIndex].ResortByNameIndexes();
+            newEntry.EntryIndex = dirIndex;
+            Files[(int)parentDirIndex].Entries.Add(newEntry);
+            Files[(int)parentDirIndex].ResortByNameIndexes();
 
             // Basically add the new empty folder
-            Files.Insert((int)entryIndex, new FileEntryBTree());
+            Files.Insert((int)dirIndex, new FileEntryBTree());
 
             return dirIndex;
         }
