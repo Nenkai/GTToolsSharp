@@ -511,9 +511,12 @@ namespace GTToolsSharp
                 else
                 {
                     uint lastDirIndex = subDirsInBaseDir.Max(e => e.EntryIndex);
-                    Math.Max(lastDirIndex, Files[(int)lastDirIndex].Entries
-                        .Where(e => e.Flags.HasFlag(EntryKeyFlags.Directory))
-                        .Max(t => t.EntryIndex));
+
+                    var subDirs = Files[(int)lastDirIndex].Entries
+                        .Where(e => e.Flags.HasFlag(EntryKeyFlags.Directory));
+
+
+                    lastDirIndex = Math.Max(lastDirIndex, subDirs.Any() ? subDirs.Max(t => t.EntryIndex) : 0);
                     dirIndex = lastDirIndex + 1;
                 }
             }
