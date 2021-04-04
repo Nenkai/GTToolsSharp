@@ -226,6 +226,11 @@ namespace GTToolsSharp
             uint newCompressedSize = (uint)file.FileSize;
             string pfsFilePath = PDIPFSPathResolver.GetPathFromSeed(tocFile.EntryIndex);
 
+            if (ParentVolume.CreateBDMARK)
+            {
+                Directory.CreateDirectory(Path.Combine("PDIPFS_bdmark", Path.GetDirectoryName(pfsFilePath)));
+                using var bdmarkfile = File.Create(Path.Combine("PDIPFS_bdmark", pfsFilePath));
+            }
             // Check for cached file
             if (ParentVolume.UsePackingCache && packCache.HasValidCachedEntry(file, key.FileIndex, out PackedCacheEntry validCacheEntry))
             {

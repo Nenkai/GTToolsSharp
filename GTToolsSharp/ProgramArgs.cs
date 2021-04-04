@@ -103,6 +103,12 @@ namespace GTToolsSharp
         [Option("no-compress", HelpText = "Newly packed files won't be compressed, and will be marked as such in the TOC.")]
         public bool NoCompress { get; set; }
 
+        [Option("create_bdmark", HelpText = "Bdmark will be created")]
+        public bool CreateBDMARK { get; set; }
+
+        [Option("start-index", HelpText = "Start index of which new files to pack will start from, useful when making files work across multiple updates by making it high.")]
+        public uint StartIndex { get; set; }
+
         [Usage(ApplicationAlias = "GTToolsSharp")]
         public static IEnumerable<Example> Examples
         {

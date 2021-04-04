@@ -119,6 +119,13 @@ namespace GTToolsSharp
             if (vol.UsePackingCache && File.Exists(".pack_cache"))
                 vol.ReadPackingCache(".pack_cache");
 
+            if (options.StartIndex != 0)
+            {
+                Program.Log($"[!] Will use {options.StartIndex} as starting File Index.");
+                vol.VolumeHeader.TOCEntryIndex = options.StartIndex;
+            }
+
+            vol.CreateBDMARK = options.CreateBDMARK;
             vol.NoCompress = options.NoCompress;
             vol.RegisterEntriesToRepack(options.FolderToRepack);
             vol.PackFiles(options.OutputPath, filesToRemove, !options.PackAsOverwrite, options.CustomGameID);

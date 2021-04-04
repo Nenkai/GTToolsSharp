@@ -46,6 +46,7 @@ namespace GTToolsSharp
         public bool NoUnpack { get; set; }
         public bool UsePackingCache { get; set; }
         public bool NoCompress { get; set; }
+        public bool CreateBDMARK { get; set; }
         public string OutputDirectory { get; private set; }
 
         public Dictionary<string, InputPackEntry> FilesToPack = new Dictionary<string, InputPackEntry>();
@@ -175,6 +176,9 @@ namespace GTToolsSharp
             // Create temp to make sure we aren't transfering user leftovers
             Directory.CreateDirectory($"{outrepackDir}_temp");
 
+            if (CreateBDMARK)
+                Directory.CreateDirectory("PDIPFS_bdmark");
+
             Program.Log($"[-] Preparing to pack {FilesToPack.Count} files, and remove {filesToRemove.Length} files");
             PackCache newCache = TableOfContents.PackFilesForPatchFileSystem(FilesToPack, _packCache, filesToRemove, outrepackDir, packAllAsNew);
             if (UsePackingCache)
@@ -256,8 +260,8 @@ namespace GTToolsSharp
             foreach (var file in files)
             {
                 var entry = new InputPackEntry();
-                entry.FullPath = file.FullName;
-                entry.VolumeDirPath = file.FullName.AsSpan(inputDir.Length).TrimStart('\\').ToString().Replace('\\', '/');
+                entry.FullPath = file.ToString();
+                entry.VolumeDirPath = entry.FullPath.AsSpan(inputDir.Length).TrimStart('\\').ToString().Replace('\\', '/');
                 entry.FileSize = file.Length;
 
                 entry.LastModified = new DateTime(file.LastWriteTime.Year, file.LastWriteTime.Month, file.LastWriteTime.Day,
@@ -403,6 +407,7 @@ namespace GTToolsSharp
             if (volHeader is null)
                 return false;
 
+            Program.Log($"[>] PFS Version: '{volHeader.PFSVersion}'");
             Program.Log($"[>] Table of Contents Entry Index: {volHeader.TOCEntryIndex}");
             Program.Log($"[>] TOC Size: {volHeader.CompressedTOCSize} bytes ({volHeader.TOCSize} decompressed)");
             Program.Log($"[>] Total Volume Size: {MiscUtils.BytesToString((long)volHeader.TotalVolumeSize)}");

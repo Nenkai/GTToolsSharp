@@ -37,7 +37,7 @@ namespace GTToolsSharp
         /// </summary>
         public uint TOCSize { get; set; }
 
-        public ulong Unk { get; private set; }
+        public ulong PFSVersion { get; private set; }
 
         /// <summary>
         /// Total size of the volume.
@@ -68,7 +68,7 @@ namespace GTToolsSharp
             gtHeader.TOCEntryIndex = sr.ReadUInt32();
             gtHeader.CompressedTOCSize = sr.ReadUInt32();
             gtHeader.TOCSize = sr.ReadUInt32();
-            gtHeader.Unk = sr.ReadUInt64();
+            gtHeader.PFSVersion = sr.ReadUInt64();
             gtHeader.TotalVolumeSize = sr.ReadUInt64();
             gtHeader.TitleID = sr.ReadString0();
 
@@ -83,7 +83,7 @@ namespace GTToolsSharp
             sw.WriteUInt32(TOCEntryIndex);
             sw.WriteUInt32(CompressedTOCSize);
             sw.WriteUInt32(TOCSize);
-            sw.WriteUInt64(Unk);
+            sw.WriteUInt64(PFSVersion);
             sw.WriteUInt64(TotalVolumeSize);
 
             if (HasCustomGameID)
