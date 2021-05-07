@@ -97,11 +97,6 @@ namespace GTToolsSharp
 
             PrintToConsole = true;
 
-            if (!vol.IsPatchVolume)
-            {
-                Program.Log("[X] Cannot repack files in single volume files (GT.VOL).");
-                return;
-            }
 
             if (options.Cache)
                 Program.Log("[!] Using packing cache.");
@@ -195,20 +190,53 @@ namespace GTToolsSharp
 
         public static void Crypt(CryptVerbs options)
         {
-            if (!File.Exists(options.InputPath))
+            Keyset keys = null;
+            if (string.IsNullOrEmpty(options.Salsa20KeyEncrypt) && string.IsNullOrEmpty(options.Salsa20KeyDecrypt))
             {
-                Console.WriteLine("[X] File to encrypt does not exist.");
-                return;
+                Keyset[] keysets = CheckKeys();
+                if (keysets is null)
+                    return;
+
+                keys = keysets.Where(e => e.GameCode.Equals(options.GameCode, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                if (keys is null)
+                {
+                    Console.WriteLine($"Keyset with GameCode '{options.GameCode}' does not exist in the keyset file.");
+                    return;
+                }
             }
 
-            byte[] input = File.ReadAllBytes(options.InputPath);
+            foreach (var file in options.InputPath)
+            {
+                if (!File.Exists(file) && !Directory.Exists(file))
+                {
+                    Console.WriteLine($"[X] File or folder '{file}' to decrypt/encrypt does not exist.");
+                    continue;
+                }
+
+                bool isDir = File.GetAttributes(file).HasFlag(FileAttributes.Directory);
+                if (isDir)
+                {
+                    foreach (var dirFile in Directory.GetFiles(file))
+                        DecryptFile(options, keys, dirFile);
+                }
+                else
+                {
+                    DecryptFile(options, keys, file);
+                }
+            }
+            Console.WriteLine("[/] Done.");
+        }
+
+        private static void DecryptFile(CryptVerbs options, Keyset keys, string file)
+        {
+            byte[] input = File.ReadAllBytes(file);
             if (!string.IsNullOrEmpty(options.Salsa20KeyEncrypt))
             {
                 byte[] keyBytes = MiscUtils.StringToByteArray(options.Salsa20KeyEncrypt);
                 using SymmetricAlgorithm salsa20 = new Salsa20();
                 byte[] dataKey = new byte[8];
 
-                Console.WriteLine("[:] Encrypting..");
+                Console.WriteLine($"[:] Salsa Encrypting '{file}'..");
                 using var decrypt = salsa20.CreateDecryptor(keyBytes, dataKey);
                 decrypt.TransformBlock(input, 0, input.Length, input, 0);
             }
@@ -218,30 +246,18 @@ namespace GTToolsSharp
                 using SymmetricAlgorithm salsa20 = new Salsa20();
                 byte[] dataKey = new byte[8];
 
-                Console.WriteLine("[:] Decrypting..");
+                Console.WriteLine($"[:] Salsa Decrypting '{file}'..");
                 using var encrypt = salsa20.CreateEncryptor(keyBytes, dataKey);
                 encrypt.TransformBlock(input, 0, input.Length, input, 0);
             }
             else
             {
-                Keyset[] keysets = CheckKeys();
-                if (keysets is null)
-                    return;
-
-                Keyset keys = keysets.Where(e => e.GameCode.Equals(options.GameCode, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-                if (keys is null)
-                {
-                    Console.WriteLine($"Keyset with GameCode '{options.GameCode}' does not exist in the keyset file.");
-                    return;
-                }
-
-                Console.WriteLine("[!] Crypting..");
+                Console.WriteLine($"[:] Crypting '{file}'..");
                 keys.CryptData(input, 0);
             }
 
-            Console.WriteLine($"[:] Saving file as {options.OutputPath}..");
-            File.WriteAllBytes(options.OutputPath, input);
-            Console.WriteLine("[/] Done.");
+            Console.WriteLine($"[:] Saving file as {file}.dec..");
+            File.WriteAllBytes(file, input);
         }
 
         public static void List(ListVerbs options)

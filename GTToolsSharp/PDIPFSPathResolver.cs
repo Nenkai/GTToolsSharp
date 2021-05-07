@@ -23,39 +23,48 @@ namespace GTToolsSharp
 			}
 		}
 
+		private static string _defaultOld;
+		public static string DefaultOld
+		{
+			get
+			{
+				_default ??= GetPathFromSeed(1, true);
+				return _default;
+			}
+		}
 
-		public static string GetPathFromSeed(uint seed)
+		public static string GetPathFromSeed(uint seed, bool oldStyle = false)
 		{
 			string t = string.Empty;
 			if (seed < 0x400)
 			{
 				t += 'K';
 				uint s = XorShift(0x499, 10, seed);
-				t += GetSubPathName(s, 2);
+				t += GetSubPathName(s, 2, oldStyle);
 			}
 			else if (seed - 0x400 < 0x8000)
 			{
 				t += '5';
 				uint s = XorShift(0x8891, 15, seed - 0x400);
-				t += GetSubPathName(s, 3);
+				t += GetSubPathName(s, 3, oldStyle);
 			}
 			else if (seed - 0x8400 < 0x100000)
 			{
 				t += '9';
 				uint s = XorShift(0x111889, 20, seed - 0x8400);
-				t += GetSubPathName(s, 4);
+				t += GetSubPathName(s, 4, oldStyle);
 			}
 			else if (seed - 0x108400 < 0x2000000)
 			{
 				t += 'W';
 				uint s = XorShift(0x2242211, 25, seed - 0x108400);
-				t += GetSubPathName(s, 5);
+				t += GetSubPathName(s, 5, oldStyle);
 			}
 			else if (seed + 0xfdf7c00 >= 0)
 			{
 				t += '4';
 				uint s = XorShift(0x8889111, 32, seed + 0xFDEFC00);
-				t += GetSubPathName(s, 6);
+				t += GetSubPathName(s, 6, oldStyle);
 			}
 
 
@@ -76,7 +85,7 @@ namespace GTToolsSharp
 		}
 
 
-		private static string GetSubPathName(uint seed, int subpathLength)
+		private static string GetSubPathName(uint seed, int subpathLength, bool oldStyle)
 		{
 			string pathName = string.Empty;
 
@@ -92,24 +101,36 @@ namespace GTToolsSharp
 					chars[i] = c;
 				}
 
-				int pos = subpathLength - 1;
-				if (subpathLength % 2 == 0)
+				if (oldStyle) // GT5P Demo
 				{
-					pathName += '/';
-					pathName += chars[pos];
-					pos--;
+					// 1 letter per folder
+					for (int pos = subpathLength - 1; pos >= 0; pos--)
+                    {
+						pathName += '/';
+						pathName += chars[pos];
+					}
 				}
+				else
+				{
+					// 2 letters per folder
+					int pos = subpathLength - 1;
+					if (subpathLength % 2 == 0)
+					{
+						pathName += '/';
+						pathName += chars[pos];
+						pos--;
+					}
 
-				while (true)
-                {
-					pathName += chars[pos];
-					if (pos == 0)
-						break;
-					pathName += '/';
-					pathName += chars[pos - 1];
-					pos -= 2;
+					while (true)
+					{
+						pathName += chars[pos];
+						if (pos == 0)
+							break;
+						pathName += '/';
+						pathName += chars[pos - 1];
+						pos -= 2;
+					}
 				}
-
 			}
 
 			return pathName;

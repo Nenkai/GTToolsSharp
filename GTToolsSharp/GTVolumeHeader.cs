@@ -15,6 +15,7 @@ namespace GTToolsSharp
     public class GTVolumeHeader
     {
         private static readonly byte[] HeaderMagic = { 0x5B, 0x74, 0x51, 0x62 };
+        private static readonly byte[] OldHeaderMagic = { 0x5B, 0x74, 0x51, 0x61 };
         private const uint HeaderSize = 0xA0; // 160
 
         /// <summary>

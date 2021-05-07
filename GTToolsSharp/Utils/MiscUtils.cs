@@ -164,15 +164,17 @@ namespace GTToolsSharp.Utils
 
                 var ds = new DeflateStream(decryptStream, CompressionMode.Decompress);
 
-                int bytes = (int)uncompressedSize;
+                int bytesLeft = (int)uncompressedSize;
                 int read;
                 const int bufSize = 81_920;
                 byte[] buffer = ArrayPool<byte>.Shared.Rent(bufSize);
-                while (bytes > 0 && (read = ds.Read(buffer, 0, Math.Min(buffer.Length, (int)bytes))) > 0)
+
+                int currentPos = 0;
+                while (bytesLeft > 0 && (read = ds.Read(buffer, 0, Math.Min(buffer.Length, bytesLeft))) > 0)
                 {
-                    ds.Read(buffer, 0, read);
                     newFileStream.Write(buffer, 0, read);
-                    bytes -= read;
+
+                    bytesLeft -= read;
                 }
 
                 ArrayPool<byte>.Shared.Return(buffer);
@@ -222,7 +224,6 @@ namespace GTToolsSharp.Utils
                 byte[] buffer = ArrayPool<byte>.Shared.Rent(bufSize);
                 while (outSize > 0 && (read = decryptStream.Read(buffer, 0, Math.Min(buffer.Length, (int)bytes))) > 0)
                 {
-                    decryptStream.Read(buffer, 0, read);
                     newFileStream.Write(buffer, 0, read);
                     bytes -= read;
                 }

@@ -26,6 +26,7 @@ namespace GTToolsSharp
         public const int BASE_VOLUME_ENTRY_INDEX = 1;
         // 160 Bytes
         private const int HeaderSize = 0xA0;
+        private const int OldHeaderSize = 0x14;
 
         /// <summary>
         /// Keyset used to decrypt and encrypt volume files.
@@ -47,6 +48,8 @@ namespace GTToolsSharp
         public bool UsePackingCache { get; set; }
         public bool NoCompress { get; set; }
         public bool CreateBDMARK { get; set; }
+        public bool IsGT5PDemoStyle { get; set; }
+
         public string OutputDirectory { get; private set; }
 
         public Dictionary<string, InputPackEntry> FilesToPack = new Dictionary<string, InputPackEntry>();
@@ -97,9 +100,16 @@ namespace GTToolsSharp
             vol.SetKeyset(keyset);
 
             if (fs.Length < HeaderSize)
-                throw new IndexOutOfRangeException($"Volume header file size is smaller than expected header size ({HeaderSize}). Ensure that your volume file is not corrupt.");
+                throw new IndexOutOfRangeException($"Volume header file size is smaller than expected header size ({HeaderSize} or {OldHeaderSize}). Ensure that your volume file is not corrupt.");
+            
+            /*
+            if (fs.Length == OldHeaderSize)
+            {
+                vol.IsGT5PDemoStyle = true;
+                Program.Log("[!] Volume appears to be GT5P Demo - Slightly different volume.", true);
+            }*/
 
-            vol.VolumeHeaderData = new byte[HeaderSize];
+            vol.VolumeHeaderData = new byte[!vol.IsGT5PDemoStyle ? HeaderSize : OldHeaderSize];
             fs.Read(vol.VolumeHeaderData);
 
             if (!vol.DecryptHeader(vol.VolumeHeaderData, BASE_VOLUME_ENTRY_INDEX))

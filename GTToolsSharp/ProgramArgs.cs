@@ -56,8 +56,8 @@ namespace GTToolsSharp
         [Option('g', "gamecode", Required = true, HelpText = "GameCode - Key to use within your key file.")]
         public string GameCode { get; set; }
 
-        [Option('i', "input", Required = true, HelpText = "Input file to encrypt or decrypt.")]
-        public string InputPath { get; set; }
+        [Option('i', "input", Required = true, HelpText = "Input files or folder to encrypt or decrypt.")]
+        public IEnumerable<string> InputPath { get; set; }
         
         [Option('o', "output", HelpText = "Output file.", Default = "out.bin")]
         public string OutputPath { get; set; }
