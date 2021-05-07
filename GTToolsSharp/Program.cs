@@ -11,6 +11,7 @@ using CommandLine.Text;
 
 using GTToolsSharp.Encryption;
 using GTToolsSharp.Utils;
+using GTToolsSharp.PackedFileInstaller;
 
 namespace GTToolsSharp
 {
@@ -26,9 +27,10 @@ namespace GTToolsSharp
             Console.WriteLine("-- Gran Turismo 5/6 Volume Tools - (c) Nenkai#9075, ported from flatz --");
             Console.WriteLine();
 
-            Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, CryptVerbs, ListVerbs, CompressVerbs>(args)
+            Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, UnpackInstallerVerbs, CryptVerbs, ListVerbs, CompressVerbs>(args)
                 .WithParsed<PackVerbs>(Pack)
                 .WithParsed<UnpackVerbs>(Unpack)
+                .WithParsed<UnpackInstallerVerbs>(UnpackInstaller)
                 .WithParsed<CryptVerbs>(Crypt)
                 .WithParsed<ListVerbs>(List)
                 .WithParsed<CompressVerbs>(Compress)
@@ -186,6 +188,47 @@ namespace GTToolsSharp
                 vol.NoUnpack = true;
 
             vol.UnpackFiles(options.FileIndexesToExtract);
+        }
+
+        public static void UnpackInstaller(UnpackInstallerVerbs options)
+        {
+            if (!File.Exists(options.InputPath))
+            {
+                Console.WriteLine($"[X] File \"{options.InputPath}\" does not exist.");
+                return;
+            }
+
+
+            Keyset[] keyset = CheckKeys();
+            if (keyset is null)
+                return;
+
+            if (!string.IsNullOrEmpty(options.LogPath))
+                sw = new StreamWriter(options.LogPath);
+
+            SaveTOC = options.SaveTOC;
+            SaveHeader = options.SaveHeader;
+
+            bool found = false;
+            InstallerUnpacker unp = null;
+            foreach (var k in keyset)
+            {
+                unp = InstallerUnpacker.Load(k, options.InputPath);
+                if (unp != null)
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+            {
+                Console.WriteLine($"[X] Could not unpack installer. Make sure that you have a valid game key/seed in your key.json.");
+                return;
+            }
+
+            Program.Log("[-] Started unpacking process.");
+            
         }
 
         public static void Crypt(CryptVerbs options)

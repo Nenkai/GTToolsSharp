@@ -50,6 +50,25 @@ namespace GTToolsSharp
         }
     }
 
+    [Verb("unpackinstaller", HelpText = "Unpacks an installation file (TV.DAT)")]
+    public class UnpackInstallerVerbs
+    {
+        [Option('i', "input", Required = true, HelpText = "Input file volume or folder. Usually TV.DAT.")]
+        public string InputPath { get; set; }
+
+        [Option('o', "output", Required = true, HelpText = "Output Folder for unpacked install files.")]
+        public string OutputPath { get; set; }
+
+        [Option('l', "log", HelpText = "Log file path. Default is log.txt.", Default = "log.txt")]
+        public string LogPath { get; set; }
+
+        [Option("save-volume-header", HelpText = "Decrypts and saves the  installer (as InstallerHeader.bin)")]
+        public bool SaveHeader { get; set; }
+
+        [Option("save-toc-header", HelpText = "Decrypts and saves the Table of Contents header. (as InstallerTOC.bin)")]
+        public bool SaveTOC { get; set; }
+    }
+
     [Verb("crypt", HelpText = "Decrypts/Encrypts a file.")]
     public class CryptVerbs
     {
