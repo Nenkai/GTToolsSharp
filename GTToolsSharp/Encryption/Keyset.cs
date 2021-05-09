@@ -155,7 +155,7 @@ namespace GTToolsSharp.Encryption
             => x ^ CryptoUtils.ShuffleBits(y);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static uint InvertedXorShift(uint x, uint y)
+        public static uint InvertedXorShift(uint x, uint y)
             => ~XorShift(x, y);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

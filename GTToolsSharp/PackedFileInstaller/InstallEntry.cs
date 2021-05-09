@@ -12,7 +12,7 @@ namespace GTToolsSharp.PackedFileInstaller
     {
         public string Path { get; set; }
         public long FileSize { get; set; }
-        public int Unk { get; set; }
+        public int BlockIndex { get; set; }
         public int PathNameOffset { get; set; }
 
         public static InstallEntry Read(ref SpanReader sr)
@@ -20,7 +20,7 @@ namespace GTToolsSharp.PackedFileInstaller
             InstallEntry entry = new InstallEntry();
 
             entry.FileSize = sr.ReadInt64();
-            entry.Unk = sr.ReadInt32();
+            entry.BlockIndex = sr.ReadInt32();
             entry.PathNameOffset = sr.ReadInt32();
 
             sr.Position = entry.PathNameOffset;
@@ -30,6 +30,6 @@ namespace GTToolsSharp.PackedFileInstaller
         }
 
         public override string ToString()
-            => $"{Path} (FileSize: {FileSize}, Unk: {Unk})";
+            => $"{Path} (FileSize: {FileSize}, Block Index: {BlockIndex})";
     }
 }

@@ -99,7 +99,6 @@ namespace GTToolsSharp
 
             PrintToConsole = true;
 
-
             if (options.Cache)
                 Program.Log("[!] Using packing cache.");
             vol.UsePackingCache = options.Cache;
@@ -198,7 +197,6 @@ namespace GTToolsSharp
                 return;
             }
 
-
             Keyset[] keyset = CheckKeys();
             if (keyset is null)
                 return;
@@ -206,14 +204,11 @@ namespace GTToolsSharp
             if (!string.IsNullOrEmpty(options.LogPath))
                 sw = new StreamWriter(options.LogPath);
 
-            SaveTOC = options.SaveTOC;
-            SaveHeader = options.SaveHeader;
-
             bool found = false;
             InstallerUnpacker unp = null;
             foreach (var k in keyset)
             {
-                unp = InstallerUnpacker.Load(k, options.InputPath);
+                unp = InstallerUnpacker.Load(k, options.InputPath, options.SaveHeaderTOC);
                 if (unp != null)
                 {
                     found = true;
@@ -228,7 +223,7 @@ namespace GTToolsSharp
             }
 
             Program.Log("[-] Started unpacking process.");
-            
+            unp.Unpack(options.OutputPath);
         }
 
         public static void Crypt(CryptVerbs options)

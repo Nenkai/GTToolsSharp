@@ -62,11 +62,8 @@ namespace GTToolsSharp
         [Option('l', "log", HelpText = "Log file path. Default is log.txt.", Default = "log.txt")]
         public string LogPath { get; set; }
 
-        [Option("save-volume-header", HelpText = "Decrypts and saves the  installer (as InstallerHeader.bin)")]
-        public bool SaveHeader { get; set; }
-
-        [Option("save-toc-header", HelpText = "Decrypts and saves the Table of Contents header. (as InstallerTOC.bin)")]
-        public bool SaveTOC { get; set; }
+        [Option("save-header-toc", HelpText = "Decrypts and saves the header & TOC of the installer. (as InstallerTOC.bin)")]
+        public bool SaveHeaderTOC { get; set; }
     }
 
     [Verb("crypt", HelpText = "Decrypts/Encrypts a file.")]
