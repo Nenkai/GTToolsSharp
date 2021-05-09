@@ -24,10 +24,19 @@ namespace GTToolsSharp.Encryption
 			_keys = keyset;
         }
 
+		/// <summary>
+		/// For traditional decryption
+		/// </summary>
+		/// <param name="inStream"></param>
+		/// <param name="outStream"></param>
+		/// <param name="seed"></param>
+		/// <param name="fileSize"></param>
+		/// <param name="offset"></param>
 		public void Decrypt(Stream inStream, Stream outStream, uint seed, ulong fileSize, ulong offset)
         {
-			uint crc = ~CRC32.CRC32_0x04C11DB7(_keys.Magic, 0);
-			uint[] keys = PrepareKey(crc ^ seed, _keys.Key.Data);
+			//uint crc = ~CRC32.CRC32_0x04C11DB7(_keys.Magic, 0);
+			uint[] keys = PrepareKey(0xadd1f79b ^ seed, _keys.Key.Data);
+			//uint[] keys = PrepareKey(crc ^ seed, _keys.Key.Data);
 			byte[] table = GenerateBitsTable(keys);
 
 			byte[] buffer = ArrayPool<byte>.Shared.Rent(0x20000);
@@ -51,7 +60,44 @@ namespace GTToolsSharp.Encryption
 			ArrayPool<byte>.Shared.Return(buffer);
 		}
 
-		public byte[] GenerateBitsTable(uint[] keys)
+		/// <summary>
+		/// For decrypting GT5P JP Demo files
+		/// </summary>
+		/// <param name="inStream"></param>
+		/// <param name="outStream"></param>
+		/// <param name="seed"></param>
+		/// <param name="fileSize"></param>
+		/// <param name="offset"></param>
+		public void DecryptOld(Stream inStream, Stream outStream, uint seed, ulong fileSize, ulong offset)
+		{
+			uint[] keys = PrepareKeyOld(seed);
+			byte[] table = GenerateBitsTable(keys);
+
+			byte[] buffer = ArrayPool<byte>.Shared.Rent(0x20000);
+
+			while (fileSize > 0)
+			{
+				ulong bufferSize = fileSize;
+				if (fileSize > 0x20000)
+					bufferSize = 0x20000;
+
+				inStream.Position = (long)offset;
+				inStream.Read(buffer);
+
+				DecryptBuffer(buffer, buffer, (int)bufferSize, table, offset);
+				outStream.Write(buffer.AsSpan(0, (int)bufferSize));
+
+				fileSize -= bufferSize;
+				offset += bufferSize;
+			}
+
+			ArrayPool<byte>.Shared.Return(buffer);
+		}
+
+		/// <summary>
+		/// Decryption bits table generation
+		/// </summary>
+		private byte[] GenerateBitsTable(uint[] keys)
 		{
 			byte[] data = new byte[(0x11 * 8) + (0x13 * 8) + (0x17 * 8) + (0x1d * 8)];
 			GenerateBits(data, keys[0], 0x11);
@@ -62,6 +108,12 @@ namespace GTToolsSharp.Encryption
 			return data;
 		}
 
+		/// <summary>
+		/// Key computing modern path
+		/// </summary>
+		/// <param name="seed"></param>
+		/// <param name="keys"></param>
+		/// <returns></returns>
 		private uint[] PrepareKey(uint seed, uint[] keys)
 		{
 			uint v1 = Keyset.InvertedXorShift(seed, keys[0]);
@@ -78,6 +130,46 @@ namespace GTToolsSharp.Encryption
 			return newKey;
 		}
 
+		/// <summary>
+		/// Key computing GT5P JP Demo
+		/// </summary>
+		/// <param name="seed"></param>
+		/// <returns></returns>
+		private uint[] PrepareKeyOld(uint seed)
+		{
+			uint one = CRC32UInt(seed ^ 0xADD1F79B);
+			uint two = CRC32UInt(one);
+			uint three = CRC32UInt(two);
+			uint four = CRC32UInt(three);
+
+			uint[] keys = new uint[4];
+			keys[0] = one & 0x1FFFF;
+			keys[1] = two & 0x7ffff;
+			keys[2] = three & 0x7fffff;
+			keys[3] = four & 0x1fffffff;
+
+			return keys;
+
+			uint CRC32UInt(uint input)
+			{
+				uint result = 0x0;
+				for (int i = 0; i < 4; i++)
+				{
+					uint xor = result ^ input;
+					input <<= 0x8;
+					uint a = (xor >> 0x16 & 0x3fc) / 4;
+					result = result << 0x8 ^ CRC32.checksum[a];
+				}
+				return ~result;
+			}
+		}
+
+		/// <summary>
+		/// Decryption bits table generation 2
+		/// </summary>
+		/// <param name="table"></param>
+		/// <param name="keyPiece"></param>
+		/// <param name="rotateAmount"></param>
 		private void GenerateBits(Span<byte> table, uint keyPiece, int rotateAmount)
 		{
 			if (rotateAmount > 0)
@@ -95,6 +187,14 @@ namespace GTToolsSharp.Encryption
 			MemCpy(table.Slice(rotateAmount * 4), table, rotateAmount * 4);
 		}
 
+		/// <summary>
+		/// Internal decrypter
+		/// </summary>
+		/// <param name="input"></param>
+		/// <param name="output"></param>
+		/// <param name="size"></param>
+		/// <param name="decryptTable"></param>
+		/// <param name="offset"></param>
 		private void DecryptBuffer(Span<byte> input, Span<byte> output, int size, Span<byte> decryptTable, ulong offset)
 		{
 			ulong u1 = (ulong)(BigInteger.Multiply(new BigInteger(offset), new BigInteger(0x642c8590b21642c9)) >> 0x40);
