@@ -34,9 +34,8 @@ namespace GTToolsSharp.Encryption
 		/// <param name="offset"></param>
 		public void Decrypt(Stream inStream, Stream outStream, uint seed, ulong fileSize, ulong offset)
         {
-			//uint crc = ~CRC32.CRC32_0x04C11DB7(_keys.Magic, 0);
-			uint[] keys = PrepareKey(0xadd1f79b ^ seed, _keys.Key.Data);
-			//uint[] keys = PrepareKey(crc ^ seed, _keys.Key.Data);
+			uint crc = ~CRC32.CRC32_0x04C11DB7(_keys.Magic, 0);
+			uint[] keys = PrepareKey(crc ^ seed, _keys.Key.Data);
 			byte[] table = GenerateBitsTable(keys);
 
 			byte[] buffer = ArrayPool<byte>.Shared.Rent(0x20000);
