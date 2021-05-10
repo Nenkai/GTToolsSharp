@@ -156,9 +156,10 @@ namespace GTToolsSharp
             if (isDir)
             {
                 string indexFile = Path.Combine(options.InputPath, PDIPFSPathResolver.Default);
-                if (!File.Exists(indexFile))
+                string oldIndexFile = Path.Combine(options.InputPath, PDIPFSPathResolver.DefaultOld);
+                if (!File.Exists(indexFile) && !File.Exists(oldIndexFile))
                 {
-                    Console.WriteLine($"[X] Provided input folder (assuming PDIPFS) does not contain an Index file. ({PDIPFSPathResolver.Default}) Make sure this folder is actually a PDIPFS folder.");
+                    Console.WriteLine($"[X] Provided input folder (assuming PDIPFS) does not contain an Index file (K/4D or K/4/D). Make sure this folder is actually a PDIPFS folder.");
                     return;
                 }
             }

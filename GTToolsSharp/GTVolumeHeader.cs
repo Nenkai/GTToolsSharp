@@ -63,15 +63,27 @@ namespace GTToolsSharp
             SpanReader sr = new SpanReader(header, Endian.Big);
 
             byte[] magic = sr.ReadBytes(4);
-            if (!magic.AsSpan().SequenceEqual(HeaderMagic.AsSpan()))
+            if (!magic.AsSpan().SequenceEqual(HeaderMagic.AsSpan()) && !magic.AsSpan().SequenceEqual(OldHeaderMagic.AsSpan()))
                 return null;
 
-            gtHeader.TOCEntryIndex = sr.ReadUInt32();
-            gtHeader.CompressedTOCSize = sr.ReadUInt32();
-            gtHeader.TOCSize = sr.ReadUInt32();
-            gtHeader.PFSVersion = sr.ReadUInt64();
-            gtHeader.TotalVolumeSize = sr.ReadUInt64();
-            gtHeader.TitleID = sr.ReadString0();
+            bool isOld = magic.AsSpan().SequenceEqual(OldHeaderMagic.AsSpan());
+
+            if (!isOld)
+            {
+                gtHeader.TOCEntryIndex = sr.ReadUInt32();
+                gtHeader.CompressedTOCSize = sr.ReadUInt32();
+                gtHeader.TOCSize = sr.ReadUInt32();
+                gtHeader.PFSVersion = sr.ReadUInt64();
+                gtHeader.TotalVolumeSize = sr.ReadUInt64();
+                gtHeader.TitleID = sr.ReadString0();
+            }
+            else
+            {
+                sr.Position += 4;
+                gtHeader.TOCEntryIndex = sr.ReadUInt32();
+                gtHeader.CompressedTOCSize = sr.ReadUInt32();
+                gtHeader.TOCSize = sr.ReadUInt32();
+            }
 
             return gtHeader;
         }

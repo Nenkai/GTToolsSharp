@@ -136,10 +136,10 @@ namespace GTToolsSharp.Encryption
 		/// <returns></returns>
 		private uint[] PrepareKeyOld(uint seed)
 		{
-			uint one = CRC32UInt(seed ^ 0xADD1F79B);
-			uint two = CRC32UInt(one);
-			uint three = CRC32UInt(two);
-			uint four = CRC32UInt(three);
+			uint one = CRC32.CRC32UInt(seed ^ 0xADD1F79B);
+			uint two = CRC32.CRC32UInt(one);
+			uint three = CRC32.CRC32UInt(two);
+			uint four = CRC32.CRC32UInt(three);
 
 			uint[] keys = new uint[4];
 			keys[0] = one & 0x1FFFF;
@@ -148,19 +148,6 @@ namespace GTToolsSharp.Encryption
 			keys[3] = four & 0x1fffffff;
 
 			return keys;
-
-			uint CRC32UInt(uint input)
-			{
-				uint result = 0x0;
-				for (int i = 0; i < 4; i++)
-				{
-					uint xor = result ^ input;
-					input <<= 0x8;
-					uint a = (xor >> 0x16 & 0x3fc) / 4;
-					result = result << 0x8 ^ CRC32.checksum[a];
-				}
-				return ~result;
-			}
 		}
 
 		/// <summary>

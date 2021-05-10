@@ -60,6 +60,16 @@ namespace GTToolsSharp.Utils
             return (ushort)(result & 0xFFF);
         }
 
+        public static ushort GetBitsAt(ref SpanReader sr, uint dataPos, uint offset)
+        {
+            sr.Position = (int)(dataPos + (offset * 0x10 - offset * 4) / 8);
+            ushort result = sr.ReadUInt16();
+            if ((offset & 0x1) == 0)
+                result >>= 4;
+
+            return (ushort)(result & 0xFFF);
+        }
+
         public static void WriteBitsAt(BinaryStream bs, uint data, uint offset)
         {
             uint offsetAligned = (offset * 12) / 8;

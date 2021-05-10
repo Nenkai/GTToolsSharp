@@ -67,5 +67,23 @@ namespace GTToolsSharp
 
 			return crc;
 		}
+
+		/// <summary>
+		/// For GT5P JP Demo
+		/// </summary>
+		/// <param name="input"></param>
+		/// <returns></returns>
+		public static uint CRC32UInt(uint input)
+		{
+			uint result = 0x0;
+			for (int i = 0; i < 4; i++)
+			{
+				uint xor = result ^ input;
+				input <<= 0x8;
+				uint a = (xor >> 0x16 & 0x3fc) / 4;
+				result = result << 0x8 ^ CRC32.checksum[a];
+			}
+			return ~result;
+		}
 	}
 }

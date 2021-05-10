@@ -42,9 +42,9 @@ namespace GTToolsSharp.BTree
             sr.Position = (int)_offsetStart;
 
             uint offsetAndCount = sr.ReadUInt32();
-            uint segmentCount = sr.ReadUInt16();
+            uint nodeCount = sr.ReadUInt16();
 
-            for (int i = 0; i < segmentCount; i++)
+            for (int i = 0; i < nodeCount; i++)
             {
                 uint keyCount = GetBitsAt(ref sr, 0) & 0x7FFu;
                 uint nextOffset = GetBitsAt(ref sr, keyCount + 1);
@@ -60,6 +60,35 @@ namespace GTToolsSharp.BTree
                 }
 
                 sr.Position += (int)nextOffset;
+            }
+        }
+
+        public void LoadEntriesOld()
+        {
+            SpanReader sr = new SpanReader(_buffer, Endian.Big);
+            sr.Position += _offsetStart;
+
+            sr.Position += 1;
+            uint nodeCount = CryptoUtils.GetBitsAt(ref sr, (uint)sr.Position, 0);
+            sr.Position += 1;
+
+            uint lastDataPos = (uint)sr.Position;
+            for (int i = 0; i < nodeCount + 1; i++)
+            {
+                uint keyCount = GetBitsAt(ref sr, lastDataPos, 0) & 0x7FFu;
+                GetBitsAt(ref sr, lastDataPos, keyCount + 1); 
+
+                for (uint j = 0; j < keyCount; j++)
+                {
+                    uint offset = GetBitsAt(ref sr, lastDataPos, j + 1);
+                    sr.Position = (int)lastDataPos + (int)offset;
+
+                    TKey key = new TKey();
+                    key.Deserialize(ref sr);
+                    Entries.Add(key);
+                }
+
+                lastDataPos = (uint)sr.Position;
             }
         }
 

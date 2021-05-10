@@ -28,8 +28,8 @@ namespace GTToolsSharp
 		{
 			get
 			{
-				_default ??= GetPathFromSeed(1, true);
-				return _default;
+				_defaultOld ??= GetPathFromSeed(1, true);
+				return _defaultOld;
 			}
 		}
 

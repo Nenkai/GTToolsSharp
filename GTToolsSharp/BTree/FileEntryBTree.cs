@@ -29,15 +29,14 @@ namespace GTToolsSharp.BTree
             sr.Position += _offsetStart;
 
             uint offsetAndCount = sr.ReadUInt32();
-
             uint nodeCount = sr.ReadUInt16();
 
             for (int i = 0; i < nodeCount; i++)
             {
-                uint high = CryptoUtils.GetBitsAt(ref sr, 0) & 0x7FFu;
-                uint nextOffset = CryptoUtils.GetBitsAt(ref sr, high + 1);
+                uint keyCount = CryptoUtils.GetBitsAt(ref sr, 0) & 0x7FFu;
+                uint nextOffset = CryptoUtils.GetBitsAt(ref sr, keyCount + 1);
 
-                for (uint j = 0; j < high; j++) // high is pretty much entry count
+                for (uint j = 0; j < keyCount; j++)
                 {
                     uint offset = CryptoUtils.GetBitsAt(ref sr, j + 1);
                     var data = sr.GetReaderAtOffset((int)offset);

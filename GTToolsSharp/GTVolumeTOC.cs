@@ -72,22 +72,35 @@ namespace GTToolsSharp
 
             
             FileNames = new StringBTree(Data, (int)NameTreeOffset);
-            FileNames.LoadEntries();
-
+            if (!ParentVolume.IsGT5PDemoStyle)
+                FileNames.LoadEntries();
+            else
+                FileNames.LoadEntriesOld();
+            
             Extensions = new StringBTree(Data, (int)FileExtensionTreeOffset);
-            Extensions.LoadEntries();
+            if (!ParentVolume.IsGT5PDemoStyle)
+                Extensions.LoadEntries();
+            else
+                Extensions.LoadEntriesOld();
 
             FileInfos = new FileInfoBTree(Data, (int)NodeTreeOffset);
-            FileInfos.LoadEntries();
+            if (!ParentVolume.IsGT5PDemoStyle)
+                FileInfos.LoadEntries();
+            else
+                FileInfos.LoadEntriesOld();
 
             Files = new List<FileEntryBTree>((int)entryTreeCount);
 
             for (int i = 0; i < entryTreeCount; i++)
             {
                 Files.Add(new FileEntryBTree(Data, (int)RootAndFolderOffsets[i]));
-                Files[i].LoadEntries();
+                if (!ParentVolume.IsGT5PDemoStyle)
+                    Files[i].LoadEntries();
+                else
+                    Files[i].LoadEntriesOld();
             }
 
+            var test = this.GetAllRegisteredFileMap();
             return true;
         }
 
