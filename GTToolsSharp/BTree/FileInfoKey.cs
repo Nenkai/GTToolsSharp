@@ -85,6 +85,7 @@ namespace GTToolsSharp.BTree
     public enum FileInfoFlags
     {
         Uncompressed,
-        Compressed
+        Compressed,
+        CustomSalsaCrypt,
     }
 }

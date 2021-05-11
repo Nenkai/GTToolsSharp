@@ -18,8 +18,17 @@ namespace GTToolsSharp.Encryption
         public string GameCode { get; set; }
         public string Magic { get; set; }
         public Key Key { get; set; }
+        public BufferDecryptManager DecryptManager { get; set; }
 
         public Keyset() { }
+
+        public Keyset(string gameCode, string magic, Key key, BufferDecryptManager decryptManager)
+        {
+            DecryptManager = decryptManager;
+            GameCode = gameCode;
+            Magic = magic;
+            Key = key;
+        }
 
         public Keyset(string gameCode, string magic, Key key)
         {

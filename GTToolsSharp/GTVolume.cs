@@ -36,6 +36,23 @@ namespace GTToolsSharp
         /// <summary>
         /// Default keys, Gran Turismo 5
         /// </summary>
+        public static readonly Keyset Keyset_GT5P_JP_DEMO = new Keyset("GT5P_JP_DEMO", "PDIPFS-071020-02", default, new BufferDecryptManager
+        {
+            Keys = new()
+            {
+                { "/car/lod/00030131", "SoyoGvyMYKCCjcYBCI8rY3GMy9eQlvy3KpEfuL2qZE4oAo5c" },
+                { "/car/menu/00030131", "SoyoGvyMYKCCjcYBCI8rY3GMy9eQlvy3KpEfuL2qZE6GuajW" },
+                { "/car/interior/00030131", "SoyoGvyMYKCCjcYBCI8rY3GMy9eQlvy3KpEfuL2qZE5JUizQ" },
+                { "/car/meter/00030131", "SoyoGvyMYKCCjcYBCI8rY3GMy9eQlvy3KpEfuL2qZE5iDFjf" },
+                { "/piece/car_thumb_M/gtr_07_01.img", "cjg1NDJzZDVmNGgyNXM0cnQ2eTJkcjg0Z3pkZmJ3ZmEtdwwS" },
+                
+                { "/car/lod/00200032", "KeaQvtvmSURh566l5+kUB1DmtHtv8OVbCesIXJ0ETPI1QYGR" },
+                { "/car/menu/00200032", "KeaQvtvmSURh566l5+kUB1DmtHtv8OVbCesIXJ0ETPJS5l7P" },
+                { "/car/interior/00200032", "KeaQvtvmSURh566l5+kUB1DmtHtv8OVbCesIXJ0ETPKP9PTn" },
+                { "/piece/car_thumb_M/impreza_wrx_sti_07_03.img", "cTM0NWgzNTZ5djJoZzRmMTIzNDQ1NjQ1ajZqMjRoNWY4Rqik" },
+            }
+        });
+
         public static readonly Keyset Keyset_GT5_EU = new Keyset("GT5_EU", "KALAHARI-37863889", new Key(0x2DEE26A7, 0x412D99F5, 0x883C94E9, 0x0F1A7069));
         public static readonly Keyset Keyset_GT5_US = new Keyset("GT5_US", "PATAGONIAN-22798263", new Key(0x5A1A59E5, 0x4D3546AB, 0xF30AF68B, 0x89F08D0D));
         public static readonly Keyset Keyset_GT6 = new Keyset("GT6", "PISCINAS-323419048", new Key(0xAA1B6A59, 0xE70B6FB3, 0x62DC6095, 0x6A594A25));
@@ -172,6 +189,118 @@ namespace GTToolsSharp
             => OutputDirectory = dirPath;
 
         /// <summary>
+        /// Decrypts the header of the main volume file, using a provided seed.
+        /// </summary>
+        /// <param name="headerData"></param>
+        /// <param name="seed"></param>
+        /// <returns></returns>
+        private bool DecryptHeader(Span<byte> headerData, uint seed)
+        {
+            if (IsGT5PDemoStyle)
+            {
+                GT5POldCrypto.DecryptPass(1, headerData, headerData, 0x14);
+
+                byte[] outdata = new byte[0x14];
+                GT5POldCrypto.DecryptHeaderSpecific(outdata, headerData);
+                outdata.CopyTo(headerData);
+                return true;
+            }
+
+            if (!Keyset.CryptData(headerData, seed))
+                return false;
+
+            Span<uint> blocks = MemoryMarshal.Cast<byte, uint>(headerData);
+            Keyset.DecryptBlocks(blocks, blocks);
+            return true;
+        }
+
+        /// <summary>
+        /// Reads a buffer containing the header of a main volume file.
+        /// </summary>
+        /// <param name="header"></param>
+        /// <returns></returns>
+        private bool ReadHeader(Span<byte> header)
+        {
+            GTVolumeHeader volHeader = GTVolumeHeader.FromStream(header);
+            if (volHeader is null)
+                return false;
+
+            Program.Log($"[>] PFS Version: '{volHeader.PFSVersion}'");
+            Program.Log($"[>] Table of Contents Entry Index: {volHeader.TOCEntryIndex}");
+            Program.Log($"[>] TOC Size: {volHeader.CompressedTOCSize} bytes ({volHeader.TOCSize} decompressed)");
+
+            if (!IsGT5PDemoStyle)
+            {
+                Program.Log($"[>] Total Volume Size: {MiscUtils.BytesToString((long)volHeader.TotalVolumeSize)}");
+                Program.Log($"[>] Title ID: '{volHeader.TitleID}'");
+            }
+            VolumeHeader = volHeader;
+
+            return true;
+        }
+
+        private bool DecryptTOC()
+        {
+            if (VolumeHeader is null)
+                throw new InvalidOperationException("Header was not yet loaded");
+
+            if (IsPatchVolume)
+            {
+                string path = PDIPFSPathResolver.GetPathFromSeed(VolumeHeader.TOCEntryIndex, IsGT5PDemoStyle);
+
+                string localPath = Path.Combine(this.PatchVolumeFolder, path);
+                Program.Log($"[!] Volume Patch Path Table of contents located at: {localPath}", true);
+                if (!File.Exists(localPath))
+                {
+                    Program.Log($"[X] Error: Unable to locate PDIPFS main TOC file on local filesystem. ({path})", true);
+                    return false;
+                }
+
+                using var fs = new FileStream(localPath, FileMode.Open);
+                byte[] data = new byte[VolumeHeader.CompressedTOCSize];
+                fs.Read(data);
+
+                // Accessing a new file, we need to decrypt the header again
+                Program.Log($"[-] TOC Entry is {VolumeHeader.TOCEntryIndex} which is at {path} - decrypting it", true);
+                if (!IsGT5PDemoStyle)
+                    Keyset.CryptData(data, VolumeHeader.TOCEntryIndex);
+                else
+                    GT5POldCrypto.DecryptPass(VolumeHeader.TOCEntryIndex, data, data, (int)VolumeHeader.CompressedTOCSize);
+
+                Program.Log($"[-] Decompressing TOC file..", true);
+                if (!MiscUtils.TryInflateInMemory(data, VolumeHeader.TOCSize, out byte[] deflatedData))
+                    return false;
+
+                TableOfContents = new GTVolumeTOC(VolumeHeader, this);
+                TableOfContents.Location = path;
+                TableOfContents.Data = deflatedData;
+            }
+            else
+            {
+                Stream.Seek(GTVolumeTOC.SEGMENT_SIZE, SeekOrigin.Begin);
+
+                var br = new BinaryReader(Stream);
+                byte[] data = br.ReadBytes((int)VolumeHeader.CompressedTOCSize);
+
+                Program.Log($"[-] TOC Entry is {VolumeHeader.TOCEntryIndex} which is at offset {GTVolumeTOC.SEGMENT_SIZE}", true);
+
+                // Decrypt it with the seed that the main header gave us
+                Keyset.CryptData(data, VolumeHeader.TOCEntryIndex);
+
+                Program.Log($"[-] Decompressing TOC within volume.. (offset: {GTVolumeTOC.SEGMENT_SIZE})", true);
+                if (!MiscUtils.TryInflateInMemory(data, VolumeHeader.TOCSize, out byte[] deflatedData))
+                    return false;
+
+                TableOfContents = new GTVolumeTOC(VolumeHeader, this);
+                TableOfContents.Data = deflatedData;
+
+                DataOffset = CryptoUtils.AlignUp(GTVolumeTOC.SEGMENT_SIZE + VolumeHeader.CompressedTOCSize, GTVolumeTOC.SEGMENT_SIZE);
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// Unpacks all the files within the volume.
         /// </summary>
         public void UnpackFiles(IEnumerable<int> fileIndexesToExtract)
@@ -195,13 +324,7 @@ namespace GTToolsSharp
         public void UnpackDirect(string volPath, FileEntryKey entry)
         {
             FileInfoKey nodeKey = TableOfContents.FileInfos.GetByFileIndex(entry.EntryIndex);
-            if (nodeKey.Flags == (FileInfoFlags)3)
-            {
-                Program.Log($"[X] Skipped {volPath} (File flag 3 - salsa encryption)", forceConsolePrint: true);
-                return;
-            }
-
-            UnpackNode(nodeKey, Path.Combine(OutputDirectory, volPath));
+            UnpackNode(nodeKey, volPath, Path.Combine(OutputDirectory, volPath));
         }
 
         public void PackFiles(string outrepackDir, string[] filesToRemove, bool packAllAsNew, string customTitleID)
@@ -315,7 +438,7 @@ namespace GTToolsSharp
             }
         }
 
-        public bool UnpackNode(FileInfoKey nodeKey, string filePath)
+        public bool UnpackNode(FileInfoKey nodeKey, string entryPath, string filePath)
         {
             ulong offset = DataOffset + (ulong)nodeKey.SegmentIndex * GTVolumeTOC.SEGMENT_SIZE;
             uint uncompressedSize = nodeKey.UncompressedSize;
@@ -325,104 +448,137 @@ namespace GTToolsSharp
                 if (NoUnpack)
                     return false;
 
-                Stream.Position = (long)offset;
-                if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
+                return UnpackVolumeFile(nodeKey, filePath, offset, uncompressedSize);
+            }
+            else
+                return UnpackPFSFile(nodeKey, entryPath, filePath, uncompressedSize);
+        }
+
+        private bool UnpackPFSFile(FileInfoKey nodeKey, string entryPath, string filePath, uint uncompressedSize)
+        {
+            FileStream fs;
+
+            string patchFilePath = PDIPFSPathResolver.GetPathFromSeed(nodeKey.FileIndex, IsGT5PDemoStyle);
+            string localPath = this.PatchVolumeFolder + "/" + patchFilePath;
+
+            if (NoUnpack)
+                return false;
+
+            /* I'm really not sure if there's a better way to do this.
+            * Volume files, at least nodes don't seem to even store any special flag whether
+            * it is located within an actual volume file or a patch volume. The only thing that is different is the sector index.. Sometimes node index when it's updated
+            * It's slow, but somewhat works I guess..
+            * */
+            if (!File.Exists(localPath))
+                return false;
+
+            Program.Log($"[:] Unpacking: {patchFilePath} -> {filePath}");
+            fs = new FileStream(localPath, FileMode.Open);
+            if (fs.Length >= 7)
+            {
+                Span<byte> magic = stackalloc byte[6];
+                fs.Read(magic);
+                if (Encoding.ASCII.GetString(magic).StartsWith("BSDIFF"))
                 {
-                    if (!MiscUtils.DecryptCheckCompression(Stream, Keyset, nodeKey.FileIndex, uncompressedSize))
+                    Program.Log($"[X] Detected BSDIFF file for {filePath} ({patchFilePath}), can not unpack yet. (fileID {nodeKey.FileIndex})", forceConsolePrint: true);
+                    return false;
+                }
+
+                fs.Position = 0;
+            }
+
+            if (IsGT5PDemoStyle)
+            {
+                var oldCrypto = new VolumeCryptoOld(Keyset);
+                bool customCrypt = nodeKey.Flags.HasFlag(FileInfoFlags.CustomSalsaCrypt)
+                    || entryPath == "piece/car_thumb_M/gtr_07_01.img" // Uncompressed files, but no special flag either...
+                    || entryPath == "piece/car_thumb_M/impreza_wrx_sti_07_03.img";
+
+                Salsa20 salsa = default;
+
+                if (customCrypt)
+                {
+                    if (!Keyset.DecryptManager.Keys.TryGetValue(entryPath, out string b64Key) || b64Key.Length < 32)
                     {
-                        Program.Log($"[X] Failed to decompress file ({filePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
+                        Program.Log($"[X] Could not find custom decryption key for {filePath}, skipping it.", forceConsolePrint: true);
                         return false;
                     }
 
+                    byte[] key = Convert.FromBase64String(b64Key).AsSpan(0, 32).ToArray();
+                    salsa = new Salsa20(key, key.Length);
+                    Program.Log($"[/] Attempting to decrypt custom encrypted file {entryPath}..");
+                }
+
+                if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
+                {
                     Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                    Stream.Position -= 8;
-                    MiscUtils.DecryptAndInflateToFile(Keyset, Stream, nodeKey.FileIndex, uncompressedSize, filePath, false);
+                    using (var outCompressedFile = new FileStream(filePath + ".in", FileMode.Create))
+                        oldCrypto.DecryptOld(fs, outCompressedFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
+
+                    using (var inCompressedFile = new FileStream(filePath + ".in", FileMode.Open))
+                    {
+                        using var outFile = new FileStream(filePath, FileMode.Create);
+
+                        inCompressedFile.Position = 8;
+                        using var ds = new DeflateStream(inCompressedFile, CompressionMode.Decompress);
+                        ds.CopyTo(outFile);
+                    }
+
+                    File.Delete(filePath + ".in");
                 }
                 else
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                    MiscUtils.DecryptToFile(Keyset, Stream, nodeKey.FileIndex, uncompressedSize, filePath, false);
+                    using (var outFile = new FileStream(filePath, FileMode.Create))
+                        oldCrypto.DecryptOld(fs, outFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
                 }
+
+                if (customCrypt)
+                    Program.Log($"[/] Successfully decrypted custom encrypted file {entryPath}.");
             }
             else
             {
-                string patchFilePath = PDIPFSPathResolver.GetPathFromSeed(nodeKey.FileIndex, IsGT5PDemoStyle);
-                string localPath = this.PatchVolumeFolder + "/" + patchFilePath;
-
-                if (NoUnpack)
-                    return false;
-
-                /* I'm really not sure if there's a better way to do this.
-                * Volume files, at least nodes don't seem to even store any special flag whether
-                * it is located within an actual volume file or a patch volume. The only thing that is different is the sector index.. Sometimes node index when it's updated
-                * It's slow, but somewhat works I guess..
-                * */
-                if (!File.Exists(localPath))
-                    return false;
-
-                Program.Log($"[:] Unpacking: {patchFilePath} -> {filePath}");
-
-                using var fs = new FileStream(localPath, FileMode.Open);
-                if (fs.Length >= 7)
+                if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
                 {
-                    Span<byte> magic = stackalloc byte[6];
-                    fs.Read(magic);
-                    if (Encoding.ASCII.GetString(magic).StartsWith("BSDIFF"))
+                    if (!MiscUtils.DecryptCheckCompression(fs, Keyset, nodeKey.FileIndex, uncompressedSize))
                     {
-                        Program.Log($"[X] Detected BSDIFF file for {filePath} ({patchFilePath}), can not unpack yet. (fileID {nodeKey.FileIndex})", forceConsolePrint: true);
+                        Program.Log($"[X] Failed to decompress file {filePath} ({patchFilePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
                         return false;
                     }
 
+                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                     fs.Position = 0;
-                }
-
-                if (IsGT5PDemoStyle)
-                {
-                    var oldCrypto = new VolumeCryptoOld(null);
-                    if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
-                    {
-                        Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                        using (var outCompressedFile = new FileStream(filePath + ".in", FileMode.Create))
-                            oldCrypto.DecryptOld(fs, outCompressedFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0);
-
-                        using (var inCompressedFile = new FileStream(filePath + ".in", FileMode.Open))
-                        {
-                            using var outFile = new FileStream(filePath, FileMode.Create);
-
-                            inCompressedFile.Position = 8;
-                            using var ds = new DeflateStream(inCompressedFile, CompressionMode.Decompress);
-                            ds.CopyTo(outFile);
-                        }
-
-                        File.Delete(filePath + ".in");
-                    }
-                    else
-                    {
-                        Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                        using (var outFile = new FileStream(filePath, FileMode.Create))
-                            oldCrypto.DecryptOld(fs, outFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0);
-                    }
+                    MiscUtils.DecryptAndInflateToFile(Keyset, fs, nodeKey.FileIndex, filePath);
                 }
                 else
                 {
-                    if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
-                    {
-                        if (!MiscUtils.DecryptCheckCompression(fs, Keyset, nodeKey.FileIndex, uncompressedSize))
-                        {
-                            Program.Log($"[X] Failed to decompress file {filePath} ({patchFilePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
-                            return false;
-                        }
-
-                        Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                        fs.Position = 0;
-                        MiscUtils.DecryptAndInflateToFile(Keyset, fs, nodeKey.FileIndex, filePath);
-                    }
-                    else
-                    {
-                        Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                        MiscUtils.DecryptToFile(Keyset, fs, nodeKey.FileIndex, filePath);
-                    }
+                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                    MiscUtils.DecryptToFile(Keyset, fs, nodeKey.FileIndex, filePath);
                 }
+            }
+
+            return true;
+        }
+
+        private bool UnpackVolumeFile(FileInfoKey nodeKey, string filePath, ulong offset, uint uncompressedSize)
+        {
+            Stream.Position = (long)offset;
+            if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
+            {
+                if (!MiscUtils.DecryptCheckCompression(Stream, Keyset, nodeKey.FileIndex, uncompressedSize))
+                {
+                    Program.Log($"[X] Failed to decompress file ({filePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
+                    return false;
+                }
+
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                Stream.Position -= 8;
+                MiscUtils.DecryptAndInflateToFile(Keyset, Stream, nodeKey.FileIndex, uncompressedSize, filePath, false);
+            }
+            else
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                MiscUtils.DecryptToFile(Keyset, Stream, nodeKey.FileIndex, uncompressedSize, filePath, false);
             }
 
             return true;
@@ -454,116 +610,5 @@ namespace GTToolsSharp
             return entryPath;
         }
 
-        /// <summary>
-        /// Decrypts the header of the main volume file, using a provided seed.
-        /// </summary>
-        /// <param name="headerData"></param>
-        /// <param name="seed"></param>
-        /// <returns></returns>
-        private bool DecryptHeader(Span<byte> headerData, uint seed)
-        {
-            if (IsGT5PDemoStyle)
-            {
-                GT5POldCrypto.DecryptPass(1, headerData, headerData, 0x14);
-
-                byte[] outdata = new byte[0x14];
-                GT5POldCrypto.DecryptHeaderSpecific(outdata, headerData);
-                outdata.CopyTo(headerData);
-                return true;
-            }
-
-            if (!Keyset.CryptData(headerData, seed))
-                return false;
-
-            Span<uint> blocks = MemoryMarshal.Cast<byte, uint>(headerData);
-            Keyset.DecryptBlocks(blocks, blocks);
-            return true;
-        }
-
-        /// <summary>
-        /// Reads a buffer containing the header of a main volume file.
-        /// </summary>
-        /// <param name="header"></param>
-        /// <returns></returns>
-        private bool ReadHeader(Span<byte> header)
-        {
-            GTVolumeHeader volHeader = GTVolumeHeader.FromStream(header);
-            if (volHeader is null)
-                return false;
-
-            Program.Log($"[>] PFS Version: '{volHeader.PFSVersion}'");
-            Program.Log($"[>] Table of Contents Entry Index: {volHeader.TOCEntryIndex}");
-            Program.Log($"[>] TOC Size: {volHeader.CompressedTOCSize} bytes ({volHeader.TOCSize} decompressed)");
-
-            if (!IsGT5PDemoStyle)
-            {
-                Program.Log($"[>] Total Volume Size: {MiscUtils.BytesToString((long)volHeader.TotalVolumeSize)}");
-                Program.Log($"[>] Title ID: '{volHeader.TitleID}'");
-            }
-            VolumeHeader = volHeader;
-
-            return true;
-        }
-
-        private bool DecryptTOC()
-        {
-            if (VolumeHeader is null)
-                throw new InvalidOperationException("Header was not yet loaded");
-
-            if (IsPatchVolume)
-            {
-                string path = PDIPFSPathResolver.GetPathFromSeed(VolumeHeader.TOCEntryIndex, IsGT5PDemoStyle);
-
-                string localPath = Path.Combine(this.PatchVolumeFolder, path);
-                Program.Log($"[!] Volume Patch Path Table of contents located at: {localPath}", true);
-                if (!File.Exists(localPath))
-                {
-                    Program.Log($"[X] Error: Unable to locate PDIPFS main TOC file on local filesystem. ({path})", true);
-                    return false;
-                }
-
-                using var fs = new FileStream(localPath, FileMode.Open);
-                byte[] data = new byte[VolumeHeader.CompressedTOCSize];
-                fs.Read(data);
-
-                // Accessing a new file, we need to decrypt the header again
-                Program.Log($"[-] TOC Entry is {VolumeHeader.TOCEntryIndex} which is at {path} - decrypting it", true);
-                if (!IsGT5PDemoStyle)
-                    Keyset.CryptData(data, VolumeHeader.TOCEntryIndex);
-                else
-                    GT5POldCrypto.DecryptPass(VolumeHeader.TOCEntryIndex, data, data, (int)VolumeHeader.CompressedTOCSize);
-
-                Program.Log($"[-] Decompressing TOC file..", true);
-                if (!MiscUtils.TryInflateInMemory(data, VolumeHeader.TOCSize, out byte[] deflatedData))
-                    return false;
-
-                TableOfContents = new GTVolumeTOC(VolumeHeader, this);
-                TableOfContents.Location = path;
-                TableOfContents.Data = deflatedData;
-            }
-            else
-            {
-                Stream.Seek(GTVolumeTOC.SEGMENT_SIZE, SeekOrigin.Begin);
-
-                var br = new BinaryReader(Stream);
-                byte[] data = br.ReadBytes((int)VolumeHeader.CompressedTOCSize);
-
-                Program.Log($"[-] TOC Entry is {VolumeHeader.TOCEntryIndex} which is at offset {GTVolumeTOC.SEGMENT_SIZE}", true);
-
-                // Decrypt it with the seed that the main header gave us
-                Keyset.CryptData(data, VolumeHeader.TOCEntryIndex);
-
-                Program.Log($"[-] Decompressing TOC within volume.. (offset: {GTVolumeTOC.SEGMENT_SIZE})", true);
-                if (!MiscUtils.TryInflateInMemory(data, VolumeHeader.TOCSize, out byte[] deflatedData))
-                    return false;
-
-                TableOfContents = new GTVolumeTOC(VolumeHeader, this);
-                TableOfContents.Data = deflatedData;
-
-                DataOffset = CryptoUtils.AlignUp(GTVolumeTOC.SEGMENT_SIZE + VolumeHeader.CompressedTOCSize, GTVolumeTOC.SEGMENT_SIZE);
-            }
-
-            return true;
-        }
     }
 }

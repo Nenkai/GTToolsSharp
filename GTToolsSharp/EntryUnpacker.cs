@@ -62,7 +62,7 @@ namespace GTToolsSharp
                 uint nodeIndex = nodeBTree.SearchIndexByKey(nodeKey);
 
                 if (nodeIndex != FileInfoKey.InvalidIndex)
-                     _volume.UnpackNode(nodeKey, fullEntryPath);
+                     _volume.UnpackNode(nodeKey, entryPath, fullEntryPath);
             }
         }
 

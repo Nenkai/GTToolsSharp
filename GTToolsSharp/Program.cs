@@ -26,7 +26,7 @@ namespace GTToolsSharp
         {
             Console.WriteLine("-- Gran Turismo 5/6 Volume Tools - (c) Nenkai#9075, ported from flatz --");
             Console.WriteLine();
-
+            
             Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, UnpackInstallerVerbs, CryptVerbs, ListVerbs, CompressVerbs>(args)
                 .WithParsed<PackVerbs>(Pack)
                 .WithParsed<UnpackVerbs>(Unpack)
@@ -272,7 +272,7 @@ namespace GTToolsSharp
             if (!string.IsNullOrEmpty(options.Salsa20KeyEncrypt))
             {
                 byte[] keyBytes = MiscUtils.StringToByteArray(options.Salsa20KeyEncrypt);
-                using SymmetricAlgorithm salsa20 = new Salsa20();
+                using SymmetricAlgorithm salsa20 = new Salsa20SymmetricAlgorithm();
                 byte[] dataKey = new byte[8];
 
                 Console.WriteLine($"[:] Salsa Encrypting '{file}'..");
@@ -282,7 +282,7 @@ namespace GTToolsSharp
             else if (!string.IsNullOrEmpty(options.Salsa20KeyDecrypt))
             {
                 byte[] keyBytes = MiscUtils.StringToByteArray(options.Salsa20KeyDecrypt);
-                using SymmetricAlgorithm salsa20 = new Salsa20();
+                using SymmetricAlgorithm salsa20 = new Salsa20SymmetricAlgorithm();
                 byte[] dataKey = new byte[8];
 
                 Console.WriteLine($"[:] Salsa Decrypting '{file}'..");
@@ -313,7 +313,6 @@ namespace GTToolsSharp
                     return;
                 }
             }
-
 
             Keyset[] keyset = CheckKeys();
             if (keyset is null)
@@ -393,7 +392,7 @@ namespace GTToolsSharp
 
         public static void CreateDefaultKeysFile()
         {
-            string json = JsonSerializer.Serialize(new[] { GTVolume.Keyset_GT5_EU, GTVolume.Keyset_GT5_US, GTVolume.Keyset_GT6 }, new JsonSerializerOptions() { WriteIndented = true }); ;
+            string json = JsonSerializer.Serialize(new[] { GTVolume.Keyset_GT5P_JP_DEMO, GTVolume.Keyset_GT5_EU, GTVolume.Keyset_GT5_US, GTVolume.Keyset_GT6 }, new JsonSerializerOptions() { WriteIndented = true }); ;
             File.WriteAllText("key.json", json);
         }
 
@@ -404,8 +403,10 @@ namespace GTToolsSharp
                 try
                 {
                     CreateDefaultKeysFile();
-                    Console.WriteLine($"[X] Error: Key file is missing, A default one was created with GT5 EU, US and GT6 keys. (key.json)");
-                    Console.WriteLine($"Change them accordingly to the keys of the game and/or different game region you are trying to unpack if needed.");
+                    Console.WriteLine("[X] Error: Key file is missing.");
+                    Console.WriteLine(" A default one was created with GT5 EU, US GT6 and GT5 JP Demo keys. (key.json)");
+                    Console.WriteLine(" Change them accordingly to the keys of the game and/or different game region you are trying to unpack if needed.");
+                    Console.WriteLine(" Just run the program again if the game you are trying to extract/pack matches one of the above.");
                     Console.WriteLine();
                 }
                 catch (Exception e)

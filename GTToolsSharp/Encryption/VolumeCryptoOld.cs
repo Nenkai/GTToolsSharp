@@ -67,13 +67,14 @@ namespace GTToolsSharp.Encryption
 		/// <param name="seed"></param>
 		/// <param name="fileSize"></param>
 		/// <param name="offset"></param>
-		public void DecryptOld(Stream inStream, Stream outStream, uint seed, ulong fileSize, ulong offset)
+		public void DecryptOld(Stream inStream, Stream outStream, uint seed, ulong fileSize, ulong offset, Salsa20 salsa = default, bool skipCompressMagicForDecrypt = true)
 		{
 			uint[] keys = PrepareKeyOld(seed);
 			byte[] table = GenerateBitsTable(keys);
 
 			byte[] buffer = ArrayPool<byte>.Shared.Rent(0x20000);
 
+			bool first = true;
 			while (fileSize > 0)
 			{
 				ulong bufferSize = fileSize;
@@ -84,10 +85,20 @@ namespace GTToolsSharp.Encryption
 				inStream.Read(buffer);
 
 				DecryptBuffer(buffer, buffer, (int)bufferSize, table, offset);
+				if (salsa.Initted)
+				{
+					if (skipCompressMagicForDecrypt)
+						salsa.DecryptOffset(buffer, first ? (int)bufferSize - 8 : (int)bufferSize, first ? (long)offset + 8 : (long)offset, first ? 8 : 0);
+					else
+						salsa.DecryptOffset(buffer, (int)bufferSize, (int)offset, 0);
+				}
+
 				outStream.Write(buffer.AsSpan(0, (int)bufferSize));
 
 				fileSize -= bufferSize;
 				offset += bufferSize;
+
+				first = false;
 			}
 
 			ArrayPool<byte>.Shared.Return(buffer);
@@ -136,7 +147,9 @@ namespace GTToolsSharp.Encryption
 		/// <returns></returns>
 		private uint[] PrepareKeyOld(uint seed)
 		{
-			uint one = CRC32.CRC32UInt(seed ^ 0xADD1F79B);
+			var keysetSeedCrc = ~CRC32.CRC32_0x04C11DB7(_keys.Magic, 0);
+
+			uint one = CRC32.CRC32UInt(seed ^ keysetSeedCrc);
 			uint two = CRC32.CRC32UInt(one);
 			uint three = CRC32.CRC32UInt(two);
 			uint four = CRC32.CRC32UInt(three);
