@@ -456,8 +456,6 @@ namespace GTToolsSharp
 
         private bool UnpackPFSFile(FileInfoKey nodeKey, string entryPath, string filePath, uint uncompressedSize)
         {
-            FileStream fs;
-
             string patchFilePath = PDIPFSPathResolver.GetPathFromSeed(nodeKey.FileIndex, IsGT5PDemoStyle);
             string localPath = this.PatchVolumeFolder + "/" + patchFilePath;
 
@@ -473,7 +471,7 @@ namespace GTToolsSharp
                 return false;
 
             Program.Log($"[:] Unpacking: {patchFilePath} -> {filePath}");
-            fs = new FileStream(localPath, FileMode.Open);
+            using var fs = new FileStream(localPath, FileMode.Open);
             if (fs.Length >= 7)
             {
                 Span<byte> magic = stackalloc byte[6];
@@ -509,32 +507,39 @@ namespace GTToolsSharp
                     Program.Log($"[/] Attempting to decrypt custom encrypted file {entryPath}..");
                 }
 
-                if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
+                try
                 {
-                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                    using (var outCompressedFile = new FileStream(filePath + ".in", FileMode.Create))
-                        oldCrypto.DecryptOld(fs, outCompressedFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
-
-                    using (var inCompressedFile = new FileStream(filePath + ".in", FileMode.Open))
+                    if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
                     {
-                        using var outFile = new FileStream(filePath, FileMode.Create);
+                        Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                        using (var outCompressedFile = new FileStream(filePath + ".in", FileMode.Create))
+                            oldCrypto.DecryptOld(fs, outCompressedFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
 
-                        inCompressedFile.Position = 8;
-                        using var ds = new DeflateStream(inCompressedFile, CompressionMode.Decompress);
-                        ds.CopyTo(outFile);
+                        using (var inCompressedFile = new FileStream(filePath + ".in", FileMode.Open))
+                        {
+                            using var outFile = new FileStream(filePath, FileMode.Create);
+
+                            inCompressedFile.Position = 8;
+                            using var ds = new DeflateStream(inCompressedFile, CompressionMode.Decompress);
+                            ds.CopyTo(outFile);
+                        }
+
+                        File.Delete(filePath + ".in");
+                    }
+                    else
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                        using (var outFile = new FileStream(filePath, FileMode.Create))
+                            oldCrypto.DecryptOld(fs, outFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
                     }
 
-                    File.Delete(filePath + ".in");
+                    if (customCrypt)
+                        Program.Log($"[/] Successfully decrypted custom encrypted file {entryPath}.");
                 }
-                else
+                catch (Exception e)
                 {
-                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                    using (var outFile = new FileStream(filePath, FileMode.Create))
-                        oldCrypto.DecryptOld(fs, outFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
+                    Program.Log($"[X] Failed to decrypt {entryPath} ({e.Message})");
                 }
-
-                if (customCrypt)
-                    Program.Log($"[/] Successfully decrypted custom encrypted file {entryPath}.");
             }
             else
             {
