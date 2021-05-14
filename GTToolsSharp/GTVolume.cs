@@ -206,6 +206,9 @@ namespace GTToolsSharp
                 return true;
             }
 
+            if (Keyset.Key.Data is null || Keyset.Key.Data.Length < 4)
+                return false;
+
             if (!Keyset.CryptData(headerData, seed))
                 return false;
 
@@ -243,6 +246,9 @@ namespace GTToolsSharp
         {
             if (VolumeHeader is null)
                 throw new InvalidOperationException("Header was not yet loaded");
+
+            if (Keyset.Key.Data is null || Keyset.Key.Data.Length < 4)
+                return false;
 
             if (IsPatchVolume)
             {
@@ -496,7 +502,7 @@ namespace GTToolsSharp
 
                 if (customCrypt)
                 {
-                    if (!Keyset.DecryptManager.Keys.TryGetValue(entryPath, out string b64Key) || b64Key.Length < 32)
+                    if (Keyset.DecryptManager is null || !Keyset.DecryptManager.Keys.TryGetValue(entryPath, out string b64Key) || b64Key.Length < 32)
                     {
                         Program.Log($"[X] Could not find custom decryption key for {filePath}, skipping it.", forceConsolePrint: true);
                         return false;

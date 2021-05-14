@@ -37,6 +37,9 @@ namespace GTToolsSharp.PackedFileInstaller
 
         public static InstallerUnpacker Load(Keyset keyset, string file, bool saveHeaderToc = false)
         {
+            if (keyset.Key.Data is null || keyset.Key.Data.Length < 4)
+                return null;
+
             Span<byte> header = stackalloc byte[0x10];
             using (var fs = new FileStream(file, FileMode.Open))
                 fs.Read(header);
