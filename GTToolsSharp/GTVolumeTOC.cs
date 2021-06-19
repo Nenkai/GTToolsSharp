@@ -15,6 +15,7 @@ using Syroot.BinaryData.Memory;
 using Syroot.BinaryData.Core;
 using Syroot.BinaryData;
 
+using PDTools.Utils;
 namespace GTToolsSharp
 {
     /// <summary>
@@ -71,19 +72,19 @@ namespace GTToolsSharp
                 RootAndFolderOffsets.Add(sr.ReadUInt32());
 
             
-            FileNames = new StringBTree(Data, (int)NameTreeOffset);
+            FileNames = new StringBTree(Data.AsMemory((int)NameTreeOffset));
             if (!ParentVolume.IsGT5PDemoStyle)
                 FileNames.LoadEntries();
             else
                 FileNames.LoadEntriesOld();
             
-            Extensions = new StringBTree(Data, (int)FileExtensionTreeOffset);
+            Extensions = new StringBTree(Data.AsMemory((int)FileExtensionTreeOffset));
             if (!ParentVolume.IsGT5PDemoStyle)
                 Extensions.LoadEntries();
             else
                 Extensions.LoadEntriesOld();
 
-            FileInfos = new FileInfoBTree(Data, (int)NodeTreeOffset);
+            FileInfos = new FileInfoBTree(Data.AsMemory((int)NodeTreeOffset));
             if (!ParentVolume.IsGT5PDemoStyle)
                 FileInfos.LoadEntries();
             else
@@ -93,7 +94,7 @@ namespace GTToolsSharp
 
             for (int i = 0; i < entryTreeCount; i++)
             {
-                Files.Add(new FileEntryBTree(Data, (int)RootAndFolderOffsets[i]));
+                Files.Add(new FileEntryBTree(Data.AsMemory((int)RootAndFolderOffsets[i])));
                 if (!ParentVolume.IsGT5PDemoStyle)
                     Files[i].LoadEntries();
                 else
@@ -130,22 +131,21 @@ namespace GTToolsSharp
         /// </summary>
         public byte[] Serialize()
         {
-            using var ms = new MemoryStream();
-            using var bs = new BinaryStream(ms, ByteConverter.Big);
+            var bs = new BitStream(BitStreamMode.Write, 1024);
 
-            bs.Write(SEGMENT_MAGIC);
-            bs.Position = 16;
+            bs.WriteByteData(SEGMENT_MAGIC);
+            bs.SeekToByte(16);
             bs.WriteUInt32((uint)Files.Count);
-            bs.Position += sizeof(uint) * Files.Count;
+            bs.SeekToByteFromCurrentPosition(sizeof(uint) * Files.Count);
 
             uint fileNamesOffset = (uint)bs.Position;
-            FileNames.Serialize(bs);
+            FileNames.Serialize(ref bs);
 
             uint extOffset = (uint)bs.Position;
-            Extensions.Serialize(bs);
+            Extensions.Serialize(ref bs);
 
             uint fileInfoOffset = (uint)bs.Position;
-            FileInfos.Serialize(bs);
+            FileInfos.Serialize(ref bs);
 
             // The list of file entry btrees mostly consist of the relation between files, folder, extensions and data
             // Thus it is writen at the end
@@ -155,18 +155,18 @@ namespace GTToolsSharp
             {
                 FileEntryBTree f = Files[i];
                 uint treeOffset = (uint)bs.Position;
-                bs.Position = baseListPos + (i * sizeof(uint));
+                bs.SeekToByte(baseListPos + (i * sizeof(uint)));
                 bs.WriteUInt32(treeOffset);
-                bs.Position = treeOffset;
-                f.Serialize(bs, (uint)FileNames.Entries.Count, (uint)Extensions.Entries.Count);
+                bs.SeekToByte((int)treeOffset);
+                f.Serialize(ref bs/*, (uint)FileNames.Entries.Count, (uint)Extensions.Entries.Count*/);
             }
 
             // Go back to write the meta data
-            bs.Position = 4;
+            bs.SeekToByte(4);
             bs.WriteUInt32(fileNamesOffset);
             bs.WriteUInt32(extOffset);
             bs.WriteUInt32(fileInfoOffset);
-            return ms.ToArray();
+            return new byte[0];//ms.ToArray();
         }
 
         public void RemoveFilesFromTOC(string[] filesToRemove)

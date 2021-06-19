@@ -311,20 +311,10 @@ namespace GTToolsSharp
         /// </summary>
         public void UnpackFiles(IEnumerable<int> fileIndexesToExtract)
         {
-            if (IsGT5PDemoStyle)
-            {
-                // Lazy way
-                var files = TableOfContents.GetAllRegisteredFileMap();
-                foreach (var file in files)
-                    UnpackDirect(file.Key, file.Value);
-            }
-            else
-            {
-                FileEntryBTree rootEntries = new FileEntryBTree(this.TableOfContents.Data, (int)TableOfContents.RootAndFolderOffsets[0]);
-
-                var unpacker = new EntryUnpacker(this, OutputDirectory, "", fileIndexesToExtract.ToList());
-                rootEntries.TraverseAndUnpack(unpacker);
-            }
+            // Lazy way
+            var files = TableOfContents.GetAllRegisteredFileMap();
+            foreach (var file in files)
+                UnpackDirect(file.Key, file.Value);
         }
 
         public void UnpackDirect(string volPath, FileEntryKey entry)
@@ -599,7 +589,7 @@ namespace GTToolsSharp
         public string GetEntryPath(FileEntryKey key, string prefix)
         {
             string entryPath = prefix;
-            StringBTree nameBTree = new StringBTree(TableOfContents.Data, (int)TableOfContents.NameTreeOffset);
+            StringBTree nameBTree = new StringBTree(TableOfContents.Data.AsMemory((int)TableOfContents.NameTreeOffset));
 
             if (nameBTree.TryFindIndex(key.NameIndex, out StringKey nameKey))
                 entryPath += nameKey.Value;
@@ -607,7 +597,7 @@ namespace GTToolsSharp
             if (key.Flags.HasFlag(EntryKeyFlags.File))
             {
                 // If it's a file, find the extension aswell
-                StringBTree extBTree = new StringBTree(TableOfContents.Data, (int)TableOfContents.FileExtensionTreeOffset);
+                StringBTree extBTree = new StringBTree(TableOfContents.Data.AsMemory((int)TableOfContents.FileExtensionTreeOffset));
                 
                 if (extBTree.TryFindIndex(key.FileExtensionIndex, out StringKey extKey) && !string.IsNullOrEmpty(extKey.Value))
                     entryPath += extKey.Value;
