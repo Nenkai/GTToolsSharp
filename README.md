@@ -1,15 +1,16 @@
 # GTToolsSharp
 A port of gttool from flatz for Gran Turismo 5/6 to C# which allows for endless modding possibilities.
 
-The main motivation for writing this tool was the near unreadability of the main one by flatz, along with extra features.
+The main motivation for writing this tool was to allow modding GT5/6 through repacking volumes.
 
 ### Features
 * Unpacking from any PS3-era Gran Turismo. (You'll need the keys to decrypt the volumes).
 * Unpacking **Patch File Systems** (PDIPFS) from game updates (except 1.06 Bsdiff GT6 files, planned)
 * **Packing files for modding** (PDIPFS only, packing an entire 10+gigs GT.VOL is kind of pointless). (Read packing sections)
+* Unpacking files for older version of volumes such as GT5 Prologue Demo
 
 Files can be extracted for GT.VOL (main build volume) and PDIPFS (update patches).
-To unpack/pack certain builds you will need the keys for each one of them. Only the keys for GT5 (EU/US) and GT6 are provided.
+To unpack/pack certain builds you will need the keys for each one of them. Only the keys for GT5 (EU/US) and GT6 are provided. There is no current support for GT Sport.
 
 # [DOWNLOAD LINK](https://github.com/Nenkai/GTToolsSharp/releases)
 
