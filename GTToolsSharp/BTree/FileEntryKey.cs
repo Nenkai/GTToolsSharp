@@ -11,9 +11,12 @@ using Syroot.BinaryData.Memory;
 
 using GTToolsSharp.Utils;
 using static GTToolsSharp.Utils.CryptoUtils;
+
+using PDTools.Utils;
+
 namespace GTToolsSharp.BTree
 {
-    public class FileEntryKey : IBTreeKey
+    public class FileEntryKey : IBTreeKey<FileEntryKey>
     {
         /// <summary>
         /// Offset from the beginning of the FileEntry Tree table.
@@ -25,38 +28,57 @@ namespace GTToolsSharp.BTree
         public uint FileExtensionIndex;
         public uint EntryIndex;
 
-        public void Deserialize(ref SpanReader sr)
+        public void Deserialize(ref BitStream stream)
         {
-            Flags = (EntryKeyFlags)sr.ReadByte();
-            NameIndex = (uint)CryptoUtils.DecodeBitsAndAdvance(ref sr);
-            FileExtensionIndex = Flags.HasFlag(EntryKeyFlags.File) ? (uint)CryptoUtils.DecodeBitsAndAdvance(ref sr) : 0;
-            EntryIndex = (uint)CryptoUtils.DecodeBitsAndAdvance(ref sr);
+            Flags = (EntryKeyFlags)stream.ReadByte();
+            NameIndex = (uint)stream.ReadVarInt();
+            FileExtensionIndex = Flags.HasFlag(EntryKeyFlags.File) ? (uint)stream.ReadVarInt() : 0;
+            EntryIndex = (uint)stream.ReadVarInt();
         }
 
-        public void Serialize(BinaryStream bs)
+        public void Serialize(ref BitStream bs)
         {
             bs.WriteByte((byte)Flags);
-            EncodeAndAdvance(bs, NameIndex);
+            bs.WriteVarInt((int)NameIndex);
             if (Flags.HasFlag(EntryKeyFlags.File))
-                EncodeAndAdvance(bs, FileExtensionIndex);
+                bs.WriteVarInt((int)FileExtensionIndex);
 
-            EncodeAndAdvance(bs, EntryIndex);
+            bs.WriteVarInt((int)EntryIndex);
         }
 
         public uint GetSerializedKeySize()
         {
-            byte[] data = ArrayPool<byte>.Shared.Rent(20); // Average size should do
-            using var keySizeMeasurer = new MemoryStream(data);
-            using var keyBufferWriter = new BinaryStream(keySizeMeasurer, ByteConverter.Big);
-            Serialize(keyBufferWriter);
-            uint keyLength = (uint)keySizeMeasurer.Position;
-            ArrayPool<byte>.Shared.Return(data, true);
+            uint keyLength = 1;
+            keyLength += (uint)BitStream.GetSizeOfVarInt((int)NameIndex);
+            if (Flags.HasFlag(EntryKeyFlags.File))
+                keyLength += (uint)BitStream.GetSizeOfVarInt((int)FileExtensionIndex);
+            keyLength += (uint)BitStream.GetSizeOfVarInt((int)EntryIndex);
+
             return keyLength;
+        }
+
+        public FileEntryKey GetLastIndex()
+        {
+            return new FileEntryKey();
+        }
+
+        public void SerializeIndex(ref BitStream stream)
+        {
+            stream.WriteVarInt((int)FileExtensionIndex);
+        }
+
+        public uint GetSerializedIndexSize()
+        {
+            return 0;
         }
 
         public override string ToString()
             => $"Flags: {Flags}, NameIndex: {NameIndex}, FileExtensionIndex: {FileExtensionIndex}, EntryIndex: {EntryIndex}";
 
+        public FileEntryKey CompareGetDiff(FileEntryKey key)
+        {
+            return key;
+        }
     }
 
     [Flags]

@@ -15,14 +15,14 @@ using GTToolsSharp.Utils;
 namespace GTToolsSharp.Encryption
 {
 	// Original implementation of the vol decryption, reverse engineered from scratch as flatz's gttool oversimplified it to a point where it was completely different.
-    public class VolumeCryptoOld
-    {
+	public class VolumeCryptoOld
+	{
 		private Keyset _keys;
 
 		public VolumeCryptoOld(Keyset keyset)
-        {
+		{
 			_keys = keyset;
-        }
+		}
 
 		/// <summary>
 		/// For traditional decryption
@@ -33,7 +33,7 @@ namespace GTToolsSharp.Encryption
 		/// <param name="fileSize"></param>
 		/// <param name="offset"></param>
 		public void Decrypt(Stream inStream, Stream outStream, uint seed, ulong fileSize, ulong offset)
-        {
+		{
 			uint crc = ~CRC32.CRC32_0x04C11DB7(_keys.Magic, 0);
 			uint[] keys = PrepareKey(crc ^ seed, _keys.Key.Data);
 			byte[] table = GenerateBitsTable(keys);
@@ -41,7 +41,7 @@ namespace GTToolsSharp.Encryption
 			byte[] buffer = ArrayPool<byte>.Shared.Rent(0x20000);
 
 			while (fileSize > 0)
-            {
+			{
 				ulong bufferSize = fileSize;
 				if (fileSize > 0x20000)
 					bufferSize = 0x20000;
@@ -297,10 +297,10 @@ namespace GTToolsSharp.Encryption
 							unkC = (uint)(unkC + 1 & (int)(unkC4 - (unkC4 ^ unkC3)) >> 0x1F);
 							unkD = (uint)(unkD + 1 & (int)(unkD4 - (unkD4 ^ unkD3)) >> 0x1F);
 
-							outputLong[iLong] = BinaryPrimitives.ReadUInt64LittleEndian(decryptTable.Slice((int)unkB2 + 0x88)) ^ 
-												BinaryPrimitives.ReadUInt64LittleEndian(decryptTable.Slice((int)unkC2 + 0x120)) ^ 
-												BinaryPrimitives.ReadUInt64LittleEndian(decryptTable.Slice((int)unkA2)) ^ 
-												inputLong.Slice(iLong)[0] ^ 
+							outputLong[iLong] = BinaryPrimitives.ReadUInt64LittleEndian(decryptTable.Slice((int)unkB2 + 0x88)) ^
+												BinaryPrimitives.ReadUInt64LittleEndian(decryptTable.Slice((int)unkC2 + 0x120)) ^
+												BinaryPrimitives.ReadUInt64LittleEndian(decryptTable.Slice((int)unkA2)) ^
+												inputLong.Slice(iLong)[0] ^
 												BinaryPrimitives.ReadUInt64LittleEndian(decryptTable.Slice((int)unkD2 + 0x1D8));
 							iLong++;
 						}

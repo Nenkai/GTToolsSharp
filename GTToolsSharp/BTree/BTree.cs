@@ -12,13 +12,16 @@ using Syroot.BinaryData;
 using GTToolsSharp.Utils;
 using static GTToolsSharp.Utils.CryptoUtils;
 
+using PDTools.Utils;
+
 namespace GTToolsSharp.BTree
 {
     [DebuggerDisplay("Count = {Entries.Count}, Offset: {_offsetStart}")]
-    public abstract class BTree<TKey> where TKey : IBTreeKey, new()
+    public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
     {
-        protected byte[] _buffer;
-        protected int _offsetStart;
+        public const int BTREE_SEGMENT_SIZE = 0x1000;
+
+        protected Memory<byte> _buffer;
 
         public List<TKey> Entries = new List<TKey>();
 
@@ -27,10 +30,9 @@ namespace GTToolsSharp.BTree
 
         }
 
-        public BTree(byte[] buffer, int offsetStart)
+        public BTree(Memory<byte> buffer)
         {
             _buffer = buffer;
-            _offsetStart = offsetStart;
         }
 
         public TKey GetByIndex(uint index)
@@ -38,117 +40,162 @@ namespace GTToolsSharp.BTree
 
         public void LoadEntries()
         {
-            SpanReader sr = new SpanReader(_buffer, Endian.Big);
-            sr.Position = (int)_offsetStart;
+            BitStream treeStream = new BitStream(BitStreamMode.Read, _buffer.Span);
 
-            uint offsetAndCount = sr.ReadUInt32();
-            uint nodeCount = sr.ReadUInt16();
+            byte indexBlockCount = treeStream.ReadByte();
+            uint indexBlockOffset = (uint)treeStream.ReadBits(24);
+            short segmentCount = treeStream.ReadInt16();
 
-            for (int i = 0; i < nodeCount; i++)
+            // Iterate through all segments and all their keys
+            for (int i = 0; i < segmentCount; i++)
             {
-                uint keyCount = GetBitsAt(ref sr, 0) & 0x7FFu;
-                uint nextOffset = GetBitsAt(ref sr, keyCount + 1);
+                int segPos = treeStream.Position;
 
+                bool moreThanOneKey = treeStream.ReadBoolBit();
+                uint keyCount = (uint)treeStream.ReadBits(11);
+
+                Debug.Assert(moreThanOneKey && keyCount > 0);
+
+                List<uint> keyOffsets = new List<uint>((int)keyCount);
                 for (uint j = 0; j < keyCount; j++)
                 {
-                    uint offset = GetBitsAt(ref sr, j + 1);
-                    var data = sr.GetReaderAtOffset((int)offset);
+                    uint offset = (uint)treeStream.ReadBits(12);
+                    keyOffsets.Add(offset);
+                }
 
+                // Offset to the next segment for the btree
+                uint nextSegmentOffset = (uint)treeStream.ReadBits(12);
+
+                for (int j = 0; j < keyCount; j++)
+                {
+                    treeStream.Position = (int)(segPos + keyOffsets[j]);
+                    Debug.Assert(keyOffsets[j] < nextSegmentOffset, "Key offset was beyond next segment?");
+
+                    // Parse key info
                     TKey key = new TKey();
-                    key.Deserialize(ref data);
+                    key.Deserialize(ref treeStream);
                     Entries.Add(key);
                 }
 
-                sr.Position += (int)nextOffset;
+                // Done with this segment, go to next
+                if (i != segmentCount - 1)
+                    treeStream.Position = (int)(segPos + nextSegmentOffset);
             }
         }
 
         public void LoadEntriesOld()
         {
-            SpanReader sr = new SpanReader(_buffer, Endian.Big);
-            sr.Position += _offsetStart;
+            BitStream treeStream = new BitStream(BitStreamMode.Read, _buffer.Span);
 
-            sr.Position += 1;
-            uint nodeCount = CryptoUtils.GetBitsAt(ref sr, (uint)sr.Position, 0);
-            sr.Position += 1;
+            byte indexBlockCount = treeStream.ReadByte();
+            uint segmentCount = (uint)treeStream.ReadBits(12);
+            uint unkOffset = (uint)treeStream.ReadBits(12);
 
-            uint lastDataPos = (uint)sr.Position;
-            for (int i = 0; i < nodeCount + 1; i++)
+            // Iterate through all segments and all their keys
+            for (int i = 0; i < segmentCount + 1; i++)
             {
-                uint keyCount = GetBitsAt(ref sr, lastDataPos, 0) & 0x7FFu;
-                GetBitsAt(ref sr, lastDataPos, keyCount + 1); 
+                int segPos = treeStream.Position;
 
+                bool moreThanOneKey = treeStream.ReadBoolBit();
+                uint keyCount = (uint)treeStream.ReadBits(11);
+
+                Debug.Assert(moreThanOneKey && keyCount > 0);
+
+                List<uint> keyOffsets = new List<uint>((int)keyCount);
                 for (uint j = 0; j < keyCount; j++)
                 {
-                    uint offset = GetBitsAt(ref sr, lastDataPos, j + 1);
-                    sr.Position = (int)lastDataPos + (int)offset;
-
-                    TKey key = new TKey();
-                    key.Deserialize(ref sr);
-                    Entries.Add(key);
+                    uint offset = (uint)treeStream.ReadBits(12);
+                    keyOffsets.Add(offset);
                 }
 
-                lastDataPos = (uint)sr.Position;
+                for (int j = 0; j < keyCount; j++)
+                {
+                    treeStream.Position = (int)(segPos + keyOffsets[j]);
+
+                    // Parse key info
+                    TKey key = new TKey();
+                    key.Deserialize(ref treeStream);
+                    Entries.Add(key);
+                }
             }
         }
 
         public bool TryFindIndex(uint index, out TKey key)
         {
-			SpanReader sr = new SpanReader(_buffer, Endian.Big);
-            sr.Position = _offsetStart;
-			uint offsetAndCount = sr.ReadUInt32();
+            BitStream treeStream = new BitStream(BitStreamMode.Read, _buffer.Span);
 
-			uint segmentCount = sr.ReadUInt16();
+            byte hasEntries = treeStream.ReadByte();
+            uint indexBlockOffset = (uint)treeStream.ReadBits(24);
+            short segmentCount = treeStream.ReadInt16();
 
-			for (uint i = 0u; i < segmentCount; ++i)
-			{
-                uint keyCount = GetBitsAt(ref sr, 0) & 0x7FFu;
-                uint nextOffset = GetBitsAt(ref sr, keyCount + 1);
+            for (uint i = 0u; i < segmentCount; ++i)
+            {
+                int segPos = treeStream.Position;
+
+                bool moreThanOneKey = treeStream.ReadBoolBit();
+                uint keyCount = (uint)treeStream.ReadBits(11);
 
                 if (index < keyCount)
-					break;
+                {
+                    treeStream.SeekToBit((int)((treeStream.Position * 8) + (index + 1) * 12));
+                    int keyOffset = (int)treeStream.ReadBits(12);
 
-				index -= keyCount;
+                    treeStream.SeekToByte(segPos + keyOffset);
 
-                sr.Position += (int)nextOffset;
-			}
+                    key = new TKey();
+                    key.Deserialize(ref treeStream);
+                    return key != null;
+                }
 
-            uint offset = GetBitsAt(ref sr, index + 1);
-            sr.Position += (int)offset;
+                index -= keyCount;
 
-            key = new TKey();
-            key.Deserialize(ref sr);
-            return key != null;
-		}
+                uint nextSegmentOffset = (uint)treeStream.ReadBits(12);
+                treeStream.SeekToByte((int)(segPos + nextSegmentOffset));
+            }
 
-        public abstract TKey SearchByKey(ref SpanReader sr);
+            key = default;
+            return false;
+        }
 
-        public abstract int LessThanKeyCompareOp(TKey key, ref SpanReader sr);
+        public abstract TKey SearchByKey(Span<byte> data);
 
-        public abstract int EqualToKeyCompareOp(TKey key, ref SpanReader sr);
+        public abstract void Serialize(ref BitStream stream, GTVolumeTOC parentTOC);
 
-        public SpanReader SearchWithComparison(ref SpanReader sr, uint count, TKey key, SearchResult res, SearchCompareMethod method)
+        public abstract int LessThanKeyCompareOp(TKey key, Span<byte> data);
+
+        public abstract int EqualToKeyCompareOp(TKey key, Span<byte> data);
+
+        public Span<byte> SearchWithComparison(ref BitStream stream, uint count, TKey key, SearchResult res, SearchCompareMethod method)
         {
-            uint high = GetBitsAt(ref sr, 0) & 0x7FFu;
+            int segPos = stream.Position;
+
+            bool moreThanOneKey = stream.ReadBoolBit();
+            uint high = (uint)stream.ReadBits(11); // Segment key count
+
             uint low = 0;
             uint index = 0;
 
             res.upperBound = high;
 
-            SpanReader subData = default;
+            Span<byte> keyData = default;
+
+            // BSearch segment to compare with our target key
             while (low < high)
             {
                 uint mid = low + (high - low) / 2;
                 index = mid + 1;
-                uint offset = GetBitsAt(ref sr, index);
 
-                subData = sr.GetReaderAtOffset((int)offset);
+                stream.SeekToBit((int)((segPos * 8) + index * 12));
+                int keyOffset = (int)stream.ReadBits(12);
+                stream.SeekToByte(segPos + keyOffset);
+
+                keyData = stream.GetSpanOfCurrentPosition();
 
                 int ret;
                 if (method == SearchCompareMethod.LessThan)
-                    ret = LessThanKeyCompareOp(key, ref subData);
+                    ret = LessThanKeyCompareOp(key, keyData);
                 else if (method == SearchCompareMethod.EqualTo)
-                    ret = EqualToKeyCompareOp(key, ref subData);
+                    ret = EqualToKeyCompareOp(key, keyData);
                 else
                     throw new ArgumentException($"Invalid search method provided '{method}'");
 
@@ -156,7 +203,7 @@ namespace GTToolsSharp.BTree
                 {
                     res.lowerBound = mid;
                     res.index = mid;
-                    return subData;
+                    return keyData;
                 }
                 else if (ret > 0)
                     low = index;
@@ -167,19 +214,22 @@ namespace GTToolsSharp.BTree
                 }
             }
 
-            subData.Position = -1;
-
             res.lowerBound = index;
             res.index = ~0u;
 
             if (count != 0 && index != res.upperBound)
             {
-                uint offset = GetBitsAt(ref sr, index + 1);
-                subData = sr.GetReaderAtOffset((int)offset);
+                stream.SeekToBit((int)((segPos * 8) + (index + 1) * 12));
+                int keyOffset = (int)stream.ReadBits(12);
+
+                stream.SeekToByte(segPos + keyOffset);
+                keyData = stream.GetSpanOfCurrentPosition();
             }
 
-            return subData;
+            return keyData;
         }
+
+
 
         public enum SearchCompareMethod
         {

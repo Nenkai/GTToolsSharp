@@ -11,13 +11,16 @@ using Syroot.BinaryData;
 using GTToolsSharp.Utils;
 using static GTToolsSharp.Utils.CryptoUtils;
 
+using PDTools.Utils;
+
 namespace GTToolsSharp.BTree
 {
     /// <summary>
     /// Represents a key that holds relational btree data and file sizes.
     /// </summary>
-    public class FileInfoKey : IBTreeKey
+    public class FileInfoKey : IBTreeKey<FileInfoKey>
     {
+
         public uint KeyOffset;
 
         public FileInfoFlags Flags { get; set; }
@@ -43,42 +46,62 @@ namespace GTToolsSharp.BTree
         }
 
 
-        public void Deserialize(ref SpanReader sr)
+        public void Deserialize(ref BitStream stream)
         {
-            Flags = (FileInfoFlags)sr.ReadByte();
+            Flags = (FileInfoFlags)stream.ReadByte();
 
-            FileIndex = (uint)DecodeBitsAndAdvance(ref sr);
-            CompressedSize = (uint)DecodeBitsAndAdvance(ref sr);
-            UncompressedSize = Flags.HasFlag(FileInfoFlags.Compressed) ? (uint)DecodeBitsAndAdvance(ref sr) : CompressedSize;
+            FileIndex = (uint)stream.ReadVarInt();
+            CompressedSize = (uint)stream.ReadVarInt();
+            UncompressedSize = Flags.HasFlag(FileInfoFlags.Compressed) ? (uint)stream.ReadVarInt() : CompressedSize;
 
-            SegmentIndex = (uint)DecodeBitsAndAdvance(ref sr);
+            SegmentIndex = (uint)stream.ReadVarInt();
         }
 
-        public void Serialize(BinaryStream bs)
+        public void Serialize(ref BitStream bs)
         {
             bs.WriteByte((byte)Flags);
-            EncodeAndAdvance(bs, FileIndex);
-            EncodeAndAdvance(bs, CompressedSize);
+            bs.WriteVarInt((int)FileIndex);
+            bs.WriteVarInt((int)CompressedSize);
             if (Flags.HasFlag(FileInfoFlags.Compressed))
-                EncodeAndAdvance(bs, UncompressedSize);
+                bs.WriteVarInt((int)UncompressedSize);
 
-            EncodeAndAdvance(bs, SegmentIndex);
+            bs.WriteVarInt((int)SegmentIndex);
         }
 
         public uint GetSerializedKeySize()
         {
-            byte[] data = ArrayPool<byte>.Shared.Rent(20); // Average size should do
-            using var keySizeMeasurer = new MemoryStream(data);
-            using var keyBufferWriter = new BinaryStream(keySizeMeasurer, ByteConverter.Big);
-            Serialize(keyBufferWriter);
-            uint keyLength = (uint)keySizeMeasurer.Position;
-            ArrayPool<byte>.Shared.Return(data, true);
+            uint keyLength = 1;
+            keyLength += (uint)BitStream.GetSizeOfVarInt((int)FileIndex);
+            keyLength += (uint)BitStream.GetSizeOfVarInt((int)CompressedSize);
+            if (Flags.HasFlag(FileInfoFlags.Compressed))
+                keyLength += (uint)BitStream.GetSizeOfVarInt((int)UncompressedSize);
+            keyLength += (uint)BitStream.GetSizeOfVarInt((int)SegmentIndex);
+
             return keyLength;
+        }
+
+        public FileInfoKey GetLastIndex()
+        {
+            return default(FileInfoKey);
+        }
+
+        public void SerializeIndex(ref BitStream stream)
+        {
+
+        }
+
+        public uint GetSerializedIndexSize()
+        {
+            return 0;
         }
 
         public override string ToString()
             => $"Flags: {Flags} FileIndex: {FileIndex} ({PDIPFSPathResolver.GetPathFromSeed(FileIndex)}), SegmentIndex: {SegmentIndex}, CompressedSize: {CompressedSize}, UncompSize: {UncompressedSize}";
 
+        public FileInfoKey CompareGetDiff(FileInfoKey key)
+        {
+            return key;
+        }
     }
 
     [Flags]
