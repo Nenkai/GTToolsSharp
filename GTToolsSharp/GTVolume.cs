@@ -300,7 +300,7 @@ namespace GTToolsSharp
                 TableOfContents = new GTVolumeTOC(VolumeHeader, this);
                 TableOfContents.Data = deflatedData;
 
-                DataOffset = CryptoUtils.AlignUp(GTVolumeTOC.SEGMENT_SIZE + VolumeHeader.CompressedTOCSize, GTVolumeTOC.SEGMENT_SIZE);
+                DataOffset = MiscUtils.Align(GTVolumeTOC.SEGMENT_SIZE + VolumeHeader.CompressedTOCSize, GTVolumeTOC.SEGMENT_SIZE);
             }
 
             return true;

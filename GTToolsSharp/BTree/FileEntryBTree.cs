@@ -123,7 +123,7 @@ namespace GTToolsSharp.BTree
                     uint keySize = key.GetSerializedKeySize();
 
                     // Get the current segment size - apply size of key offsets (12 bits each) (extra (+ 12 + 12) due to segment header and next segment offset)
-                    int currentSizeTaken = (int)Math.Round(((double)segmentKeyCount * 12 + 12 + 12) / 8, MidpointRounding.AwayFromZero);
+                    int currentSizeTaken = MiscUtils.MeasureBytesTakenByBits(((double)segmentKeyCount * 12) + 12 + 12);
                     currentSizeTaken += entryWriter.Position; // And size of key data themselves
 
                     // Segment size exceeded?
@@ -156,7 +156,7 @@ namespace GTToolsSharp.BTree
                 stream.WriteBoolBit(true);
                 stream.WriteBits((ulong)segmentKeyCount, 11);
 
-                int tocSize = (int)Math.Round(((double)segmentKeyCount * 12 + 12 + 12) / 8, MidpointRounding.AwayFromZero);
+                int tocSize = MiscUtils.MeasureBytesTakenByBits(((double)segmentKeyCount * 12) + 12 + 12);
                 for (int i = 0; i < segmentKeyCount; i++)
                 {
                     // Translate each key offset to segment relative offsets

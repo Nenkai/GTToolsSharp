@@ -299,5 +299,14 @@ namespace GTToolsSharp.Utils
 
             return true;
         }
+
+        public static uint Align(uint x, uint alignment)
+        {
+            uint mask = ~(alignment - 1);
+            return (x + (alignment - 1)) & mask;
+        }
+
+        public static int MeasureBytesTakenByBits(double bitCount)
+            => (int)Math.Round(bitCount / 8, MidpointRounding.AwayFromZero);
     }
 }

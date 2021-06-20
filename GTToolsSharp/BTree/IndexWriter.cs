@@ -4,12 +4,15 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using GTToolsSharp.Utils;
 using PDTools.Utils;
 
 namespace GTToolsSharp.BTree
 {
     public class IndexWriter<TKey> where TKey : IBTreeKey<TKey>, new()
     {
+        public const int BTREE_SEGMENT_SIZE = 0x1000;
+
         public int CurrentDataLength = 0;
 
         public byte SegmentCount = 0;
@@ -22,15 +25,15 @@ namespace GTToolsSharp.BTree
 
         public void AddIndex(ref BitStream stream, int keyIndex, int segmentOffset, TKey prevKey, TKey nextKey)
         {
-            //                                               v Include new
-            int newIndexBlockSize = ((CurrentIndexes.Count + 1 * 12) + 12 + 12) / 8;
+                                                                                           // v Include new
+            int newIndexBlockSize = MiscUtils.MeasureBytesTakenByBits(((double)(CurrentIndexes.Count + 1) * 12) + 12 + 12);
             newIndexBlockSize += CurrentDataLength;
 
             var diffKey = prevKey.CompareGetDiff(nextKey);
             var index = new BTreeIndex(keyIndex, segmentOffset, diffKey);
             uint indexSize = MeasureIndexEntrySize(index);
 
-            if (newIndexBlockSize + indexSize >= 0x1000) // Can we fit index?
+            if (newIndexBlockSize + indexSize >= BTREE_SEGMENT_SIZE) // Can we fit index?
             {
                 // Nope, we are about to start a new one
                 WriteBlock(ref stream);
@@ -79,7 +82,8 @@ namespace GTToolsSharp.BTree
 
             // Done writing entries, we can write the index header
             stream.WriteBits((ulong)CurrentIndexes.Count, 12);
-            int tocSize = (int)Math.Round(((double)CurrentIndexes.Count * 12 + 12 + 12) / 8, MidpointRounding.AwayFromZero); // Entry count (12 bits) + offset array (12 * off count) + rem next segment (12)
+            
+            int tocSize = MiscUtils.MeasureBytesTakenByBits((double)(CurrentIndexes.Count * 12) + 12 + 12); // Entry count (12 bits) + offset array (12 * off count) + rem next segment (12)
             for (int i = 0; i < CurrentIndexes.Count; i++)
                 stream.WriteBits((ulong)(tocSize + indexEntryOffsets[i]), 12);
             stream.WriteBits((ulong)(tocSize + indexEntryWriter.Length), 12);
@@ -90,6 +94,5 @@ namespace GTToolsSharp.BTree
         }
 
         public record BTreeIndex(int KeyIndex, int SegmentOffset, IBTreeKey<TKey> Key);
-        
     }
 }

@@ -29,50 +29,49 @@ namespace GTToolsSharp.BTree
 
         public uint SearchIndexByKey(FileInfoKey key)
         {
-            /*
-            BitStream sr = new BitStream(_buffer.Span);
+            // We are searching in index blocks
+            BitStream stream = new BitStream(BitStreamMode.Read, _buffer.Span);
 
-            uint count = (uint)ReadByteAtOffset(ref sr, 0);
+            uint indexBlockCount = (uint)stream.ReadByte();
+            int indexBlockOffset = (int)stream.ReadBits(24);
 
-            sr.Endian = Endian.Little;
-            uint offset = ReadUInt24AtOffset(ref sr, 1); // 4th byte is 0
-            sr.Endian = Endian.Big;
-
-            // Can't do data = sr.Slice(), because for some reason the endian setting does not carry over?
-            SpanReader data = sr.GetReaderAtOffset((int)offset);
+            stream.Position = indexBlockOffset;
 
             SearchResult res = new SearchResult();
-            for (uint i = count; i != 0; i--)
+
+            Span<byte> data = default;
+            for (uint i = indexBlockCount; i != 0; i--)
             {
-                data = SearchWithComparison(ref data, count, key, res, SearchCompareMethod.LessThan);
-                if (data.Position == -1)
+                data = SearchWithComparison(ref stream, indexBlockCount, key, res, SearchCompareMethod.LessThan);
+                if (data.IsEmpty)
                     goto DONE;
 
-                res.maxIndex = (uint)DecodeBitsAndAdvance(ref data);
+                BitStream indexDataStream = new BitStream(BitStreamMode.Read, data);
+                res.maxIndex = (uint)indexDataStream.ReadVarInt();
+                uint nextSegmentOffset = (uint)indexDataStream.ReadVarInt();
 
-                uint nextOffset = (uint)DecodeBitsAndAdvance(ref data);
-
-                data = sr.GetReaderAtOffset((int)nextOffset);
+                stream.Position = (int)nextSegmentOffset;
             }
 
-            data = SearchWithComparison(ref data, 0, key, res, SearchCompareMethod.EqualTo);
+            // Search within regular blocks
+            data = SearchWithComparison(ref stream, 0, key, res, SearchCompareMethod.EqualTo);
 
             DONE:
-            if (count == 0)
+            if (indexBlockCount == 0)
                 res.upperBound = 0;
 
-            if (data.Position != -1)
+            if (!data.IsEmpty)
             {
                 uint index = (res.maxIndex - res.upperBound + res.lowerBound);
-                data.Position = 0;
-
                 key.KeyOffset = (uint)(_buffer.Length - data.Length);
-                key.Deserialize(ref data);
+
+                BitStream keyStream = new BitStream(BitStreamMode.Read, data);
+                key.Deserialize(ref keyStream);
                 return index;
             }
             else
                 return FileInfoKey.InvalidIndex;
-            */
+            
             return 0;
         }
 
@@ -134,7 +133,7 @@ namespace GTToolsSharp.BTree
                     uint keySize = key.GetSerializedKeySize();
 
                     // Get the current segment size - apply size of key offsets (12 bits each) (extra (+ 12 + 12) due to segment header and next segment offset)
-                    int currentSizeTaken = (int)Math.Round(((double)segmentKeyCount * 12 + 12 + 12) / 8, MidpointRounding.AwayFromZero);
+                    int currentSizeTaken = MiscUtils.MeasureBytesTakenByBits(((double)segmentKeyCount * 12) + 12 + 12);
                     currentSizeTaken += entryWriter.Position; // And size of key data themselves
 
                     // Segment size exceeded?
@@ -167,7 +166,7 @@ namespace GTToolsSharp.BTree
                 stream.WriteBoolBit(true);
                 stream.WriteBits((ulong)segmentKeyCount, 11);
 
-                int tocSize = (int)Math.Round(((double)segmentKeyCount * 12 + 12 + 12) / 8, MidpointRounding.AwayFromZero);
+                int tocSize = MiscUtils.MeasureBytesTakenByBits((segmentKeyCount * 12) + 12 + 12);
                 for (int i = 0; i < segmentKeyCount; i++)
                 {
                     // Translate each key offset to segment relative offsets

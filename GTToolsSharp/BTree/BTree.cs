@@ -46,34 +46,6 @@ namespace GTToolsSharp.BTree
             uint indexBlockOffset = (uint)treeStream.ReadBits(24);
             short segmentCount = treeStream.ReadInt16();
 
-            if (this is FileEntryBTree && indexBlockCount != 0)
-            {
-                List<(int, int, int)> test = new List<(int, int, int)>();
-
-                {
-                    treeStream.Position = (int)indexBlockOffset;
-                    int indexesCount = (int)treeStream.ReadBits(12);
-                    List<int> indexOffsets = new List<int>();
-                    for (int i = 0; i < indexesCount; i++)
-                        indexOffsets.Add((int)treeStream.ReadBits(12));
-                    int nextSeg = (int)treeStream.ReadBits(12);
-
-                    for (int i = 0; i < indexesCount; i++)
-                    {
-                        int nameIndex = (int)treeStream.ReadVarInt();
-                        int extIndex = (int)treeStream.ReadVarInt();
-                        int childOffset = (int)treeStream.ReadVarInt();
-
-                        test.Add((nameIndex, extIndex, childOffset));
-                    }
-
-                }
-                treeStream.Position = 6;
-            }
-
-            
-            
-
             // Iterate through all segments and all their keys
             for (int i = 0; i < segmentCount; i++)
             {
@@ -97,6 +69,7 @@ namespace GTToolsSharp.BTree
                 for (int j = 0; j < keyCount; j++)
                 {
                     treeStream.Position = (int)(segPos + keyOffsets[j]);
+                    Debug.Assert(keyOffsets[j] < nextSegmentOffset, "Key offset was beyond next segment?");
 
                     // Parse key info
                     TKey key = new TKey();
@@ -112,33 +85,39 @@ namespace GTToolsSharp.BTree
 
         public void LoadEntriesOld()
         {
-            /*
-            SpanReader sr = new SpanReader(_buffer, Endian.Big);
-            sr.Position += _offsetStart;
+            BitStream treeStream = new BitStream(BitStreamMode.Read, _buffer.Span);
 
-            sr.Position += 1;
-            uint nodeCount = CryptoUtils.GetBitsAt(ref sr, (uint)sr.Position, 0);
-            sr.Position += 1;
+            byte indexBlockCount = treeStream.ReadByte();
+            uint segmentCount = (uint)treeStream.ReadBits(12);
+            uint unkOffset = (uint)treeStream.ReadBits(12);
 
-            uint lastDataPos = (uint)sr.Position;
-            for (int i = 0; i < nodeCount + 1; i++)
+            // Iterate through all segments and all their keys
+            for (int i = 0; i < segmentCount + 1; i++)
             {
-                uint keyCount = GetBitsAt(ref sr, lastDataPos, 0) & 0b111_1111_1111u;
-                GetBitsAt(ref sr, lastDataPos, keyCount + 1); 
+                int segPos = treeStream.Position;
 
+                bool moreThanOneKey = treeStream.ReadBoolBit();
+                uint keyCount = (uint)treeStream.ReadBits(11);
+
+                Debug.Assert(moreThanOneKey && keyCount > 0);
+
+                List<uint> keyOffsets = new List<uint>((int)keyCount);
                 for (uint j = 0; j < keyCount; j++)
                 {
-                    uint offset = GetBitsAt(ref sr, lastDataPos, j + 1);
-                    sr.Position = (int)lastDataPos + (int)offset;
-
-                    TKey key = new TKey();
-                    key.Deserialize(ref sr);
-                    Entries.Add(key);
+                    uint offset = (uint)treeStream.ReadBits(12);
+                    keyOffsets.Add(offset);
                 }
 
-                lastDataPos = (uint)sr.Position;
+                for (int j = 0; j < keyCount; j++)
+                {
+                    treeStream.Position = (int)(segPos + keyOffsets[j]);
+
+                    // Parse key info
+                    TKey key = new TKey();
+                    key.Deserialize(ref treeStream);
+                    Entries.Add(key);
+                }
             }
-            */
         }
 
         public bool TryFindIndex(uint index, out TKey key)

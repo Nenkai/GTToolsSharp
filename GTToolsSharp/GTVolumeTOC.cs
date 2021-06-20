@@ -101,7 +101,6 @@ namespace GTToolsSharp
                     Files[i].LoadEntriesOld();
             }
 
-            var test = this.GetAllRegisteredFileMap();
             return true;
         }
 

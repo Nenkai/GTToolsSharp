@@ -5,6 +5,9 @@ using System.IO;
 
 namespace PDTools.Utils
 {
+    /// <summary>
+    /// Bit stream reverse engineered & modified with extra features. Big Endian only.
+    /// </summary>
     [DebuggerDisplay("Position = {BytePosition}")]
     public ref struct BitStream
     {
@@ -24,6 +27,8 @@ namespace PDTools.Utils
         // Not original implementation
         public int BufferByteSize { get; set; }
         public bool IsEndOfStream { get; set; }
+
+        public bool _needsFlush;
 
         /// <summary>
         /// Byte position within the stream.
@@ -78,6 +83,8 @@ namespace PDTools.Utils
 
             IsEndOfStream = false;
             _length = buffer.Length;
+
+            _needsFlush = false;
 #if DEBUG
             _sw = null;
 #endif
@@ -101,6 +108,7 @@ namespace PDTools.Utils
 
             IsEndOfStream = false;
             _length = 0;
+            _needsFlush = false;
 
 #if DEBUG
             _sw = null;
@@ -216,8 +224,18 @@ namespace PDTools.Utils
         /// </summary>
         public void AlignToNextByte()
         {
-            if (RemainingByteBits > 0)
-                WriteBits(0, RemainingByteBits); // Not the most efficient but who cares
+            if (RemainingByteBits > 0 && RemainingByteBits != 8)
+            {
+                if (_needsFlush)
+                {
+                    SourceBuffer[Position] = CurrentByte;
+                    _needsFlush = false;
+                }
+
+                _currentBuffer = _currentBuffer.Slice(1);
+                CurrentByte = _currentBuffer[0];
+                RemainingByteBits = 8;
+            }
         }
 
         public void Align(int alignment)
@@ -577,6 +595,7 @@ namespace PDTools.Utils
             if (Position > _length)
                 _length = Position;
 
+            _needsFlush = RemainingByteBits > 0;
 #if DEBUG
             _sw?.WriteLine($"[{Position} - {RemainingByteBits}/8] Wrote {value} ({bitCountToWrite} bits)");
 #endif
