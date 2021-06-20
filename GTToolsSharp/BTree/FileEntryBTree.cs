@@ -23,7 +23,7 @@ namespace GTToolsSharp.BTree
         public FileEntryBTree(Memory<byte> buffer)
             : base(buffer)
         {
-            
+
         }
 
         public override int EqualToKeyCompareOp(FileEntryKey key, Span<byte> data)

@@ -71,13 +71,13 @@ namespace GTToolsSharp
             for (int i = 0; i < entryTreeCount; i++)
                 RootAndFolderOffsets.Add(sr.ReadUInt32());
 
-            
+
             FileNames = new StringBTree(Data.AsMemory((int)NameTreeOffset));
             if (!ParentVolume.IsGT5PDemoStyle)
                 FileNames.LoadEntries();
             else
                 FileNames.LoadEntriesOld();
-            
+
             Extensions = new StringBTree(Data.AsMemory((int)FileExtensionTreeOffset));
             if (!ParentVolume.IsGT5PDemoStyle)
                 Extensions.LoadEntries();
@@ -208,7 +208,7 @@ namespace GTToolsSharp
                 // Pack Non-Added files first
                 foreach (var tocFile in tocFiles)
                 {
-                    if (FilesToPack.TryGetValue(tocFile.Key, out InputPackEntry file) && !file.IsAddedFile) 
+                    if (FilesToPack.TryGetValue(tocFile.Key, out InputPackEntry file) && !file.IsAddedFile)
                         PackFile(packCache, outputDir, packAllAsNewEntries, newCache, tocFile.Value, file);
                 }
 
@@ -309,7 +309,7 @@ namespace GTToolsSharp
         private void PreRegisterNewFilesToPack(Dictionary<string, InputPackEntry> FilesToPack)
         {
             Dictionary<string, FileEntryKey> tocFiles = GetAllRegisteredFileMap();
-            
+
             // Add Files, these files will have their sizes adjusted later on during repack process
             foreach (var file in FilesToPack)
             {

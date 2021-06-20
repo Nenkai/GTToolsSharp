@@ -25,7 +25,7 @@ namespace GTToolsSharp.BTree
 
         public void AddIndex(ref BitStream stream, int keyIndex, int segmentOffset, TKey prevKey, TKey nextKey)
         {
-                                                                                           // v Include new
+            // v Include new
             int newIndexBlockSize = MiscUtils.MeasureBytesTakenByBits(((double)(CurrentIndexes.Count + 1) * 12) + 12 + 12);
             newIndexBlockSize += CurrentDataLength;
 
@@ -82,12 +82,12 @@ namespace GTToolsSharp.BTree
 
             // Done writing entries, we can write the index header
             stream.WriteBits((ulong)CurrentIndexes.Count, 12);
-            
+
             int tocSize = MiscUtils.MeasureBytesTakenByBits((double)(CurrentIndexes.Count * 12) + 12 + 12); // Entry count (12 bits) + offset array (12 * off count) + rem next segment (12)
             for (int i = 0; i < CurrentIndexes.Count; i++)
                 stream.WriteBits((ulong)(tocSize + indexEntryOffsets[i]), 12);
             stream.WriteBits((ulong)(tocSize + indexEntryWriter.Length), 12);
- 
+
             // Finally add the data
             stream.Position = baseIndexBlockPos + tocSize;
             stream.WriteByteData(indexEntryWriter.GetSpan());

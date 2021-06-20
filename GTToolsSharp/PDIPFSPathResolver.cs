@@ -95,7 +95,7 @@ namespace GTToolsSharp
 			if (subpathLength != 0)
 			{
 				for (int i = 0; i < subpathLength; i++)
-                {
+				{
 					char c = Charset[(int)(seed % 36)];
 					seed /= 36;
 					chars[i] = c;
@@ -105,7 +105,7 @@ namespace GTToolsSharp
 				{
 					// 1 letter per folder
 					for (int pos = subpathLength - 1; pos >= 0; pos--)
-                    {
+					{
 						pathName += '/';
 						pathName += chars[pos];
 					}

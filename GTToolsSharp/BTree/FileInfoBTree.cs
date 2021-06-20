@@ -56,7 +56,7 @@ namespace GTToolsSharp.BTree
             // Search within regular blocks
             data = SearchWithComparison(ref stream, 0, key, res, SearchCompareMethod.EqualTo);
 
-            DONE:
+        DONE:
             if (indexBlockCount == 0)
                 res.upperBound = 0;
 
@@ -71,21 +71,21 @@ namespace GTToolsSharp.BTree
             }
             else
                 return FileInfoKey.InvalidIndex;
-            
+
             return 0;
         }
 
         public FileInfoKey GetByFileIndex(uint fileIndex)
             => Entries.FirstOrDefault(e => e.FileIndex == fileIndex);
 
-        public override int LessThanKeyCompareOp(FileInfoKey key, Span<byte> data) 
-	    {
+        public override int LessThanKeyCompareOp(FileInfoKey key, Span<byte> data)
+        {
             BitStream bitStream = new BitStream(BitStreamMode.Read, data);
 
             uint nodeIndex = (uint)bitStream.ReadVarInt();
             if (key.FileIndex < nodeIndex)
                 return -1;
-            else 
+            else
                 return 1;
         }
 
@@ -158,7 +158,7 @@ namespace GTToolsSharp.BTree
                 if (index < Entries.Count)
                 {
                     // For info btrees, the *file* index within the list is what we write for the game to search
-                    indexWriter.AddIndex(ref indexStream, (int)Entries[index].FileIndex, baseSegmentPos - baseTreePos, Entries[index - 1], Entries[index]); 
+                    indexWriter.AddIndex(ref indexStream, (int)Entries[index].FileIndex, baseSegmentPos - baseTreePos, Entries[index - 1], Entries[index]);
                 }
 
                 // Finish up segment header

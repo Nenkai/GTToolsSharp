@@ -133,7 +133,7 @@ namespace GTToolsSharp.BTree
                 if (index < Entries.Count)
                 {
                     // For string btrees, the string index within the list is what we write for the game to search since these don't have actual indexes
-                    indexWriter.AddIndex(ref indexStream, index, baseSegmentPos - baseTreePos, Entries[index - 1], Entries[index]); 
+                    indexWriter.AddIndex(ref indexStream, index, baseSegmentPos - baseTreePos, Entries[index - 1], Entries[index]);
                 }
 
                 // Finish up segment header

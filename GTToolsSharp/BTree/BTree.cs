@@ -122,14 +122,14 @@ namespace GTToolsSharp.BTree
 
         public bool TryFindIndex(uint index, out TKey key)
         {
-			BitStream treeStream = new BitStream(BitStreamMode.Read, _buffer.Span);
+            BitStream treeStream = new BitStream(BitStreamMode.Read, _buffer.Span);
 
             byte hasEntries = treeStream.ReadByte();
             uint indexBlockOffset = (uint)treeStream.ReadBits(24);
             short segmentCount = treeStream.ReadInt16();
 
             for (uint i = 0u; i < segmentCount; ++i)
-			{
+            {
                 int segPos = treeStream.Position;
 
                 bool moreThanOneKey = treeStream.ReadBoolBit();
@@ -147,15 +147,15 @@ namespace GTToolsSharp.BTree
                     return key != null;
                 }
 
-				index -= keyCount;
+                index -= keyCount;
 
                 uint nextSegmentOffset = (uint)treeStream.ReadBits(12);
                 treeStream.SeekToByte((int)(segPos + nextSegmentOffset));
-			}
+            }
 
             key = default;
             return false;
-		}
+        }
 
         public abstract TKey SearchByKey(Span<byte> data);
 

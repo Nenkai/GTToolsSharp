@@ -45,7 +45,7 @@ namespace GTToolsSharp
                 { "/car/interior/00030131", "SoyoGvyMYKCCjcYBCI8rY3GMy9eQlvy3KpEfuL2qZE5JUizQ" },
                 { "/car/meter/00030131", "SoyoGvyMYKCCjcYBCI8rY3GMy9eQlvy3KpEfuL2qZE5iDFjf" },
                 { "/piece/car_thumb_M/gtr_07_01.img", "cjg1NDJzZDVmNGgyNXM0cnQ2eTJkcjg0Z3pkZmJ3ZmEtdwwS" },
-                
+
                 { "/car/lod/00200032", "KeaQvtvmSURh566l5+kUB1DmtHtv8OVbCesIXJ0ETPI1QYGR" },
                 { "/car/menu/00200032", "KeaQvtvmSURh566l5+kUB1DmtHtv8OVbCesIXJ0ETPJS5l7P" },
                 { "/car/interior/00200032", "KeaQvtvmSURh566l5+kUB1DmtHtv8OVbCesIXJ0ETPKP9PTn" },
@@ -131,8 +131,8 @@ namespace GTToolsSharp
             vol.IsGT5PDemoStyle = fs.Length == OldHeaderSize;
             if (fs.Length < OldHeaderSize)
                 throw new IndexOutOfRangeException($"Volume header file size is smaller than expected header size ({HeaderSize} or {OldHeaderSize}). Ensure that your volume file is not corrupt.");
-            
-            
+
+
             vol.VolumeHeaderData = new byte[!vol.IsGT5PDemoStyle ? HeaderSize : OldHeaderSize];
             fs.Read(vol.VolumeHeaderData);
 
@@ -598,7 +598,7 @@ namespace GTToolsSharp
             {
                 // If it's a file, find the extension aswell
                 StringBTree extBTree = new StringBTree(TableOfContents.Data.AsMemory((int)TableOfContents.FileExtensionTreeOffset));
-                
+
                 if (extBTree.TryFindIndex(key.FileExtensionIndex, out StringKey extKey) && !string.IsNullOrEmpty(extKey.Value))
                     entryPath += extKey.Value;
 
