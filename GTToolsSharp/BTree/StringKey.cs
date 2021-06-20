@@ -31,12 +31,19 @@ namespace GTToolsSharp.BTree
 
         public void SerializeIndex(ref BitStream stream)
         {
-            stream.WriteVarPrefixString(Value);
+            if (Value.Length > 0 && (byte)Value[0] == 255)
+            {
+                // Work around ignore encoding
+                stream.WriteByte(1);
+                stream.WriteByte(255);
+            }
+            else
+                stream.WriteVarPrefixString(Value);
         }
 
         public StringKey GetLastIndex()
         {
-            return new StringKey(Encoding.ASCII.GetString(new byte[] { 255 })); // Max char comparison
+            return new StringKey(((char)255).ToString()); // Max char comparison
         }
 
         public StringKey CompareGetDiff(StringKey nextKey)
@@ -44,8 +51,8 @@ namespace GTToolsSharp.BTree
             int maxLen = Math.Max(this.Value.Length, nextKey.Value.Length);
             for (int i = 0; i < maxLen; i++)
             {
-                if (i >= nextKey.Value.Length || this.Value[i] != nextKey.Value[i])
-                    return new StringKey(nextKey.Value.Substring(i + 1));
+                if (i >= this.Value.Length || this.Value[i] != nextKey.Value[i])
+                    return new StringKey(nextKey.Value.Substring(0, i + 1));
             }
 
             throw new ArgumentException("Both keys are equal.");

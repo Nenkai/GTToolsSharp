@@ -12,7 +12,7 @@ namespace GTToolsSharp.BTree
     {
         public int CurrentDataLength = 0;
 
-        public int SegmentCount = 0;
+        public byte SegmentCount = 0;
         public List<BTreeIndex> CurrentIndexes { get; set; } = new();
 
         public IndexWriter()
@@ -46,12 +46,9 @@ namespace GTToolsSharp.BTree
             }
         }
 
-        public void Finalize(ref BitStream stream, int segmentOffset, int lastIndex)
+        public void Finalize(ref BitStream stream, int segmentOffset, int lastIndex, TKey lastKeyIndex)
         {
-            TKey t = new TKey();
-            var keyIndex = t.GetLastIndex();
-
-            var lastIndexEntry = new BTreeIndex(lastIndex, segmentOffset, keyIndex);
+            var lastIndexEntry = new BTreeIndex(lastIndex, segmentOffset, lastKeyIndex);
             CurrentIndexes.Add(lastIndexEntry);
             WriteBlock(ref stream);
         }
@@ -76,7 +73,7 @@ namespace GTToolsSharp.BTree
                 indexEntryOffsets.Add(indexEntryWriter.Position);
 
                 indexEntryWriter.WriteVarInt(CurrentIndexes[i].KeyIndex);
-                CurrentIndexes[i].Key.SerializeIndex(ref indexEntryWriter); // TODO: For strings: only store the first string difference instead of writing the whole thing
+                CurrentIndexes[i].Key?.SerializeIndex(ref indexEntryWriter); // Only for strings
                 indexEntryWriter.WriteVarInt(CurrentIndexes[i].SegmentOffset);
             }
 

@@ -172,6 +172,9 @@ namespace PDTools.Utils
             if (Mode == BitStreamMode.Read && byteOffset > Length)
                 throw new ArgumentOutOfRangeException("Position is beyond end of stream.");
 
+            // Flush current byte
+            AlignToNextByte();
+
             if (byteOffset >= _length)
                 _length = byteOffset;
 
@@ -194,6 +197,9 @@ namespace PDTools.Utils
             if (Mode == BitStreamMode.Read && newPos > Length)
                 throw new ArgumentOutOfRangeException("Position is beyond end of stream.");
 
+            // Flush current byte
+            AlignToNextByte();
+
             if (newPos >= _length)
                 _length = newPos;
 
@@ -212,6 +218,13 @@ namespace PDTools.Utils
         {
             if (RemainingByteBits > 0)
                 WriteBits(0, RemainingByteBits); // Not the most efficient but who cares
+        }
+
+        public void Align(int alignment)
+        {
+            AlignToNextByte();
+            var newPos = (-Position % alignment + alignment) % alignment;
+            Position += newPos;
         }
 
         public unsafe bool CanRead(int bitCountToRead)
@@ -607,7 +620,7 @@ namespace PDTools.Utils
                 WriteByte((byte)val);
                 return;
             }
-            else if (val <= 0x1FFFF)
+            else if (val <= 0x3FFF)
             {
                 Span<byte> tempBuf = BitConverter.GetBytes(val).AsSpan();
                 tempBuf.Reverse();
@@ -628,7 +641,7 @@ namespace PDTools.Utils
             {
                 buffer = BitConverter.GetBytes(val);
                 buffer.Reverse();
-                buffer = new byte[] { 0, buffer[0], buffer[1], buffer[2], buffer[3], buffer[4] };
+                buffer = new byte[] { 0, buffer[0], buffer[1], buffer[2], buffer[3] };
             }
 
             uint mask = 0x80;
@@ -645,7 +658,7 @@ namespace PDTools.Utils
         {
             WriteVarInt(str.Length);
             if (!string.IsNullOrEmpty(str))
-                WriteByteData(Encoding.ASCII.GetBytes(str));
+                WriteByteData(Encoding.UTF8.GetBytes(str));
         }
 
         public void WriteByteData(Span<byte> data, bool withPrefixLength = false)

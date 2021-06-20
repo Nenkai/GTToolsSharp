@@ -59,15 +59,13 @@ namespace GTToolsSharp.BTree
 
         public void Serialize(ref BitStream bs)
         {
-            /*
             bs.WriteByte((byte)Flags);
-            EncodeAndAdvance(bs, FileIndex);
-            EncodeAndAdvance(bs, CompressedSize);
+            bs.WriteVarInt((int)FileIndex);
+            bs.WriteVarInt((int)CompressedSize);
             if (Flags.HasFlag(FileInfoFlags.Compressed))
-                EncodeAndAdvance(bs, UncompressedSize);
+                bs.WriteVarInt((int)UncompressedSize);
 
-            EncodeAndAdvance(bs, SegmentIndex);
-            */
+            bs.WriteVarInt((int)SegmentIndex);
         }
 
         public uint GetSerializedKeySize()
@@ -102,7 +100,7 @@ namespace GTToolsSharp.BTree
 
         public FileInfoKey CompareGetDiff(FileInfoKey key)
         {
-            throw new NotImplementedException();
+            return key;
         }
     }
 

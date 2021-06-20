@@ -42,36 +42,37 @@ namespace GTToolsSharp.BTree
         {
             BitStream treeStream = new BitStream(BitStreamMode.Read, _buffer.Span);
 
-            byte hasEntries = treeStream.ReadByte();
+            byte indexBlockCount = treeStream.ReadByte();
             uint indexBlockOffset = (uint)treeStream.ReadBits(24);
             short segmentCount = treeStream.ReadInt16();
 
-            /*
-            List<(int, string, int)> test = new List<(int, string, int)>();
-
+            if (this is FileEntryBTree && indexBlockCount != 0)
             {
-                treeStream.Position = (int)indexBlockOffset;
-                int indexesCount = (int)treeStream.ReadBits(12);
-                List<int> indexOffsets = new List<int>();
-                for (int i = 0; i < indexesCount; i++)
-                    indexOffsets.Add((int)treeStream.ReadBits(12));
-                int nextSeg = (int)treeStream.ReadBits(12);
+                List<(int, int, int)> test = new List<(int, int, int)>();
 
-                for (int i = 0; i < indexesCount; i++)
                 {
-                    int childIndex = (int)treeStream.ReadVarInt();
-                    string str = treeStream.ReadVarPrefixString();
-                    int childOffset = (int)treeStream.ReadVarInt();
+                    treeStream.Position = (int)indexBlockOffset;
+                    int indexesCount = (int)treeStream.ReadBits(12);
+                    List<int> indexOffsets = new List<int>();
+                    for (int i = 0; i < indexesCount; i++)
+                        indexOffsets.Add((int)treeStream.ReadBits(12));
+                    int nextSeg = (int)treeStream.ReadBits(12);
 
-                    test.Add((childIndex, str, childOffset));
+                    for (int i = 0; i < indexesCount; i++)
+                    {
+                        int nameIndex = (int)treeStream.ReadVarInt();
+                        int extIndex = (int)treeStream.ReadVarInt();
+                        int childOffset = (int)treeStream.ReadVarInt();
 
-                    Console.WriteLine(test);
+                        test.Add((nameIndex, extIndex, childOffset));
+                    }
+
                 }
-
+                treeStream.Position = 6;
             }
 
-            treeStream.Position = 6;
-            */
+            
+            
 
             // Iterate through all segments and all their keys
             for (int i = 0; i < segmentCount; i++)
@@ -179,6 +180,8 @@ namespace GTToolsSharp.BTree
 
         public abstract TKey SearchByKey(Span<byte> data);
 
+        public abstract void Serialize(ref BitStream stream, GTVolumeTOC parentTOC);
+
         public abstract int LessThanKeyCompareOp(TKey key, Span<byte> data);
 
         public abstract int EqualToKeyCompareOp(TKey key, Span<byte> data);
@@ -247,93 +250,8 @@ namespace GTToolsSharp.BTree
             return keyData;
         }
 
-        public void Serialize(ref BitStream stream) 
-        {
-            int baseTreePos = stream.Position;
-            stream.Position += 6;
 
-            int segmentCount = 0; // 1 per 0x1000
-            int index = 0; // To keep track of which key we are currently at
 
-            // Following lists is for writing index blocks later on
-            BitStream indexStream = new BitStream(BitStreamMode.Write);
-            IndexWriter<TKey> indexWriter = new IndexWriter<TKey>();
-
-            int baseSegmentPos = stream.Position;
-            while (index < Entries.Count)
-            {
-                int segmentKeyCount = 0;
-                baseSegmentPos = stream.Position;
-
-                BitStream entryWriter = new BitStream(BitStreamMode.Write, 1024);
-                List<int> segmentKeyOffsets = new List<int>();
-
-                // Write keys in 0x1000 segments
-                while (index < Entries.Count)
-                {
-                    TKey key = Entries[index];
-                    uint keySize = key.GetSerializedKeySize();
-
-                    // Get the current segment size - apply size of key offsets (12 bits each) (extra (+ 12 + 12) due to segment header and next segment offset)
-                    int currentSizeTaken = (int)Math.Round(((double)segmentKeyCount * 12 + 12 + 12) / 8, MidpointRounding.AwayFromZero);
-                    currentSizeTaken += entryWriter.Position; // And size of key data themselves
-
-                    // Segment size exceeded?
-                    if (currentSizeTaken + (keySize + 2) >= BTREE_SEGMENT_SIZE) // Extra 2 to fit the 12 bits as short
-                    {
-                        // Segment's done, move on to next
-                        break;
-                    }
-
-                    // To build up the segment's TOC when its filled or done
-                    segmentKeyOffsets.Add(entryWriter.Position);
-
-                    // Serialize the key
-                    key.Serialize(ref entryWriter);
-
-                    // Move on to next
-                    segmentKeyCount++;
-                    index++;
-                }
-
-                // Avoid writing the end yet
-                if (index < Entries.Count)
-                    indexWriter.AddIndex(ref indexStream, index, baseSegmentPos - baseTreePos, Entries[index - 1], Entries[index]);
-
-                // Finish up segment header
-                stream.Position = baseSegmentPos;
-                stream.WriteBoolBit(true);
-                stream.WriteBits((ulong)segmentKeyCount, 11);
-
-                int tocSize = (int)Math.Round(((double)segmentKeyCount * 12 + 12 + 12) / 8, MidpointRounding.AwayFromZero);
-                for (int i = 0; i < segmentKeyCount; i++)
-                {
-                    // Translate each key offset to segment relative offsets
-                    stream.WriteBits((ulong)(tocSize + segmentKeyOffsets[i]), 12);
-                }
-
-                Span<byte> entryBuffer = entryWriter.GetSpan();
-                int nextSegmentOffset = tocSize + entryBuffer.Length;
-
-                Debug.Assert(nextSegmentOffset < BTREE_SEGMENT_SIZE, "Next segment offset beyond segment size?");
-
-                stream.WriteBits((ulong)nextSegmentOffset, 12);
-
-                // Write key data
-                stream.WriteByteData(entryWriter.GetSpan());
-
-                segmentCount++;
-            }
-
-            indexWriter.Finalize(ref indexStream, baseSegmentPos - baseTreePos, Entries.Count);
-        } 
-
-        public void SerializeIndexes(ref BitStream stream, List<int> segmentOffsets, List<TKey> firstSegmentKeys, List<int> firstSegmentIndexes, int lastIndex)
-        {
-            
-        }
-
-        
         public enum SearchCompareMethod
         {
             LessThan,

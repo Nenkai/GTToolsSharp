@@ -139,17 +139,17 @@ namespace GTToolsSharp
             bs.SeekToByteFromCurrentPosition(sizeof(uint) * Files.Count);
 
             uint fileNamesOffset = (uint)bs.Position;
-            FileNames.Serialize(ref bs);
+            FileNames.Serialize(ref bs, this);
 
             uint extOffset = (uint)bs.Position;
-            Extensions.Serialize(ref bs);
+            Extensions.Serialize(ref bs, this);
 
             uint fileInfoOffset = (uint)bs.Position;
-            FileInfos.Serialize(ref bs);
+            FileInfos.Serialize(ref bs, this);
 
             // The list of file entry btrees mostly consist of the relation between files, folder, extensions and data
             // Thus it is writen at the end
-            // Each tree is a seperate general subdir
+            // Each tree is a subdir
             const int baseListPos = 20;
             for (int i = 0; i < Files.Count; i++)
             {
@@ -158,7 +158,8 @@ namespace GTToolsSharp
                 bs.SeekToByte(baseListPos + (i * sizeof(uint)));
                 bs.WriteUInt32(treeOffset);
                 bs.SeekToByte((int)treeOffset);
-                f.Serialize(ref bs/*, (uint)FileNames.Entries.Count, (uint)Extensions.Entries.Count*/);
+
+                f.Serialize(ref bs, this);
             }
 
             // Go back to write the meta data
@@ -166,7 +167,7 @@ namespace GTToolsSharp
             bs.WriteUInt32(fileNamesOffset);
             bs.WriteUInt32(extOffset);
             bs.WriteUInt32(fileInfoOffset);
-            return new byte[0];//ms.ToArray();
+            return bs.GetSpan().ToArray();
         }
 
         public void RemoveFilesFromTOC(string[] filesToRemove)

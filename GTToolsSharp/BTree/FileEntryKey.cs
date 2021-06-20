@@ -38,14 +38,12 @@ namespace GTToolsSharp.BTree
 
         public void Serialize(ref BitStream bs)
         {
-            /*
             bs.WriteByte((byte)Flags);
-            EncodeAndAdvance(bs, NameIndex);
+            bs.WriteVarInt((int)NameIndex);
             if (Flags.HasFlag(EntryKeyFlags.File))
-                EncodeAndAdvance(bs, FileExtensionIndex);
+                bs.WriteVarInt((int)FileExtensionIndex);
 
-            EncodeAndAdvance(bs, EntryIndex);
-            */
+            bs.WriteVarInt((int)EntryIndex);
         }
 
         public uint GetSerializedKeySize()
@@ -54,19 +52,19 @@ namespace GTToolsSharp.BTree
             keyLength += (uint)BitStream.GetSizeOfVarInt((int)NameIndex);
             if (Flags.HasFlag(EntryKeyFlags.File))
                 keyLength += (uint)BitStream.GetSizeOfVarInt((int)FileExtensionIndex);
-            EntryIndex += (uint)BitStream.GetSizeOfVarInt((int)NameIndex);
+            keyLength += (uint)BitStream.GetSizeOfVarInt((int)EntryIndex);
 
             return keyLength;
         }
 
         public FileEntryKey GetLastIndex()
         {
-            return default(FileEntryKey);
+            return new FileEntryKey();
         }
 
         public void SerializeIndex(ref BitStream stream)
         {
-            
+            stream.WriteVarInt((int)FileExtensionIndex);
         }
 
         public uint GetSerializedIndexSize()
@@ -79,7 +77,7 @@ namespace GTToolsSharp.BTree
 
         public FileEntryKey CompareGetDiff(FileEntryKey key)
         {
-            throw new NotImplementedException();
+            return key;
         }
     }
 
