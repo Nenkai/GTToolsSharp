@@ -265,7 +265,23 @@ namespace GTToolsSharp
                 }
             }
 
-            byte[] fileData = File.ReadAllBytes(file.FullPath);
+            byte[] fileData;
+            while (true)
+            {
+                try
+                {
+                    fileData = File.ReadAllBytes(file.FullPath);
+                    break;
+                }
+                catch (Exception e)
+                {
+                    Program.Log($"[!] {file.FullPath} could not be opened: {e.Message}");
+                    Program.Log($"[!] Press any key to try again.");
+                    Console.ReadKey();
+                }
+            }
+
+
             if (ParentVolume.NoCompress)
                 key.Flags &= ~FileInfoFlags.Compressed;
             else if (key.Flags.HasFlag(FileInfoFlags.Compressed))
@@ -454,16 +470,11 @@ namespace GTToolsSharp
             FileInfoKey newKey = new FileInfoKey(this.NextEntryIndex());
             newKey.SegmentIndex = this.NextSegmentIndex();
 
-            if (!ParentVolume.NoCompress)
-                newKey.Flags |= FileInfoFlags.Compressed;
             newKey.CompressedSize = 1; // Important for segments to count as at least one
             newKey.UncompressedSize = 1; // Same
 
-            /* TODO: Needs more investigation on compressed files
-            if (   (path.StartsWith("crs/") && !path.EndsWith("stream"))
-                || (path.StartsWith("car/") && !path.EndsWith("bin"))
-                || (!path.StartsWith("replay/") && !path.StartsWith("carsound/") && !path.StartsWith("car")))
-                newKey.Flags |= FileInfoFlags.Compressed; */
+            if (!ParentVolume.NoCompress && IsCompressableFile(path))
+                newKey.Flags |= FileInfoFlags.Compressed; 
 
             FileInfos.Entries.Add(newKey);
             string[] folders = path.Split(Path.AltDirectorySeparatorChar);
@@ -759,6 +770,26 @@ namespace GTToolsSharp
             }
 
             return false;
+        }
+
+        private bool IsCompressableFile(string path)
+        {
+            if (path.StartsWith("crs/") && path.EndsWith("stream")) // Stream files should NOT be compressed
+                return false;
+
+            if (path.StartsWith("car/") && path.EndsWith("bin")) // Car Paint files shouldn't either
+                return false;
+
+            if (path.StartsWith("replay/")) // Replays can be compressed already
+                return false;
+
+            if (path.StartsWith("carsound/")) // Dunno why
+                return false;
+
+            if (path.EndsWith("gpb") || path.EndsWith("mpackage")) // Not original but added it because the components inside are compressed already
+                return false;
+
+            return true;
         }
     }
 }

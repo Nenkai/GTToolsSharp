@@ -38,7 +38,7 @@ namespace GTToolsSharp
         /// </summary>
         public uint TOCSize { get; set; }
 
-        public ulong PFSVersion { get; private set; }
+        public ulong PFSVersion { get; set; }
 
         /// <summary>
         /// Total size of the volume.

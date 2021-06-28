@@ -125,6 +125,9 @@ namespace GTToolsSharp
         [Option("start-index", HelpText = "Start index of which new files to pack will start from, useful when making files work across multiple updates by making it high.")]
         public uint StartIndex { get; set; }
 
+        [Option("version", Hidden = true, HelpText = "Set version")]
+        public ulong? Version { get; set; }
+
         [Usage(ApplicationAlias = "GTToolsSharp")]
         public static IEnumerable<Example> Examples
         {

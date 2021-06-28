@@ -124,6 +124,10 @@ namespace GTToolsSharp
             vol.CreateBDMARK = options.CreateBDMARK;
             vol.NoCompress = options.NoCompress;
             vol.RegisterEntriesToRepack(options.FolderToRepack);
+
+            if (options.Version != null)
+                vol.VolumeHeader.PFSVersion = options.Version.Value;
+
             vol.PackFiles(options.OutputPath, filesToRemove, !options.PackAsOverwrite, options.CustomGameID);
         }
 
