@@ -5,13 +5,25 @@ using System.Text;
 using System.Threading.Tasks;
 
 using Syroot.BinaryData.Memory;
+using PDTools.Utils;
 
 namespace GTToolsSharp.BTree
 {
-    public interface IBTreeKey
+    public interface IBTreeKey<T>
     {
-        public void Deserialize(ref SpanReader sr);
+        public T GetLastIndex();
+
+        public T CompareGetDiff(T key);
+
+        public void Deserialize(ref BitStream sr);
+
+        public void Serialize(ref BitStream sr);
+
+        public void SerializeIndex(ref BitStream sr);
 
         public uint GetSerializedKeySize();
+
+        public uint GetSerializedIndexSize();
+
     }
 }

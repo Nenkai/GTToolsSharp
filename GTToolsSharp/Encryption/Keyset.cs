@@ -4,9 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
+using System.Buffers.Binary;
 
 using GTToolsSharp.Utils;
-using static GTToolsSharp.Utils.CryptoUtils;
 
 namespace GTToolsSharp.Encryption
 {
@@ -122,18 +122,18 @@ namespace GTToolsSharp.Encryption
 
         public void DecryptBlocks(Span<uint> data, Span<uint> dest)
         {
-            uint prevBlock = data[0].ReverseEndian();
-            dest[0] = prevBlock.ReverseEndian();
+            uint prevBlock = BinaryPrimitives.ReverseEndianness(data[0]);
+            dest[0] = BinaryPrimitives.ReverseEndianness(prevBlock);
 
             if (data.IsEmpty)
                 return;
 
             for (int i = 1; i < data.Length; i++)
             {
-                uint curBlock = data[i].ReverseEndian();
+                uint curBlock = BinaryPrimitives.ReverseEndianness(data[i]);
                 uint outBlock = CryptBlock(curBlock, prevBlock);
 
-                outBlock = outBlock.ReverseEndian();
+                outBlock = BinaryPrimitives.ReverseEndianness(outBlock);
 
                 prevBlock = curBlock;
 
@@ -143,17 +143,17 @@ namespace GTToolsSharp.Encryption
 
         public void EncryptBlocks(Span<uint> data, Span<uint> dest)
         {
-            uint prevBlock = data[0].ReverseEndian();
-            dest[0] = prevBlock.ReverseEndian();
+            uint prevBlock = BinaryPrimitives.ReverseEndianness(data[0]);
+            dest[0] = BinaryPrimitives.ReverseEndianness(prevBlock);
 
             if (data.IsEmpty)
                 return;
 
             for (int i = 1; i < data.Length; i++)
             {
-                uint curBlock = data[i].ReverseEndian();
+                uint curBlock = BinaryPrimitives.ReverseEndianness(data[i]);
                 uint outBlock = CryptBlock(curBlock, prevBlock);
-                dest[i] = outBlock.ReverseEndian();
+                dest[i] = BinaryPrimitives.ReverseEndianness(outBlock);
 
                 prevBlock = outBlock;
             }

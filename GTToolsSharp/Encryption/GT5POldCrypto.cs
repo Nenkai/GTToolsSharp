@@ -8,8 +8,8 @@ using System.Runtime.InteropServices;
 
 namespace GTToolsSharp.Encryption
 {
-    class GT5POldCrypto
-    {
+	class GT5POldCrypto
+	{
 		public static void DecryptPass(uint seed, Span<byte> input, Span<byte> output, int size)
 		{
 			uint one = CRC32.CRC32UInt(seed);
