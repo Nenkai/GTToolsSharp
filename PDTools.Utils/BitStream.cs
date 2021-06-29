@@ -187,7 +187,7 @@ namespace PDTools.Utils
                 _length = byteOffset;
 
             if (_length > SourceBuffer.Length)
-                EnsureCapacity((SourceBuffer.Length - _length) * Byte_Bits);
+                EnsureCapacity(_length * Byte_Bits);
 
             _currentBuffer = SourceBuffer.Slice(byteOffset);
 

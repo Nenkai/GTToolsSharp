@@ -174,6 +174,10 @@ namespace GTToolsSharp.Encryption
                 m_state[9]++;
         }
 
+        /// <summary>
+        /// Used to seek through the crypted buffer.
+        /// </summary>
+        /// <param name="offset"></param>
         private void Set(long offset)
         {
             m_state[8] = (uint)offset;

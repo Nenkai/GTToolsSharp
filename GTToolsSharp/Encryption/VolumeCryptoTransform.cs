@@ -13,27 +13,22 @@ namespace GTToolsSharp.Encryption
 {
     class VolumeCryptoTransform : ICryptoTransform
     {
-        Key currentKey;
+        private byte[] bitsTable;
+        private ulong pos = 0;
 
         public VolumeCryptoTransform(Keyset keyset, uint seed)
         {
-            this.currentKey = keyset.ComputeKey(seed);
+            uint crc = ~CRC32.CRC32_0x04C11DB7(keyset.Magic, 0);
+            uint[] keys = VolumeCrypto.PrepareKey(crc ^ seed, keyset.Key.Data);
+            bitsTable = VolumeCrypto.GenerateBitsTable(keys);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public unsafe int TransformBlock(byte[] inputBuffer, int inputOffset, int inputCount, byte[] outputBuffer, int outputOffset)
         {
-            for (int i = 0; i < inputCount; i++)
-            {
-                byte d = (byte)((((currentKey.Data[0] ^ currentKey.Data[1]) ^ inputBuffer[inputOffset + i]) ^ (currentKey.Data[2] ^ currentKey.Data[3])) & (byte)0xFF);
-                currentKey.Data[0] = ((BitOperations.RotateLeft(currentKey.Data[0], 9) & 0x1FE00u) | (currentKey.Data[0] >> 8));
-                currentKey.Data[1] = ((BitOperations.RotateLeft(currentKey.Data[1], 11) & 0x7F800u) | (currentKey.Data[1] >> 8));
-                currentKey.Data[2] = ((BitOperations.RotateLeft(currentKey.Data[2], 15) & 0x7F8000u) | (currentKey.Data[2] >> 8));
-                currentKey.Data[3] = ((BitOperations.RotateLeft(currentKey.Data[3], 21) & 0x1FE00000u) | (currentKey.Data[3] >> 8));
+            VolumeCrypto.DecryptBuffer(inputBuffer, outputBuffer, inputCount, bitsTable, pos);
 
-                outputBuffer[outputOffset + i] = d;
-            }
-
+            pos += (ulong)inputCount;
             return inputCount;
         }
 

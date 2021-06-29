@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Security;
 
 using CommandLine;
 using CommandLine.Text;
@@ -22,9 +23,11 @@ namespace GTToolsSharp
         public static bool SaveHeader = false;
         public static bool SaveTOC = false;
 
+        public const string Version = "3.0.0";
+
         static void Main(string[] args)
         {
-            Console.WriteLine("-- Gran Turismo 5/6 Volume Tools - (c) Nenkai#9075, ported from flatz --");
+            Console.WriteLine($"-- GToolsSharp {Version} - (c) Nenkai#9075, ported from flatz's gttool --");
             Console.WriteLine();
             
             Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, UnpackInstallerVerbs, CryptVerbs, ListVerbs, CompressVerbs>(args)
@@ -264,7 +267,8 @@ namespace GTToolsSharp
                 }
                 else
                 {
-                    DecryptFile(options, keys, file);
+                    using var inFile = File.Open(file, FileMode.Open);
+                    CryptoUtils.CryptToFile(keys, inFile, 0, "test.bin");
                 }
             }
             Console.WriteLine("[/] Done.");
@@ -296,7 +300,7 @@ namespace GTToolsSharp
             else
             {
                 Console.WriteLine($"[:] Crypting '{file}'..");
-                keys.CryptData(input, 0);
+                CryptoUtils.CryptBuffer(keys, input, input, 0);
             }
 
             Console.WriteLine($"[:] Saving file as {file}.dec..");

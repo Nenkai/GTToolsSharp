@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Numerics;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
 using System.Buffers.Binary;
@@ -43,33 +44,9 @@ namespace GTToolsSharp.Encryption
             Key = key;
         }
 
-        /// <summary>
-        /// Encrypts or decrypts a buffer, using a provided seed.
-        /// </summary>
-        /// <param name="data">Data to manipulate.</param>
-        /// <param name="seed">Seed to use.</param>
-        /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool CryptData(Span<byte> data, uint seed)
-        {
-            CryptBytes(data, data, seed);
-            return true;
-        }
-
-        public void CryptDataChunk(in Key key, Span<byte> data)
-        {
-            for (int i = 0; i < data.Length; i++)
-            {
-                byte d = (byte)((((key.Data[0] ^ key.Data[1]) ^ data[i]) ^ (key.Data[2] ^ key.Data[3])) & (byte)0xFF);
-
-                key.Data[0] = ((RotateLeft(key.Data[0], 9) & 0x1FE00u) | (key.Data[0] >> 8));
-                key.Data[1] = ((RotateLeft(key.Data[1], 11) & 0x7F800u) | (key.Data[1] >> 8));
-                key.Data[2] = ((RotateLeft(key.Data[2], 15) & 0x7F8000u) | (key.Data[2] >> 8));
-                key.Data[3] = ((RotateLeft(key.Data[3], 21) & 0x1FE00000u) | (key.Data[3] >> 8));
-
-                data[i] = d;
-            }
-        }
+        /* \!/ The crypto algorithms following are kept for documentation purposes only
+               They are not the original ones, they have been simplified by flatz
+               For the real ones, look at VolumeCrypto.cs */
 
         /// <summary>
         /// Creates a key based on a seed.
@@ -107,18 +84,14 @@ namespace GTToolsSharp.Encryption
             {
                 byte d = (byte)((((key.Data[0] ^ key.Data[1]) ^ data[i]) ^ (key.Data[2] ^ key.Data[3])) & (byte)0xFF);
 
-                key.Data[0] = ((RotateLeft(key.Data[0], 9) & 0x1FE00u) | (key.Data[0] >> 8));
-                key.Data[1] = ((RotateLeft(key.Data[1], 11) & 0x7F800u) | (key.Data[1] >> 8));
-                key.Data[2] = ((RotateLeft(key.Data[2], 15) & 0x7F8000u) | (key.Data[2] >> 8));
-                key.Data[3] = ((RotateLeft(key.Data[3], 21) & 0x1FE00000u) | (key.Data[3] >> 8));
+                key.Data[0] = ((BitOperations.RotateLeft(key.Data[0], 9) & 0x1FE00u) | (key.Data[0] >> 8));
+                key.Data[1] = ((BitOperations.RotateLeft(key.Data[1], 11) & 0x7F800u) | (key.Data[1] >> 8));
+                key.Data[2] = ((BitOperations.RotateLeft(key.Data[2], 15) & 0x7F8000u) | (key.Data[2] >> 8));
+                key.Data[3] = ((BitOperations.RotateLeft(key.Data[3], 21) & 0x1FE00000u) | (key.Data[3] >> 8));
 
                 dest[i] = d;
             }
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static uint RotateLeft(uint val, int places)
-            => (val << places) | (val >> (32 - places)); // 32 = bit count, size * byte bit size;
 
         public void DecryptBlocks(Span<uint> data, Span<uint> dest)
         {

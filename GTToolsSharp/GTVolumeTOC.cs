@@ -9,7 +9,7 @@ using System.IO.Compression;
 
 using GTToolsSharp.BTree;
 using GTToolsSharp.Utils;
-using static GTToolsSharp.Utils.CryptoUtils;
+using GTToolsSharp.Encryption;
 
 using Syroot.BinaryData.Memory;
 using Syroot.BinaryData.Core;
@@ -118,7 +118,7 @@ namespace GTToolsSharp
             uncompressedSize = (uint)tocSerialized.Length;
             compressedTocSize = (uint)compressedToc.Length;
 
-            ParentVolume.Keyset.CryptData(compressedToc, ParentHeader.TOCEntryIndex);
+            CryptoUtils.CryptBuffer(ParentVolume.Keyset, compressedToc, compressedToc, ParentHeader.TOCEntryIndex);
 
             string path = Path.Combine(outputDir, PDIPFSPathResolver.GetPathFromSeed(ParentHeader.TOCEntryIndex));
             Directory.CreateDirectory(Path.GetDirectoryName(path));
@@ -135,7 +135,7 @@ namespace GTToolsSharp
             bs.WriteByteData(SEGMENT_MAGIC);
             bs.SeekToByte(16);
             bs.WriteUInt32((uint)Files.Count);
-            bs.SeekToByteFromCurrentPosition(sizeof(uint) * Files.Count);
+            bs.Position += sizeof(uint) * Files.Count;
 
             uint fileNamesOffset = (uint)bs.Position;
             FileNames.Serialize(ref bs, this);
@@ -154,15 +154,15 @@ namespace GTToolsSharp
             {
                 FileEntryBTree f = Files[i];
                 uint treeOffset = (uint)bs.Position;
-                bs.SeekToByte(baseListPos + (i * sizeof(uint)));
+                bs.Position = baseListPos + (i * sizeof(uint));
                 bs.WriteUInt32(treeOffset);
-                bs.SeekToByte((int)treeOffset);
+                bs.Position = (int)treeOffset;
 
                 f.Serialize(ref bs, this);
             }
 
             // Go back to write the meta data
-            bs.SeekToByte(4);
+            bs.Position = 4;
             bs.WriteUInt32(fileNamesOffset);
             bs.WriteUInt32(extOffset);
             bs.WriteUInt32(fileInfoOffset);
@@ -225,7 +225,6 @@ namespace GTToolsSharp
 
         private void PackFile(PackCache packCache, string outputDir, bool packAllAsNewEntries, PackCache newCache, FileEntryKey tocFile, InputPackEntry file)
         {
-            Program.Log($"[:] Pack: Processing {file.VolumeDirPath}");
             FileInfoKey key = FileInfos.GetByFileIndex(tocFile.EntryIndex);
 
             if (packAllAsNewEntries && !file.IsAddedFile)
@@ -284,18 +283,19 @@ namespace GTToolsSharp
 
             if (ParentVolume.NoCompress)
                 key.Flags &= ~FileInfoFlags.Compressed;
-            else if (key.Flags.HasFlag(FileInfoFlags.Compressed))
+
+            if (key.Flags.HasFlag(FileInfoFlags.Compressed))
             {
-                Program.Log($"[:] Pack: Compressing {file.VolumeDirPath}");
+                Program.Log($"[:] Pack: Compressing + Encrypting {file.VolumeDirPath} -> {pfsFilePath}");
                 fileData = MiscUtils.ZlibCompress(fileData);
                 newCompressedSize = (uint)fileData.Length;
             }
-
-            Program.Log($"[:] Pack: Saving and encrypting {file.VolumeDirPath} -> {pfsFilePath}");
+            else
+                Program.Log($"[:] Pack: Encrypting {file.VolumeDirPath} -> {pfsFilePath}");
 
             // Will also update the ones we pre-registered
             UpdateKeyAndRetroactiveAdjustSegments(key, newCompressedSize, newUncompressedSize);
-            ParentVolume.Keyset.CryptBytes(fileData, fileData, key.FileIndex);
+            CryptoUtils.CryptBuffer(ParentVolume.Keyset, fileData, fileData, key.FileIndex);
 
             string outputFile = Path.Combine($"{outputDir}_temp", pfsFilePath);
             Directory.CreateDirectory(Path.GetDirectoryName(outputFile));

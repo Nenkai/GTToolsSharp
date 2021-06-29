@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.IO;
 using System.IO.Compression;
@@ -14,7 +14,6 @@ using Syroot.BinaryData.Core;
 using GTToolsSharp.BTree;
 using GTToolsSharp.Utils;
 using GTToolsSharp.Encryption;
-using System.ComponentModel.Design;
 
 namespace GTToolsSharp
 {
@@ -209,8 +208,7 @@ namespace GTToolsSharp
             if (Keyset.Key.Data is null || Keyset.Key.Data.Length < 4)
                 return false;
 
-            if (!Keyset.CryptData(headerData, seed))
-                return false;
+            CryptoUtils.CryptBuffer(Keyset, headerData, headerData, seed);
 
             Span<uint> blocks = MemoryMarshal.Cast<byte, uint>(headerData);
             Keyset.DecryptBlocks(blocks, blocks);
@@ -269,7 +267,7 @@ namespace GTToolsSharp
                 // Accessing a new file, we need to decrypt the header again
                 Program.Log($"[-] TOC Entry is {VolumeHeader.TOCEntryIndex} which is at {path} - decrypting it", true);
                 if (!IsGT5PDemoStyle)
-                    Keyset.CryptData(data, VolumeHeader.TOCEntryIndex);
+                    CryptoUtils.CryptBuffer(Keyset, data, data, VolumeHeader.TOCEntryIndex);
                 else
                     GT5POldCrypto.DecryptPass(VolumeHeader.TOCEntryIndex, data, data, (int)VolumeHeader.CompressedTOCSize);
 
@@ -291,7 +289,7 @@ namespace GTToolsSharp
                 Program.Log($"[-] TOC Entry is {VolumeHeader.TOCEntryIndex} which is at offset {GTVolumeTOC.SEGMENT_SIZE}", true);
 
                 // Decrypt it with the seed that the main header gave us
-                Keyset.CryptData(data, VolumeHeader.TOCEntryIndex);
+                CryptoUtils.CryptBuffer(Keyset, data, data, VolumeHeader.TOCEntryIndex);
 
                 Program.Log($"[-] Decompressing TOC within volume.. (offset: {GTVolumeTOC.SEGMENT_SIZE})", true);
                 if (!MiscUtils.TryInflateInMemory(data, VolumeHeader.TOCSize, out byte[] deflatedData))
@@ -311,16 +309,22 @@ namespace GTToolsSharp
         /// </summary>
         public void UnpackFiles(IEnumerable<int> fileIndexesToExtract)
         {
+            if (fileIndexesToExtract is null)
+                fileIndexesToExtract = Enumerable.Empty<int>();
+
             // Lazy way
             var files = TableOfContents.GetAllRegisteredFileMap();
             foreach (var file in files)
-                UnpackDirect(file.Key, file.Value);
+            {
+                if (!fileIndexesToExtract.Any() || fileIndexesToExtract.Contains((int)file.Value.EntryIndex))
+                    UnpackFile(file.Key, file.Value);
+            }
         }
 
-        public void UnpackDirect(string volPath, FileEntryKey entry)
+        public void UnpackFile(string volPath, FileEntryKey entry)
         {
             FileInfoKey nodeKey = TableOfContents.FileInfos.GetByFileIndex(entry.EntryIndex);
-            UnpackNode(nodeKey, volPath, Path.Combine(OutputDirectory, volPath));
+            UnpackFile(nodeKey, volPath, Path.Combine(OutputDirectory, volPath));
         }
 
         public void PackFiles(string outrepackDir, string[] filesToRemove, bool packAllAsNew, string customTitleID)
@@ -332,6 +336,8 @@ namespace GTToolsSharp
                 if (Console.ReadKey().Key != ConsoleKey.Y)
                     return;
             }
+
+            var sw = Stopwatch.StartNew();
 
             // Leftover?
             if (Directory.Exists($"{outrepackDir}_temp"))
@@ -381,14 +387,15 @@ namespace GTToolsSharp
 
             Span<uint> headerBlocks = MemoryMarshal.Cast<byte, uint>(header);
             Keyset.EncryptBlocks(headerBlocks, headerBlocks);
-            Keyset.CryptData(header, BASE_VOLUME_ENTRY_INDEX);
+            CryptoUtils.CryptBuffer(Keyset, header, header, BASE_VOLUME_ENTRY_INDEX);
 
             string headerPath = Path.Combine(outrepackDir, PDIPFSPathResolver.Default);
             Directory.CreateDirectory(Path.GetDirectoryName(headerPath));
 
             File.WriteAllBytes(headerPath, header);
 
-            Program.Log($"[/] Done packing.", forceConsolePrint: true);
+            sw.Stop();
+            Program.Log($"[/] Done packing in {sw.Elapsed}.", forceConsolePrint: true);
         }
 
         /// <summary>
@@ -434,7 +441,14 @@ namespace GTToolsSharp
             }
         }
 
-        public bool UnpackNode(FileInfoKey nodeKey, string entryPath, string filePath)
+        /// <summary>
+        /// Unpacks a file node.
+        /// </summary>
+        /// <param name="nodeKey">Info of the file.</param>
+        /// <param name="entryPath">Entry path of the file.</param>
+        /// <param name="filePath">Local file path of the file.</param>
+        /// <returns></returns>
+        public bool UnpackFile(FileInfoKey nodeKey, string entryPath, string filePath)
         {
             ulong offset = DataOffset + (ulong)nodeKey.SegmentIndex * GTVolumeTOC.SEGMENT_SIZE;
             uint uncompressedSize = nodeKey.UncompressedSize;
@@ -483,7 +497,6 @@ namespace GTToolsSharp
 
             if (IsGT5PDemoStyle)
             {
-                var oldCrypto = new VolumeCryptoOld(Keyset);
                 bool customCrypt = nodeKey.Flags.HasFlag(FileInfoFlags.CustomSalsaCrypt)
                     || entryPath == "piece/car_thumb_M/gtr_07_01.img" // Uncompressed files, but no special flag either...
                     || entryPath == "piece/car_thumb_M/impreza_wrx_sti_07_03.img";
@@ -509,7 +522,7 @@ namespace GTToolsSharp
                     {
                         Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                         using (var outCompressedFile = new FileStream(filePath + ".in", FileMode.Create))
-                            oldCrypto.DecryptOld(fs, outCompressedFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
+                            VolumeCrypto.DecryptOld(Keyset, fs, outCompressedFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
 
                         using (var inCompressedFile = new FileStream(filePath + ".in", FileMode.Open))
                         {
@@ -526,7 +539,7 @@ namespace GTToolsSharp
                     {
                         Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                         using (var outFile = new FileStream(filePath, FileMode.Create))
-                            oldCrypto.DecryptOld(fs, outFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
+                            VolumeCrypto.DecryptOld(Keyset, fs, outFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
                     }
 
                     if (customCrypt)
@@ -549,12 +562,12 @@ namespace GTToolsSharp
 
                     Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                     fs.Position = 0;
-                    MiscUtils.DecryptAndInflateToFile(Keyset, fs, nodeKey.FileIndex, filePath);
+                    CryptoUtils.DecryptAndInflateToFile(Keyset, fs, nodeKey.FileIndex, filePath);
                 }
                 else
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                    MiscUtils.DecryptToFile(Keyset, fs, nodeKey.FileIndex, filePath);
+                    CryptoUtils.CryptToFile(Keyset, fs, nodeKey.FileIndex, filePath);
                 }
             }
 
@@ -574,12 +587,12 @@ namespace GTToolsSharp
 
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                 Stream.Position -= 8;
-                MiscUtils.DecryptAndInflateToFile(Keyset, Stream, nodeKey.FileIndex, uncompressedSize, filePath, false);
+                CryptoUtils.DecryptAndInflateToFile(Keyset, Stream, nodeKey.FileIndex, uncompressedSize, filePath, false);
             }
             else
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                MiscUtils.DecryptToFile(Keyset, Stream, nodeKey.FileIndex, uncompressedSize, filePath, false);
+                CryptoUtils.CryptToFile(Keyset, Stream, nodeKey.FileIndex, uncompressedSize, filePath, false);
             }
 
             return true;

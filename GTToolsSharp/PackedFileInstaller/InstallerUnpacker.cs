@@ -44,7 +44,7 @@ namespace GTToolsSharp.PackedFileInstaller
             using (var fs = new FileStream(file, FileMode.Open))
                 fs.Read(header);
 
-            keyset.CryptData(header, DefaultSeed);
+            CryptoUtils.CryptBuffer(keyset, header, header, DefaultSeed);
 
             SpanReader sr = new SpanReader(header, Endian.Big);
             if (sr.ReadStringRaw(4) != Magic)
@@ -70,7 +70,7 @@ namespace GTToolsSharp.PackedFileInstaller
             byte[] tocBuffer = new byte[tocSize];
             fs.Read(tocBuffer);
 
-            _keys.CryptData(tocBuffer, DefaultSeed);
+            CryptoUtils.CryptBuffer(_keys, tocBuffer, tocBuffer, DefaultSeed);
             if (saveHeaderToc)
                 File.WriteAllBytes("InstallerHeaderTOC.bin", tocBuffer);
 
@@ -87,7 +87,6 @@ namespace GTToolsSharp.PackedFileInstaller
         public void Unpack(string outPath)
         {
             using var fs = new FileStream(_file, FileMode.Open);
-            var crypto = new VolumeCryptoOld(_keys);
 
             for (int i = 0; i < Entries.Count; i++)
             {
@@ -100,7 +99,7 @@ namespace GTToolsSharp.PackedFileInstaller
 
                 // Decrypt it from offset
                 using (FileStream tempOutDecrypt = new FileStream(outFileName + ".in", FileMode.Create))
-                        crypto.Decrypt(fs, tempOutDecrypt, DefaultSeed, (ulong)entry.FileSize, (ulong)entry.BlockIndex * BlockSize);
+                    VolumeCrypto.Decrypt(_keys, fs, tempOutDecrypt, DefaultSeed, (ulong)entry.FileSize, (ulong)entry.BlockIndex * BlockSize);
 
                 // Decompress if needed
                 bool isCompressed = true;

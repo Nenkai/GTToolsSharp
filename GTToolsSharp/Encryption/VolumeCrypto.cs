@@ -15,15 +15,8 @@ using GTToolsSharp.Utils;
 namespace GTToolsSharp.Encryption
 {
 	// Original implementation of the vol decryption, reverse engineered from scratch as flatz's gttool oversimplified it to a point where it was completely different.
-	public class VolumeCryptoOld
+	public class VolumeCrypto
 	{
-		private Keyset _keys;
-
-		public VolumeCryptoOld(Keyset keyset)
-		{
-			_keys = keyset;
-		}
-
 		/// <summary>
 		/// For traditional decryption
 		/// </summary>
@@ -32,10 +25,10 @@ namespace GTToolsSharp.Encryption
 		/// <param name="seed"></param>
 		/// <param name="fileSize"></param>
 		/// <param name="offset"></param>
-		public void Decrypt(Stream inStream, Stream outStream, uint seed, ulong fileSize, ulong offset)
+		public static void Decrypt(Keyset keyset, Stream inStream, Stream outStream, uint seed, ulong fileSize, ulong offset)
 		{
-			uint crc = ~CRC32.CRC32_0x04C11DB7(_keys.Magic, 0);
-			uint[] keys = PrepareKey(crc ^ seed, _keys.Key.Data);
+			uint crc = ~CRC32.CRC32_0x04C11DB7(keyset.Magic, 0);
+			uint[] keys = PrepareKey(crc ^ seed, keyset.Key.Data);
 			byte[] table = GenerateBitsTable(keys);
 
 			byte[] buffer = ArrayPool<byte>.Shared.Rent(0x20000);
@@ -67,9 +60,9 @@ namespace GTToolsSharp.Encryption
 		/// <param name="seed"></param>
 		/// <param name="fileSize"></param>
 		/// <param name="offset"></param>
-		public void DecryptOld(Stream inStream, Stream outStream, uint seed, ulong fileSize, ulong offset, Salsa20 salsa = default, bool skipCompressMagicForDecrypt = true)
+		public static void DecryptOld(Keyset keyset, Stream inStream, Stream outStream, uint seed, ulong fileSize, ulong offset, Salsa20 salsa = default, bool skipCompressMagicForDecrypt = true)
 		{
-			uint[] keys = PrepareKeyOld(seed);
+			uint[] keys = PrepareKeyOld(keyset, seed);
 			byte[] table = GenerateBitsTable(keys);
 
 			byte[] buffer = ArrayPool<byte>.Shared.Rent(0x20000);
@@ -107,7 +100,7 @@ namespace GTToolsSharp.Encryption
 		/// <summary>
 		/// Decryption bits table generation
 		/// </summary>
-		private byte[] GenerateBitsTable(uint[] keys)
+		public static byte[] GenerateBitsTable(uint[] keys)
 		{
 			byte[] data = new byte[(0x11 * 8) + (0x13 * 8) + (0x17 * 8) + (0x1d * 8)];
 			GenerateBits(data, keys[0], 0x11);
@@ -124,7 +117,7 @@ namespace GTToolsSharp.Encryption
 		/// <param name="seed"></param>
 		/// <param name="keys"></param>
 		/// <returns></returns>
-		private uint[] PrepareKey(uint seed, uint[] keys)
+		public static uint[] PrepareKey(uint seed, uint[] keys)
 		{
 			uint v1 = Keyset.InvertedXorShift(seed, keys[0]);
 			uint v2 = Keyset.InvertedXorShift(v1, keys[1]);
@@ -145,9 +138,9 @@ namespace GTToolsSharp.Encryption
 		/// </summary>
 		/// <param name="seed"></param>
 		/// <returns></returns>
-		private uint[] PrepareKeyOld(uint seed)
+		public static uint[] PrepareKeyOld(Keyset keyset, uint seed)
 		{
-			var keysetSeedCrc = ~CRC32.CRC32_0x04C11DB7(_keys.Magic, 0);
+			var keysetSeedCrc = ~CRC32.CRC32_0x04C11DB7(keyset.Magic, 0);
 
 			uint one = CRC32.CRC32UInt(seed ^ keysetSeedCrc);
 			uint two = CRC32.CRC32UInt(one);
@@ -169,7 +162,7 @@ namespace GTToolsSharp.Encryption
 		/// <param name="table"></param>
 		/// <param name="keyPiece"></param>
 		/// <param name="rotateAmount"></param>
-		private void GenerateBits(Span<byte> table, uint keyPiece, int rotateAmount)
+		public static void GenerateBits(Span<byte> table, uint keyPiece, int rotateAmount)
 		{
 			if (rotateAmount > 0)
 			{
@@ -187,22 +180,20 @@ namespace GTToolsSharp.Encryption
 		}
 
 		/// <summary>
-		/// Internal decrypter
+		/// Actual Data Decrypter Reverse Engineered.
 		/// </summary>
 		/// <param name="input"></param>
 		/// <param name="output"></param>
 		/// <param name="size"></param>
 		/// <param name="decryptTable"></param>
 		/// <param name="offset"></param>
-		private void DecryptBuffer(Span<byte> input, Span<byte> output, int size, Span<byte> decryptTable, ulong offset)
+		public static void DecryptBuffer(Span<byte> input, Span<byte> output, int size, Span<byte> decryptTable, ulong offset)
 		{
-			ulong u1 = (ulong)(BigInteger.Multiply(new BigInteger(offset), new BigInteger(0x642c8590b21642c9)) >> 0x40);
-			ulong u4 = (ulong)(BigInteger.Multiply(new BigInteger(offset), new BigInteger(0x1A7B9611A7B9611B)) >> 0x40);
-
-			int bitOffset0 = (int)(offset + (BigInteger.Multiply(new BigInteger(offset), new BigInteger(0xF0F0F0F0F0F0F0F1)) >> 0x44) * -0x11);
-			int bitOffset1 = (int)(offset + (BigInteger.Multiply(new BigInteger(offset), new BigInteger(0xD79435E50D79435F)) >> 0x44) * -0x13);
-			int bitOffset2 = (int)((uint)offset + (uint)(u1 + (offset - u1 >> 0x1) >> 0x4) * -0x17);
-			int bitOffset3 = (int)((uint)offset + (uint)(u4 + (offset - u4 >> 0x1) >> 0x4) * -0x1d);
+			// Bit offsets
+			int bO1 = (int)(offset % 0x11);
+			int bO2 = (int)(offset % 0x13);
+			int bO3 = (int)(offset % 0x17);
+			int bO4 = (int)(offset % 0x1d);
 
 			// For the sake of C#, these will stay 0 - these should be the addresses of each buffer pointers
 			// Depending on where they are certain paths will be taken
@@ -226,10 +217,10 @@ namespace GTToolsSharp.Encryption
 						int countToAligned = negCountToAligned + 8;
 						if (countToAligned > 0)
 						{
-							var bits0_ = decryptTable.Slice(bitOffset0);
-							var bits1_ = decryptTable.Slice(bitOffset1 + 0x88);
-							var bits2_ = decryptTable.Slice(bitOffset2 + 0x120);
-							var bits3_ = decryptTable.Slice(bitOffset3 + 0x1D8);
+							var bits0_ = decryptTable.Slice(bO1);
+							var bits1_ = decryptTable.Slice(bO2 + 0x88);
+							var bits2_ = decryptTable.Slice(bO3 + 0x120);
+							var bits3_ = decryptTable.Slice(bO4 + 0x1D8);
 
 							for (int i = 0; i < countToAligned; i++)
 							{
@@ -238,34 +229,36 @@ namespace GTToolsSharp.Encryption
 							}
 						}
 
-						bitOffset0 += countToAligned;
-						if (bitOffset0 >= 0x11)
-							bitOffset0 -= 0x11;
+						bO1 += countToAligned;
+						if (bO1 >= 0x11)
+							bO1 -= 0x11;
 
-						bitOffset1 += countToAligned;
-						if (bitOffset1 >= 0x13)
-							bitOffset1 -= 0x13;
+						bO2 += countToAligned;
+						if (bO2 >= 0x13)
+							bO2 -= 0x13;
 
-						bitOffset2 += countToAligned;
-						if (bitOffset2 >= 0x17)
-							bitOffset2 -= 0x17;
+						bO3 += countToAligned;
+						if (bO3 >= 0x17)
+							bO3 -= 0x17;
 
-						bitOffset3 += countToAligned;
-						if (bitOffset3 >= 0x1D)
-							bitOffset3 -= 0x1D;
+						bO4 += countToAligned;
+						if (bO4 >= 0x1D)
+							bO4 -= 0x1D;
 					}
 
 					// Decrypt in 8 bytes chunks
 					int longCount = ((inPos + size) - inPos) / 8;
 
-					uint unkA = unkBitTable[bitOffset0];
-					uint unkB = unkBitTable[bitOffset1 + 0x22];
-					uint unkC = unkBitTable[bitOffset2 + 0x48];
-					uint unkD = unkBitTable[bitOffset3 + 0x76];
+					// Bit offsets
+					bO1 = unkBitTable[bO1];
+					bO2 = unkBitTable[bO2 + 0x22];
+					bO3 = unkBitTable[bO3 + 0x48];
+					bO4 = unkBitTable[bO4 + 0x76];
 
 					Span<ulong> outputLong = MemoryMarshal.Cast<byte, ulong>(output);
 					Span<ulong> inputLong = MemoryMarshal.Cast<byte, ulong>(input);
 
+					Span<ulong> decryptTableLong = MemoryMarshal.Cast<byte, ulong>(decryptTable);
 					int bytesRead;
 					if (longCount < 1)
 						bytesRead = longCount * 8;
@@ -275,33 +268,16 @@ namespace GTToolsSharp.Encryption
 						int iLong = 0;
 						for (int i = 0; i < longCount; i++)
 						{
-							uint unkA2 = unkA * 8;
-							uint unkB2 = unkB * 8;
-							uint unkC2 = unkC * 8;
-							uint unkD2 = unkD * 8;
+							outputLong[iLong] = decryptTableLong[bO1] ^
+												decryptTableLong[bO2 + (0x88 / 8)] ^
+												decryptTableLong[bO3 + (0x120 / 8)] ^
+												decryptTableLong[bO4 + (0x1D8 / 8)] ^
+												inputLong.Slice(iLong)[0];
 
-							uint unkA3 = unkA + 1 ^ 0x11;
-							uint unkA4 = unkA3 >> 0x1F;
-
-							uint unkB3 = unkB + 1 ^ 0x13;
-							uint unkB4 = unkB3 >> 0x1F;
-
-							uint unkC3 = unkC + 1 ^ 0x17;
-							uint unkC4 = unkC3 >> 0x1F;
-
-							uint unkD3 = unkD + 1 ^ 0x1D;
-							uint unkD4 = unkD3 >> 0x1F;
-
-							unkA = (uint)(unkA + 1 & (int)(unkA4 - (unkA4 ^ unkA3)) >> 0x1F);
-							unkB = (uint)(unkB + 1 & (int)(unkB4 - (unkB4 ^ unkB3)) >> 0x1F);
-							unkC = (uint)(unkC + 1 & (int)(unkC4 - (unkC4 ^ unkC3)) >> 0x1F);
-							unkD = (uint)(unkD + 1 & (int)(unkD4 - (unkD4 ^ unkD3)) >> 0x1F);
-
-							outputLong[iLong] = BinaryPrimitives.ReadUInt64LittleEndian(decryptTable.Slice((int)unkB2 + 0x88)) ^
-												BinaryPrimitives.ReadUInt64LittleEndian(decryptTable.Slice((int)unkC2 + 0x120)) ^
-												BinaryPrimitives.ReadUInt64LittleEndian(decryptTable.Slice((int)unkA2)) ^
-												inputLong.Slice(iLong)[0] ^
-												BinaryPrimitives.ReadUInt64LittleEndian(decryptTable.Slice((int)unkD2 + 0x1D8));
+							bO1 = (bO1 + 1) & (((((bO1 + 1) ^ 0x11) >> 31) - ((((bO1 + 1) ^ 0x11) >> 31) ^ (bO1 + 1) ^ 0x11)) >> 31);
+							bO2 = (bO2 + 1) & (((((bO2 + 1) ^ 0x13) >> 31) - ((((bO2 + 1) ^ 0x13) >> 31) ^ (bO2 + 1) ^ 0x13)) >> 31);
+							bO3 = (bO3 + 1) & (((((bO3 + 1) ^ 0x17) >> 31) - ((((bO3 + 1) ^ 0x17) >> 31) ^ (bO3 + 1) ^ 0x17)) >> 31);
+							bO4 = (bO4 + 1) & (((((bO4 + 1) ^ 0x1D) >> 31) - ((((bO4 + 1) ^ 0x1D) >> 31) ^ (bO4 + 1) ^ 0x1D)) >> 31);
 							iLong++;
 						}
 
@@ -311,26 +287,25 @@ namespace GTToolsSharp.Encryption
 					}
 
 					size -= bytesRead;
-					bitOffset0 = unkBitTable[unkA + 0x11];
-					bitOffset1 = unkBitTable[unkB + 0x35];
-					bitOffset2 = unkBitTable[unkC + 0x5F];
-					bitOffset3 = unkBitTable[unkD + 0x93];
-
-					// Done reading, no more bytes
-					if (size == 0)
-						return;
+					bO1 = unkBitTable[bO1 + 0x11];
+					bO2 = unkBitTable[bO2 + 0x35];
+					bO3 = unkBitTable[bO3 + 0x5F];
+					bO4 = unkBitTable[bO4 + 0x93];
 				}
 
-				// Decrypt remainder byte by byte
-				var bits0 = decryptTable.Slice(bitOffset0);
-				var bits1 = decryptTable.Slice(bitOffset1 + 0x88);
-				var bits2 = decryptTable.Slice(bitOffset2 + 0x120);
-				var bits3 = decryptTable.Slice(bitOffset3 + 0x1d8);
-
-				for (int i = 0; i < size; i++)
+				if (size > 0)
 				{
-					output[i] = (byte)(bits1[0] ^ bits2[0] ^ input[i] ^ bits0[0] ^ bits3[0]);
-					bits0 = bits0[1..]; bits1 = bits1[1..]; bits2 = bits2[1..]; bits3 = bits3[1..]; // Advance all by 1
+					// Decrypt remainder byte by byte
+					var bits0 = decryptTable.Slice(bO1);
+					var bits1 = decryptTable.Slice(bO2 + 0x88);
+					var bits2 = decryptTable.Slice(bO3 + 0x120);
+					var bits3 = decryptTable.Slice(bO4 + 0x1d8);
+
+					for (int i = 0; i < size; i++)
+					{
+						output[i] = (byte)(bits1[0] ^ bits2[0] ^ input[i] ^ bits0[0] ^ bits3[0]);
+						bits0 = bits0[1..]; bits1 = bits1[1..]; bits2 = bits2[1..]; bits3 = bits3[1..]; // Advance all by 1
+					}
 				}
 			}
 			else
@@ -339,10 +314,10 @@ namespace GTToolsSharp.Encryption
 				if (size == 0)
 					return;
 
-				var bits0 = decryptTable.Slice(bitOffset0);
-				var bits1 = decryptTable.Slice(bitOffset1);
-				var bits2 = decryptTable.Slice(bitOffset2);
-				var bits3 = decryptTable.Slice(bitOffset3);
+				var bits0 = decryptTable.Slice(bO1);
+				var bits1 = decryptTable.Slice(bO2);
+				var bits2 = decryptTable.Slice(bO3);
+				var bits3 = decryptTable.Slice(bO4);
 
 				for (int i = 0; i < size; i++)
 				{
@@ -350,40 +325,40 @@ namespace GTToolsSharp.Encryption
 					{
 						output[i] = (byte)(bits1[0] ^ bits2[0] ^ input[i] ^ bits0[0] ^ bits3[0]);
 
-						int bUnk0 = bitOffset0;
-						bitOffset0++;
+						int bUnk0 = bO1;
+						bO1++;
 
 						// Wrap around if needed
 						if (bUnk0 == 0x10)
 						{
-							bitOffset0 = 0;
+							bO1 = 0;
 							bits0 = decryptTable;
 						}
 						else
 							bits0 = bits0[1..];
 
-						int bUnk1 = bitOffset1;
-						bitOffset1++;
+						int bUnk1 = bO1;
+						bO1++;
 						if (bUnk1 == 0x12)
 						{
-							bitOffset1 = 0;
+							bO1 = 0;
 							bits1 = decryptTable.Slice(0x88);
 						}
 						else
 							bits1 = bits1[1..];
 
-						int bUnk2 = bitOffset2;
-						bitOffset2++;
+						int bUnk2 = bO2;
+						bO2++;
 						if (bUnk2 == 0x16)
 						{
-							bitOffset2 = 0;
+							bO2 = 0;
 							bits2 = decryptTable.Slice(0x120);
 						}
 						else
 							bits2 = bits2[1..];
 
-						int bUnk3 = bitOffset3;
-						bitOffset3++;
+						int bUnk3 = bO3;
+						bO3++;
 						if (bUnk3 == 0x1c)
 							break;
 
@@ -393,13 +368,13 @@ namespace GTToolsSharp.Encryption
 							return;
 					}
 
-					bitOffset3 = 0;
+					bO3 = 0;
 					bits3 = decryptTable.Slice(0x1D8);
 				}
 			}
 		}
 
-		byte[] unkBitTable = new byte[]
+		static byte[] unkBitTable = new byte[]
 		{
 			0x00, 0x0F, 0x0D, 0x0B, 0x09, 0x07, 0x05, 0x03, 0x01, 0x10, 0x0E, 0x0C, 0x0A, 0x08, 0x06, 0x04,
 			0x02, 0x00, 0x08, 0x10, 0x07, 0x0F, 0x06, 0x0E, 0x05, 0x0D, 0x04, 0x0C, 0x03, 0x0B, 0x02, 0x0A,
@@ -414,7 +389,7 @@ namespace GTToolsSharp.Encryption
 			0x11, 0x19, 0x04, 0x0C, 0x14, 0x1C, 0x07, 0x0F, 0x17, 0x02, 0x0A, 0x12, 0x1A, 0x05, 0x0D, 0x15
 		};
 
-		private void MemCpy(Span<byte> output, Span<byte> input, int length)
+		private static void MemCpy(Span<byte> output, Span<byte> input, int length)
 		{
 			input.Slice(0, length).CopyTo(output);
 		}
