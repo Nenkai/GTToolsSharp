@@ -27,7 +27,7 @@ namespace GTToolsSharp
 
         static void Main(string[] args)
         {
-            Console.WriteLine($"-- GToolsSharp {Version} - (c) Nenkai#9075, ported from flatz's gttool --");
+            Console.WriteLine($"-- GTToolsSharp {Version} - (c) Nenkai#9075, ported from flatz's gttool --");
             Console.WriteLine();
             
             Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, UnpackInstallerVerbs, CryptVerbs, ListVerbs, CompressVerbs>(args)
