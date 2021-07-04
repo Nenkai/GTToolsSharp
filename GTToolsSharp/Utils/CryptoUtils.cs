@@ -74,7 +74,7 @@ namespace GTToolsSharp.Utils
 
                 int bytesLeft = (int)uncompressedSize;
                 int read;
-                const int bufSize = 81_920;
+                const int bufSize = 0x20000;
                 byte[] buffer = ArrayPool<byte>.Shared.Rent(bufSize);
 
                 int currentPos = 0;

@@ -34,8 +34,8 @@ namespace GTToolsSharp.Encryption
             var keyUints = MemoryMarshal.Cast<byte, uint>(key);
             keyUints.CopyTo(m_state.AsSpan(1, keyLength / 4));
 
-            byte[] constants = key.Length == 32 ? c_sigma : c_tau;
-            int keyIndex = key.Length - 16;
+            byte[] constants = keyLength == 32 ? c_sigma : c_tau;
+            int keyIndex = keyLength - 16;
 
             m_state[11] = ToUInt32(key, keyIndex + 0);
             m_state[12] = ToUInt32(key, keyIndex + 4);
@@ -75,7 +75,7 @@ namespace GTToolsSharp.Encryption
                 o[i] = 0;
 
             int pos = 0;
-            while (length > StateLength)
+            while (length > 0)
             {
                 Hash(o);
                 Increment();
@@ -202,7 +202,5 @@ namespace GTToolsSharp.Encryption
 
         private static uint ToUInt32(byte[] input, int inputOffset)
             => unchecked((uint)(((input[inputOffset] | (input[inputOffset + 1] << 8)) | (input[inputOffset + 2] << 16)) | (input[inputOffset + 3] << 24)));
-
-
     }
 }
