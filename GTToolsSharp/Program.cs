@@ -400,7 +400,16 @@ namespace GTToolsSharp
 
         public static void CreateDefaultKeysFile()
         {
-            string json = JsonSerializer.Serialize(new[] { GTVolume.Keyset_GT5P_JP_DEMO, GTVolume.Keyset_GT5_EU, GTVolume.Keyset_GT5_US, GTVolume.Keyset_GT6 }, new JsonSerializerOptions() { WriteIndented = true }); ;
+            string json = JsonSerializer.Serialize(new[] 
+            { 
+                GTVolume.Keyset_GT5P_JP_DEMO, 
+                GTVolume.Keyset_GT5P_EU_SPEC3,
+                GTVolume.Keyset_GT5P_US_SPEC3,
+                GTVolume.Keyset_GT5_EU, 
+                GTVolume.Keyset_GT5_US,
+                GTVolume.Keyset_GT6 
+            }, new JsonSerializerOptions() { WriteIndented = true });
+
             File.WriteAllText("key.json", json);
         }
 
@@ -411,10 +420,17 @@ namespace GTToolsSharp
                 try
                 {
                     CreateDefaultKeysFile();
-                    Console.WriteLine("[X] Error: Key file is missing.");
-                    Console.WriteLine(" A default one was created with GT5 EU, US GT6 and GT5 JP Demo keys. (key.json)");
-                    Console.WriteLine(" Change them accordingly to the keys of the game and/or different game region you are trying to unpack if needed.");
+                    Console.WriteLine("[X] Error: Volume Encryption Key file is missing (key.json).");
+                    Console.WriteLine(" A default one was created with the keys for the following games:");
+                    Console.WriteLine("  - GT5P Demo (Japan)");
+                    Console.WriteLine("  - GT5P (US, Spec III)");
+                    Console.WriteLine("  - GT5P (Europe, Spec III)");
+                    Console.WriteLine("  - GT5 (Europe)");
+                    Console.WriteLine("  - GT5 (US)");
+                    Console.WriteLine("  - GT6 (Universal/All Regions)");
                     Console.WriteLine(" Just run the program again if the game you are trying to extract/pack matches one of the above.");
+                    Console.WriteLine(" If not, change the file accordingly and provide keys for the game build/region you are trying to unpack.");
+                    
                     Console.WriteLine();
                 }
                 catch (Exception e)
