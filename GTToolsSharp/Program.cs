@@ -267,8 +267,7 @@ namespace GTToolsSharp
                 }
                 else
                 {
-                    using var inFile = File.Open(file, FileMode.Open);
-                    CryptoUtils.CryptToFile(keys, inFile, 0, "test.bin");
+                    DecryptFile(options, keys, file);
                 }
             }
             Console.WriteLine("[/] Done.");
@@ -303,7 +302,6 @@ namespace GTToolsSharp
                 CryptoUtils.CryptBuffer(keys, input, input, 0);
             }
 
-            Console.WriteLine($"[:] Saving file as {file}.dec..");
             File.WriteAllBytes(file, input);
         }
 
