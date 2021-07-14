@@ -103,33 +103,56 @@ namespace GTToolsSharp
             PrintToConsole = true;
 
             if (options.Cache)
-                Program.Log("[!] Using packing cache.");
+                Program.Log("[!] Using packing cache. (--cache)");
             vol.UsePackingCache = options.Cache;
 
             Program.Log("[-] Started packing process.");
 
-            string[] filesToRemove = Array.Empty<string>();
-            if (options.PackRemoveFiles && File.Exists("files_to_remove.txt"))
-                filesToRemove = File.ReadAllLines("files_to_remove.txt");
+            List<string> filesToRemove = new List<string>();
+            if (options.PackRemoveFiles)
+            {
+                if (!File.Exists("files_to_remove.txt"))
+                {
+                    Console.WriteLine($"[X] --remove-files was provided but 'files_to_remove.txt' file does not exist.");
+                    return;
+                }
+                filesToRemove = ReadEntriesFromFile("files_to_remove.txt");
+                Program.Log($"[!] Files to remove: {filesToRemove.Count} entries (--remove-files)");
+            }
 
-            if (options.PackAllAsNew)
-                Program.Log("[!] Note: --pack-all-as-new provided - packing as new is now on by default. To use overwrite mode, use --pack-as-overwrite");
+            List<string> filesToIgnore = new List<string>();
+            if (options.PackIgnoreFiles)
+            {
+                if (!File.Exists("files_to_ignore.txt"))
+                {
+                    Console.WriteLine($"[X] --ignore-files was provided but 'files_to_ignore.txt' file does not exist.");
+                    return;
+                }
+                filesToIgnore = ReadEntriesFromFile("files_to_ignore.txt");
+                Program.Log($"[!] Files to ignore: {filesToIgnore.Count} entries (--ignore-files)");
+            }
 
             if (vol.UsePackingCache && File.Exists(".pack_cache"))
                 vol.ReadPackingCache(".pack_cache");
 
             if (options.StartIndex != 0)
             {
-                Program.Log($"[!] Will use {options.StartIndex} as starting File Index.");
+                Program.Log($"[!] Will use {options.StartIndex} as starting File Index. (--start-index)");
                 vol.VolumeHeader.TOCEntryIndex = options.StartIndex;
             }
 
+            if (options.CreateBDMARK)
+                Program.Log("[!] PDIPFS_bdmark will be created. (--create_bdmark)");
             vol.CreateBDMARK = options.CreateBDMARK;
+
             vol.NoCompress = options.NoCompress;
-            vol.RegisterEntriesToRepack(options.FolderToRepack);
+            vol.RegisterEntriesToRepack(options.FolderToRepack, filesToIgnore);
 
             if (options.Version != null)
                 vol.VolumeHeader.PFSVersion = options.Version.Value;
+
+            if (!string.IsNullOrEmpty(options.CustomGameID))
+                Program.Log($"[!] Volume Game ID will be set to '{options.CustomGameID}'. (--custom-game-id)");
 
             vol.PackFiles(options.OutputPath, filesToRemove, !options.PackAsOverwrite, options.CustomGameID);
         }
@@ -465,6 +488,23 @@ namespace GTToolsSharp
                 Console.WriteLine($"Error: Unable to parse key.json. {e.Message}");
                 return null;
             }
+        }
+        
+        public static List<string> ReadEntriesFromFile(string file)
+        {
+            var list = new List<string>();
+            string[] array = File.ReadAllLines(file);
+            for (int i = 0; i < array.Length; i++)
+            {
+                string line = array[i];
+                line = line.Trim().Replace('\\', '/');
+                if (line.StartsWith("//") || string.IsNullOrEmpty(file))
+                    continue;
+
+                list.Add(line);
+            }
+
+            return list;
         }
 
         public static void HandleNotParsedArgs(IEnumerable<Error> errors)

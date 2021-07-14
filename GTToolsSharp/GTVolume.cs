@@ -329,9 +329,9 @@ namespace GTToolsSharp
             UnpackFile(nodeKey, volPath, Path.Combine(OutputDirectory, volPath));
         }
 
-        public void PackFiles(string outrepackDir, string[] filesToRemove, bool packAllAsNew, string customTitleID)
+        public void PackFiles(string outrepackDir, List<string> filesToRemove, bool packAllAsNew, string customTitleID)
         {
-            if (FilesToPack.Count == 0 && filesToRemove.Length == 0)
+            if (FilesToPack.Count == 0 && filesToRemove.Count == 0)
             {
                 Program.Log("[X] Found no files to pack or remove from volume.", forceConsolePrint: true);
                 Console.WriteLine("[?] Continue? (Y/N)");
@@ -351,7 +351,7 @@ namespace GTToolsSharp
             if (CreateBDMARK)
                 Directory.CreateDirectory("PDIPFS_bdmark");
 
-            Program.Log($"[-] Preparing to pack {FilesToPack.Count} files, and remove {filesToRemove.Length} files");
+            Program.Log($"[-] Preparing to pack {FilesToPack.Count} files, and remove {filesToRemove.Count} files");
             PackCache newCache = TableOfContents.PackFilesForPatchFileSystem(FilesToPack, _packCache, filesToRemove, outrepackDir, packAllAsNew);
             if (UsePackingCache)
                 newCache.Save(".pack_cache");
@@ -421,7 +421,7 @@ namespace GTToolsSharp
             }
         }
 
-        public void RegisterEntriesToRepack(string inputDir)
+        public void RegisterEntriesToRepack(string inputDir, List<string> filesToIgnore)
         {
             string[] fileNames = Directory.GetFiles(inputDir, "*", SearchOption.AllDirectories);
             Array.Sort(fileNames, StringComparer.OrdinalIgnoreCase);
@@ -435,6 +435,12 @@ namespace GTToolsSharp
                 var entry = new InputPackEntry();
                 entry.FullPath = file.ToString();
                 entry.VolumeDirPath = entry.FullPath.AsSpan(inputDir.Length).TrimStart('\\').ToString().Replace('\\', '/');
+                if (filesToIgnore.Contains(entry.VolumeDirPath))
+                {
+                    Program.Log($"[:] Ignoring: '{entry.VolumeDirPath}'");
+                    continue;
+                }
+
                 entry.FileSize = file.Length;
 
                 entry.LastModified = new DateTime(file.LastWriteTime.Year, file.LastWriteTime.Month, file.LastWriteTime.Day,

@@ -169,7 +169,7 @@ namespace GTToolsSharp
             return bs.GetSpan().ToArray();
         }
 
-        public void RemoveFilesFromTOC(string[] filesToRemove)
+        public void RemoveFilesFromTOC(List<string> filesToRemove)
         {
             Dictionary<string, FileEntryKey> tocFiles = GetAllRegisteredFileMap();
             foreach (var file in filesToRemove)
@@ -188,13 +188,13 @@ namespace GTToolsSharp
         /// </summary>
         /// <param name="FilesToPack">Files to pack.</param>
         /// <param name="outputDir">Main output dir to use to expose the packed files.</param>
-        public PackCache PackFilesForPatchFileSystem(Dictionary<string, InputPackEntry> FilesToPack, PackCache packCache, string[] filesToRemove, string outputDir, bool packAllAsNewEntries)
+        public PackCache PackFilesForPatchFileSystem(Dictionary<string, InputPackEntry> FilesToPack, PackCache packCache, List<string> filesToRemove, string outputDir, bool packAllAsNewEntries)
         {
             // If we are packing as new, ensure the TOC is before all the files (that will come after it)
             if (packAllAsNewEntries)
                 ParentHeader.TOCEntryIndex = NextEntryIndex();
 
-            if (filesToRemove.Length > 0)
+            if (filesToRemove.Count > 0)
                 RemoveFilesFromTOC(filesToRemove);
 
             var newCache = new PackCache();
