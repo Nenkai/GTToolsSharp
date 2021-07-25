@@ -54,7 +54,8 @@ namespace GTToolsSharp.BTree
                 bool moreThanOneKey = treeStream.ReadBoolBit();
                 uint keyCount = (uint)treeStream.ReadBits(11);
 
-                Debug.Assert(moreThanOneKey && keyCount > 0);
+                // 25/07/2021 - Not necessarily true - caused issues with 2.11 US Toc (GT5) - moreThanOneKey was true, keyCount was 0
+                // Debug.Assert(moreThanOneKey && keyCount > 0, "More than one key flag set but key count is 0?");
 
                 List<uint> keyOffsets = new List<uint>((int)keyCount);
                 for (uint j = 0; j < keyCount; j++)
