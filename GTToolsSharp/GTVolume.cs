@@ -23,7 +23,8 @@ namespace GTToolsSharp
     public class GTVolume
     {
         public const int BASE_VOLUME_ENTRY_INDEX = 1;
-        // 160 Bytes
+
+        private const int GTSPHeaderSize = 0xA60;
         private const int HeaderSize = 0xA0;
         private const int OldHeaderSize = 0x14;
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Buffers.Binary;
 
 using Syroot.BinaryData.Memory;
 using Syroot.BinaryData.Core;
@@ -16,6 +17,9 @@ namespace GTToolsSharp
     {
         private static readonly byte[] HeaderMagic = { 0x5B, 0x74, 0x51, 0x62 };
         private static readonly byte[] OldHeaderMagic = { 0x5B, 0x74, 0x51, 0x61 };
+
+        public const uint GTSPMagicEncryptKey = 0x9AEFDE67;
+
         private const uint HeaderSize = 0xA0; // 160
 
         /// <summary>
@@ -63,19 +67,53 @@ namespace GTToolsSharp
             SpanReader sr = new SpanReader(header, Endian.Big);
 
             byte[] magic = sr.ReadBytes(4);
+
+            bool isGTSP = false;
             if (!magic.AsSpan().SequenceEqual(HeaderMagic.AsSpan()) && !magic.AsSpan().SequenceEqual(OldHeaderMagic.AsSpan()))
-                return null;
+            {
+                uint magicInt = BinaryPrimitives.ReadUInt32BigEndian(magic);
+                if ((magicInt ^ GTSPMagicEncryptKey) != 0x5B745162)
+                    return null;
+                else
+                    isGTSP = true;
+            }
 
             bool isOld = magic.AsSpan().SequenceEqual(OldHeaderMagic.AsSpan());
 
             if (!isOld)
             {
-                gtHeader.TOCEntryIndex = sr.ReadUInt32();
-                gtHeader.CompressedTOCSize = sr.ReadUInt32();
-                gtHeader.TOCSize = sr.ReadUInt32();
-                gtHeader.PFSVersion = sr.ReadUInt64();
-                gtHeader.TotalVolumeSize = sr.ReadUInt64();
-                gtHeader.TitleID = sr.ReadString0();
+                if (isGTSP)
+                {
+                    sr.Endian = Endian.Little;
+                    ulong julianBuiltTime = sr.ReadUInt64();
+                    ulong serialNumber = sr.ReadUInt64(); // Also patch sequence
+
+                    sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); // reserve_0-3
+                    sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); // reserve_4-7
+                    sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); // reserve_8-b
+                    sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); // reserve_c-f
+
+                    sr.Position = 0xF0;
+                    int node = sr.ReadInt32();
+                    int compressedSize = sr.ReadInt32();
+                    int expandedSize = sr.ReadInt32();
+                    int volListCount = sr.ReadInt32();
+
+                    for (int i = 0; i < volListCount; i++)
+                    {
+                        sr.ReadStringRaw(16); // Name
+                        sr.ReadUInt64(); // Size
+                    }
+                }
+                else
+                {
+                    gtHeader.TOCEntryIndex = sr.ReadUInt32();
+                    gtHeader.CompressedTOCSize = sr.ReadUInt32();
+                    gtHeader.TOCSize = sr.ReadUInt32();
+                    gtHeader.PFSVersion = sr.ReadUInt64();
+                    gtHeader.TotalVolumeSize = sr.ReadUInt64();
+                    gtHeader.TitleID = sr.ReadString0();
+                }
             }
             else
             {
