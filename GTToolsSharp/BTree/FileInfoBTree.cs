@@ -20,10 +20,10 @@ namespace GTToolsSharp.BTree
 {
     public class FileInfoBTree : BTree<FileInfoKey>
     {
-        public FileInfoBTree(Memory<byte> buffer)
-            : base(buffer)
+        public FileInfoBTree(Memory<byte> buffer, GTVolumeTOC parentToC)
+            : base(buffer, parentToC)
         {
-
+            
         }
 
 
@@ -66,7 +66,7 @@ namespace GTToolsSharp.BTree
                 key.KeyOffset = (uint)(_buffer.Length - data.Length);
 
                 BitStream keyStream = new BitStream(BitStreamMode.Read, data);
-                key.Deserialize(ref keyStream);
+                //key.Deserialize(ref keyStream);
                 return index;
             }
             else

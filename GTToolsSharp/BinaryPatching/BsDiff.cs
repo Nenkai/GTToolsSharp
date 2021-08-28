@@ -10,7 +10,7 @@ using Syroot.BinaryData;
 using SharpCompress.Compressors;
 using SharpCompress.Compressors.BZip2;
 
-using static GTToolsSharp.Utils.MiscExtensions;
+using static PDTools.Utils.Extensions;
 
 namespace GTToolsSharp.BinaryPatching
 {

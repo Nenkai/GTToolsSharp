@@ -8,6 +8,7 @@ using System.IO;
 using Syroot.BinaryData.Memory;
 using Syroot.BinaryData;
 
+using GTToolsSharp.Headers;
 using GTToolsSharp.Utils;
 using static GTToolsSharp.Utils.CryptoUtils;
 
@@ -20,7 +21,6 @@ namespace GTToolsSharp.BTree
     /// </summary>
     public class FileInfoKey : IBTreeKey<FileInfoKey>
     {
-
         public uint KeyOffset;
 
         public FileInfoFlags Flags { get; set; }
@@ -33,11 +33,21 @@ namespace GTToolsSharp.BTree
         public uint UncompressedSize { get; set; }
 
         /// <summary>
-        /// Segment size within the entire volume file.
+        /// File Sector Offset within the entire volume file.
         /// </summary>
-        public uint SegmentIndex { get; set; }
+        public uint SectorOffset { get; set; }
 
         public const uint InvalidIndex = uint.MaxValue;
+        
+        /// <summary>
+        /// For GT7SP
+        /// </summary>
+        public bool UsesMultipleVolumes { get; set; }
+
+        /// <summary>
+        /// To which volume this file belongs to (GT7SP)
+        /// </summary>
+        public uint VolumeIndex { get; set; } = unchecked((uint)-1);
 
         public FileInfoKey() { }
         public FileInfoKey(uint fileIndex)
@@ -46,15 +56,20 @@ namespace GTToolsSharp.BTree
         }
 
 
-        public void Deserialize(ref BitStream stream)
+        public void Deserialize(ref BitStream stream, GTVolumeTOC parentToC)
         {
             Flags = (FileInfoFlags)stream.ReadByte();
-
             FileIndex = (uint)stream.ReadVarInt();
             CompressedSize = (uint)stream.ReadVarInt();
-            UncompressedSize = Flags.HasFlag(FileInfoFlags.Compressed) ? (uint)stream.ReadVarInt() : CompressedSize;
 
-            SegmentIndex = (uint)stream.ReadVarInt();
+            if (Flags.HasFlag(FileInfoFlags.Compressed) || (int)Flags == 34)
+                UncompressedSize = (uint)stream.ReadVarInt();
+            else
+                UncompressedSize = CompressedSize;
+        
+            if (parentToC.ParentHeader is FileDeviceGTFS3Header)
+                VolumeIndex = (uint)stream.ReadVarInt();
+            SectorOffset = (uint)stream.ReadVarInt();
         }
 
         public void Serialize(ref BitStream bs)
@@ -65,7 +80,10 @@ namespace GTToolsSharp.BTree
             if (Flags.HasFlag(FileInfoFlags.Compressed))
                 bs.WriteVarInt((int)UncompressedSize);
 
-            bs.WriteVarInt((int)SegmentIndex);
+            if (UsesMultipleVolumes)
+                bs.WriteVarInt((int)VolumeIndex);
+
+            bs.WriteVarInt((int)SectorOffset);
         }
 
         public uint GetSerializedKeySize()
@@ -75,7 +93,11 @@ namespace GTToolsSharp.BTree
             keyLength += (uint)BitStream.GetSizeOfVarInt((int)CompressedSize);
             if (Flags.HasFlag(FileInfoFlags.Compressed))
                 keyLength += (uint)BitStream.GetSizeOfVarInt((int)UncompressedSize);
-            keyLength += (uint)BitStream.GetSizeOfVarInt((int)SegmentIndex);
+
+            if (UsesMultipleVolumes)
+                keyLength += (uint)BitStream.GetSizeOfVarInt((int)VolumeIndex);
+
+            keyLength += (uint)BitStream.GetSizeOfVarInt((int)SectorOffset);
 
             return keyLength;
         }
@@ -96,7 +118,10 @@ namespace GTToolsSharp.BTree
         }
 
         public override string ToString()
-            => $"Flags: {Flags} FileIndex: {FileIndex} ({PDIPFSPathResolver.GetPathFromSeed(FileIndex)}), SegmentIndex: {SegmentIndex}, CompressedSize: {CompressedSize}, UncompSize: {UncompressedSize}";
+        {
+            return $"Flags: {Flags} | FileIndex: {FileIndex} ({PDIPFSPathResolver.GetPathFromSeed(FileIndex)}) | SegIndex: {SectorOffset}, ZSize: {CompressedSize:X8} | Size: {UncompressedSize:X8} | VolIndex: {VolumeIndex}";
+        }
+            
 
         public FileInfoKey CompareGetDiff(FileInfoKey key)
         {
@@ -107,8 +132,12 @@ namespace GTToolsSharp.BTree
     [Flags]
     public enum FileInfoFlags
     {
-        Uncompressed,
-        Compressed,
-        CustomSalsaCrypt,
+        Uncompressed = 0x0,
+        Compressed = 0x01,
+        CustomSalsaCrypt = 0x02,
+        a = 0x04,
+        b = 0x08,
+        c = 0x10,
+        d = 0x20,
     }
 }

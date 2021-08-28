@@ -5,14 +5,16 @@ using System.Text.Json;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Security;
 
 using CommandLine;
-using CommandLine.Text;
 
+using GTToolsSharp.Headers;
 using GTToolsSharp.Encryption;
 using GTToolsSharp.Utils;
 using GTToolsSharp.PackedFileInstaller;
+
+using PDTools.Compression;
+using PDTools.Utils;
 
 namespace GTToolsSharp
 {
@@ -138,7 +140,7 @@ namespace GTToolsSharp
             if (options.StartIndex != 0)
             {
                 Program.Log($"[!] Will use {options.StartIndex} as starting File Index. (--start-index)");
-                vol.VolumeHeader.TOCEntryIndex = options.StartIndex;
+                vol.VolumeHeader.ToCNodeIndex = options.StartIndex;
             }
 
             if (options.CreateBDMARK)
@@ -149,7 +151,7 @@ namespace GTToolsSharp
             vol.RegisterEntriesToRepack(options.FolderToRepack, filesToIgnore);
 
             if (options.Version != null)
-                vol.VolumeHeader.PFSVersion = options.Version.Value;
+                vol.VolumeHeader.SerialNumber = options.Version.Value;
 
             if (!string.IsNullOrEmpty(options.CustomGameID))
                 Program.Log($"[!] Volume Game ID will be set to '{options.CustomGameID}'. (--custom-game-id)");
@@ -367,12 +369,24 @@ namespace GTToolsSharp
 
             using var sw = new StreamWriter(options.OutputPath);
             var entries = vol.TableOfContents.GetAllRegisteredFileMap();
+
+            if (vol.VolumeHeader is FileDeviceGTFS3Header header3)
+            {
+                sw.WriteLine("[Volumes]");
+                for (int i = 0; i < header3.VolList.Length; i++)
+                    sw.WriteLine($"Vol: {header3.VolList[i].Name} (Size: {header3.VolList[i].Size:X8})");
+                sw.WriteLine();
+            }
+
             foreach (var entry in entries)
             {
-                if (vol.IsPatchVolume)
-                    sw.WriteLine($"{entry.Key} ({entry.Value.EntryIndex}) - {PDIPFSPathResolver.GetPathFromSeed(entry.Value.EntryIndex)}");
-                else
-                    sw.WriteLine($"{entry.Key} ({entry.Value.EntryIndex})");
+                if (vol.VolumeHeader is FileDeviceGTFS3Header header33)
+                {
+                    var entryInfo = vol.TableOfContents.FileInfos.GetByFileIndex(entry.Value.EntryIndex);
+                    sw.WriteLine($"{entry.Key} - {entryInfo} - {header33.VolList[entryInfo.VolumeIndex].Name}");
+
+                }
+
             }
 
             sw.WriteLine($"[!] Wrote {entries.Count} at {options.OutputPath}.");
@@ -388,7 +402,7 @@ namespace GTToolsSharp
 
             Console.WriteLine("[:] Compressing..");
             var file = File.ReadAllBytes(options.InputPath);
-            var compressed = MiscUtils.ZlibCompress(file);
+            var compressed = PS2ZIP.Deflate(file);
 
             if (string.IsNullOrEmpty(options.OutputPath))
                 options.OutputPath = options.InputPath;
@@ -423,12 +437,12 @@ namespace GTToolsSharp
         {
             string json = JsonSerializer.Serialize(new[] 
             { 
-                GTVolume.Keyset_GT5P_JP_DEMO, 
-                GTVolume.Keyset_GT5P_EU_SPEC3,
-                GTVolume.Keyset_GT5P_US_SPEC3,
-                GTVolume.Keyset_GT5_EU, 
-                GTVolume.Keyset_GT5_US,
-                GTVolume.Keyset_GT6 
+                KeysetStore.Keyset_GT5P_JP_DEMO,
+                KeysetStore.Keyset_GT5P_EU_SPEC3,
+                KeysetStore.Keyset_GT5P_US_SPEC3,
+                KeysetStore.Keyset_GT5_EU,
+                KeysetStore.Keyset_GT5_US,
+                KeysetStore.Keyset_GT6 
             }, new JsonSerializerOptions() { WriteIndented = true });
 
             File.WriteAllText("key.json", json);

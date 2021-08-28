@@ -28,7 +28,7 @@ namespace GTToolsSharp.BTree
         public uint FileExtensionIndex;
         public uint EntryIndex;
 
-        public void Deserialize(ref BitStream stream)
+        public void Deserialize(ref BitStream stream, GTVolumeTOC parentToC)
         {
             Flags = (EntryKeyFlags)stream.ReadByte();
             NameIndex = (uint)stream.ReadVarInt();

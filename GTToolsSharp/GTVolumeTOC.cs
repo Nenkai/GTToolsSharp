@@ -1,21 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 using System.IO;
-using System.IO.Compression;
 
 using GTToolsSharp.BTree;
 using GTToolsSharp.Utils;
-using GTToolsSharp.Encryption;
+using GTToolsSharp.Headers;
 
 using Syroot.BinaryData.Memory;
 using Syroot.BinaryData.Core;
 using Syroot.BinaryData;
 
 using PDTools.Utils;
+using PDTools.Compression;
+
 namespace GTToolsSharp
 {
     /// <summary>
@@ -23,7 +22,9 @@ namespace GTToolsSharp
     /// </summary>
     public class GTVolumeTOC
     {
-        private readonly static byte[] SEGMENT_MAGIC = { 0x5B, 0x74, 0x51, 0x6E };
+        private readonly static byte[] SEGMENT_MAGIC_BE = { 0x5B, 0x74, 0x51, 0x6E };
+        private readonly static byte[] SEGMENT_MAGIC_LE = { 0x6E, 0x51, 0x74, 0x5B };
+
         public const int SEGMENT_SIZE = 2048;
 
         public string Location { get; set; }
@@ -39,10 +40,12 @@ namespace GTToolsSharp
         public FileInfoBTree FileInfos { get; private set; }
         public List<FileEntryBTree> Files { get; private set; }
 
-        public GTVolumeHeader ParentHeader { get; }
+        public VolumeHeaderBase ParentHeader { get; }
         public GTVolume ParentVolume { get; }
 
-        public GTVolumeTOC(GTVolumeHeader parentHeader, GTVolume parentVolume)
+        public BTreeEndian TreeEndian { get; private set; }
+
+        public GTVolumeTOC(VolumeHeaderBase parentHeader, GTVolume parentVolume)
         {
             ParentHeader = parentHeader;
             ParentVolume = parentVolume;
@@ -56,7 +59,11 @@ namespace GTToolsSharp
         {
             var sr = new SpanReader(Data, Endian.Big);
             byte[] magic = sr.ReadBytes(4);
-            if (!magic.AsSpan().SequenceEqual(SEGMENT_MAGIC.AsSpan()))
+            if (magic.AsSpan().SequenceEqual(SEGMENT_MAGIC_BE.AsSpan()))
+                sr.Endian = Endian.Big;
+            else if (magic.AsSpan().SequenceEqual(SEGMENT_MAGIC_LE.AsSpan()))
+                sr.Endian = Endian.Little;
+            else
             {
                 Program.Log($"Volume TOC magic did not match, found ({string.Join('-', magic.Select(e => e.ToString("X2")))})");
                 return false;
@@ -71,20 +78,19 @@ namespace GTToolsSharp
             for (int i = 0; i < entryTreeCount; i++)
                 RootAndFolderOffsets.Add(sr.ReadUInt32());
 
-
-            FileNames = new StringBTree(Data.AsMemory((int)NameTreeOffset));
+            FileNames = new StringBTree(Data.AsMemory((int)NameTreeOffset), this);
             if (!ParentVolume.IsGT5PDemoStyle)
                 FileNames.LoadEntries();
             else
                 FileNames.LoadEntriesOld();
 
-            Extensions = new StringBTree(Data.AsMemory((int)FileExtensionTreeOffset));
+            Extensions = new StringBTree(Data.AsMemory((int)FileExtensionTreeOffset), this);
             if (!ParentVolume.IsGT5PDemoStyle)
                 Extensions.LoadEntries();
             else
                 Extensions.LoadEntriesOld();
 
-            FileInfos = new FileInfoBTree(Data.AsMemory((int)NodeTreeOffset));
+            FileInfos = new FileInfoBTree(Data.AsMemory((int)NodeTreeOffset), this);
             if (!ParentVolume.IsGT5PDemoStyle)
                 FileInfos.LoadEntries();
             else
@@ -94,7 +100,7 @@ namespace GTToolsSharp
 
             for (int i = 0; i < entryTreeCount; i++)
             {
-                Files.Add(new FileEntryBTree(Data.AsMemory((int)RootAndFolderOffsets[i])));
+                Files.Add(new FileEntryBTree(Data.AsMemory((int)RootAndFolderOffsets[i]), this));
                 if (!ParentVolume.IsGT5PDemoStyle)
                     Files[i].LoadEntries();
                 else
@@ -113,14 +119,14 @@ namespace GTToolsSharp
         public void SaveToPatchFileSystem(string outputDir, out uint compressedTocSize, out uint uncompressedSize)
         {
             byte[] tocSerialized = Serialize();
-            byte[] compressedToc = MiscUtils.ZlibCompress(tocSerialized);
+            byte[] compressedToc = PS2ZIP.Inflate(tocSerialized);
 
             uncompressedSize = (uint)tocSerialized.Length;
             compressedTocSize = (uint)compressedToc.Length;
 
-            CryptoUtils.CryptBuffer(ParentVolume.Keyset, compressedToc, compressedToc, ParentHeader.TOCEntryIndex);
+            CryptoUtils.CryptBuffer(ParentVolume.Keyset, compressedToc, compressedToc, ParentHeader.ToCNodeIndex);
 
-            string path = Path.Combine(outputDir, PDIPFSPathResolver.GetPathFromSeed(ParentHeader.TOCEntryIndex));
+            string path = Path.Combine(outputDir, PDIPFSPathResolver.GetPathFromSeed(ParentHeader.ToCNodeIndex));
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             File.WriteAllBytes(path, compressedToc);
         }
@@ -132,8 +138,8 @@ namespace GTToolsSharp
         {
             var bs = new BitStream(BitStreamMode.Write, 1024);
 
-            bs.WriteByteData(SEGMENT_MAGIC);
-            bs.SeekToByte(16);
+            bs.WriteByteData(SEGMENT_MAGIC_BE);
+            bs.SeekToByte(0x10);
             bs.WriteUInt32((uint)Files.Count);
             bs.Position += sizeof(uint) * Files.Count;
 
@@ -192,7 +198,7 @@ namespace GTToolsSharp
         {
             // If we are packing as new, ensure the TOC is before all the files (that will come after it)
             if (packAllAsNewEntries)
-                ParentHeader.TOCEntryIndex = NextEntryIndex();
+                ParentHeader.ToCNodeIndex = NextEntryIndex();
 
             if (filesToRemove.Count > 0)
                 RemoveFilesFromTOC(filesToRemove);
@@ -287,7 +293,7 @@ namespace GTToolsSharp
             if (key.Flags.HasFlag(FileInfoFlags.Compressed))
             {
                 Program.Log($"[:] Pack: Compressing + Encrypting {file.VolumeDirPath} -> {pfsFilePath}");
-                fileData = MiscUtils.ZlibCompress(fileData);
+                fileData = PS2ZIP.Deflate(fileData);
                 newCompressedSize = (uint)fileData.Length;
             }
             else
@@ -395,7 +401,7 @@ namespace GTToolsSharp
                         var fileInfo = new FileInfoKey(newKeyIndex);
                         fileInfo.CompressedSize = infoKey.CompressedSize;
                         fileInfo.UncompressedSize = infoKey.UncompressedSize;
-                        fileInfo.SegmentIndex = NextSegmentIndex(); // Pushed to the end, so technically the segment is new, will be readjusted at the end anyway
+                        fileInfo.SectorOffset = NextSegmentIndex(); // Pushed to the end, so technically the segment is new, will be readjusted at the end anyway
                         fileInfo.Flags = infoKey.Flags;
                         FileInfos.Entries.Add(fileInfo);
                         return fileInfo;
@@ -415,16 +421,16 @@ namespace GTToolsSharp
         public bool TryCheckAndFixInvalidSegmentIndexes()
         {
             bool valid = true;
-            List<FileInfoKey> segmentSortedFiles = FileInfos.Entries.OrderBy(e => e.SegmentIndex).ToList();
+            List<FileInfoKey> segmentSortedFiles = FileInfos.Entries.OrderBy(e => e.SectorOffset).ToList();
             for (int i = 0; i < segmentSortedFiles.Count - 1; i++)
             {
                 FileInfoKey current = segmentSortedFiles[i];
                 FileInfoKey next = segmentSortedFiles[i + 1];
                 double segmentsTakenByCurrent = MathF.Ceiling(current.CompressedSize / (float)SEGMENT_SIZE);
-                if (next.SegmentIndex != current.SegmentIndex + segmentsTakenByCurrent)
+                if (next.SectorOffset != current.SectorOffset + segmentsTakenByCurrent)
                 {
                     valid = false;
-                    next.SegmentIndex = (uint)(current.SegmentIndex + segmentsTakenByCurrent);
+                    next.SectorOffset = (uint)(current.SectorOffset + segmentsTakenByCurrent);
                 }
             }
             return valid;
@@ -444,7 +450,7 @@ namespace GTToolsSharp
             fileInfo.UncompressedSize = newUncompressedSize;
             if (oldTotalSegments != newTotalSegments)
             {
-                List<FileInfoKey> orderedKeySegments = FileInfos.Entries.OrderBy(e => e.SegmentIndex).ToList();
+                List<FileInfoKey> orderedKeySegments = FileInfos.Entries.OrderBy(e => e.SectorOffset).ToList();
                 for (int i = orderedKeySegments.IndexOf(fileInfo); i < orderedKeySegments.Count - 1; i++)
                 {
                     FileInfoKey currentFileInfo = orderedKeySegments[i];
@@ -452,8 +458,8 @@ namespace GTToolsSharp
                     float segmentCount = MathF.Ceiling(currentFileInfo.CompressedSize / (float)SEGMENT_SIZE);
 
                     // New file pushes older files beyond segment size? Update them by the amount of segments that increases
-                    if (nextFileInfo.SegmentIndex != currentFileInfo.SegmentIndex + segmentCount)
-                        nextFileInfo.SegmentIndex = (uint)(currentFileInfo.SegmentIndex + segmentCount);
+                    if (nextFileInfo.SectorOffset != currentFileInfo.SectorOffset + segmentCount)
+                        nextFileInfo.SectorOffset = (uint)(currentFileInfo.SectorOffset + segmentCount);
                 }
             }
         }
@@ -468,7 +474,7 @@ namespace GTToolsSharp
             string ext = Path.GetExtension(path);
 
             FileInfoKey newKey = new FileInfoKey(this.NextEntryIndex());
-            newKey.SegmentIndex = this.NextSegmentIndex();
+            newKey.SectorOffset = this.NextSegmentIndex();
 
             newKey.CompressedSize = 1; // Important for segments to count as at least one
             newKey.UncompressedSize = 1; // Same
@@ -585,13 +591,13 @@ namespace GTToolsSharp
 
             if (removed > 0)
             {
-                List<FileInfoKey> orderedKeySegments = FileInfos.Entries.OrderBy(e => e.SegmentIndex).ToList();
+                List<FileInfoKey> orderedKeySegments = FileInfos.Entries.OrderBy(e => e.SectorOffset).ToList();
                 int fileSegmentIndex = orderedKeySegments.IndexOf(file);
 
                 // Sort it all
                 FileInfoKey cur = orderedKeySegments[fileSegmentIndex];
                 FileInfoKey next = orderedKeySegments[fileSegmentIndex + 1];
-                cur.SegmentIndex = next.SegmentIndex;
+                cur.SectorOffset = next.SectorOffset;
                 for (int i = orderedKeySegments.IndexOf(file); i < orderedKeySegments.Count - 1; i++)
                 {
                     cur = orderedKeySegments[i];
@@ -599,8 +605,8 @@ namespace GTToolsSharp
                     float segmentCountFromFile = MathF.Ceiling(cur.CompressedSize / (float)SEGMENT_SIZE);
 
                     // Re-update segments
-                    if (next.SegmentIndex != cur.SegmentIndex + segmentCountFromFile)
-                        next.SegmentIndex = (uint)(cur.SegmentIndex + segmentCountFromFile);
+                    if (next.SectorOffset != cur.SectorOffset + segmentCountFromFile)
+                        next.SectorOffset = (uint)(cur.SectorOffset + segmentCountFromFile);
                 }
 
                 FileInfos.Entries.Remove(file);
@@ -722,7 +728,7 @@ namespace GTToolsSharp
             uint lastIndex = FileInfos.Entries.Max(e => e.FileIndex);
 
             // TOC also counts as an entry, even if its not registered.
-            return Math.Max(ParentHeader.TOCEntryIndex + 1, lastIndex + 1);
+            return Math.Max(ParentHeader.ToCNodeIndex + 1, lastIndex + 1);
         }
 
         /// <summary>
@@ -731,20 +737,20 @@ namespace GTToolsSharp
         /// <returns></returns>
         public uint NextSegmentIndex()
         {
-            FileInfoKey lastSegmentKey = FileInfos.Entries.OrderByDescending(e => e.SegmentIndex).FirstOrDefault();
+            FileInfoKey lastSegmentKey = FileInfos.Entries.OrderByDescending(e => e.SectorOffset).FirstOrDefault();
 
             int minSize = 1;
             if (lastSegmentKey.CompressedSize > minSize)
                 minSize = (int)lastSegmentKey.CompressedSize;
-            return (uint)(lastSegmentKey.SegmentIndex + MathF.Ceiling(minSize / (float)SEGMENT_SIZE)); // Last + Size
+            return (uint)(lastSegmentKey.SectorOffset + MathF.Ceiling(minSize / (float)SEGMENT_SIZE)); // Last + Size
         }
 
         public ulong GetTotalPatchFileSystemSize(uint compressedTocSize)
         {
             compressedTocSize -= 8; // Remove the header
 
-            uint lastSegmentIndex = FileInfos.Entries.Max(e => e.SegmentIndex);
-            FileInfoKey lastFileInfoBySegment = FileInfos.Entries.FirstOrDefault(e => e.SegmentIndex == lastSegmentIndex);
+            uint lastSegmentIndex = FileInfos.Entries.Max(e => e.SectorOffset);
+            FileInfoKey lastFileInfoBySegment = FileInfos.Entries.FirstOrDefault(e => e.SectorOffset == lastSegmentIndex);
             ulong pdiFileSize = (ulong)(lastSegmentIndex + MathF.Ceiling(lastFileInfoBySegment.CompressedSize / (float)SEGMENT_SIZE));
             double tocSegSize = Math.Ceiling(compressedTocSize / (float)SEGMENT_SIZE);
             return (ulong)((tocSegSize + pdiFileSize + 1) * (float)SEGMENT_SIZE);

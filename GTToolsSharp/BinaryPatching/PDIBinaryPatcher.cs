@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 using System.IO;
 
-namespace GTToolsSharp
+namespace GTToolsSharp.BinaryPatching
 {
     public class PDIBinaryPatcher
     {

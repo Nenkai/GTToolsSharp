@@ -16,12 +16,13 @@ using PDTools.Utils;
 
 namespace GTToolsSharp.BTree
 {
-    [DebuggerDisplay("Count = {Entries.Count}, Offset: {_offsetStart}")]
+    [DebuggerDisplay("Count = {Entries.Count}")]
     public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
     {
         public const int BTREE_SEGMENT_SIZE = 0x1000;
 
         protected Memory<byte> _buffer;
+        private GTVolumeTOC _parentToC;
 
         public List<TKey> Entries = new List<TKey>();
 
@@ -30,9 +31,10 @@ namespace GTToolsSharp.BTree
 
         }
 
-        public BTree(Memory<byte> buffer)
+        public BTree(Memory<byte> buffer, GTVolumeTOC parentToC)
         {
             _buffer = buffer;
+            _parentToC = parentToC;
         }
 
         public TKey GetByIndex(uint index)
@@ -74,7 +76,7 @@ namespace GTToolsSharp.BTree
 
                     // Parse key info
                     TKey key = new TKey();
-                    key.Deserialize(ref treeStream);
+                    key.Deserialize(ref treeStream, _parentToC);
                     Entries.Add(key);
                 }
 
@@ -115,7 +117,7 @@ namespace GTToolsSharp.BTree
 
                     // Parse key info
                     TKey key = new TKey();
-                    key.Deserialize(ref treeStream);
+                    key.Deserialize(ref treeStream, _parentToC);
                     Entries.Add(key);
                 }
             }
@@ -144,7 +146,7 @@ namespace GTToolsSharp.BTree
                     treeStream.SeekToByte(segPos + keyOffset);
 
                     key = new TKey();
-                    key.Deserialize(ref treeStream);
+                    key.Deserialize(ref treeStream, _parentToC);
                     return key != null;
                 }
 
@@ -237,5 +239,11 @@ namespace GTToolsSharp.BTree
             LessThan,
             EqualTo,
         }
+    }
+
+    public enum BTreeEndian
+    {
+        Little,
+        Big
     }
 }

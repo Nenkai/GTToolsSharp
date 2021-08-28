@@ -16,8 +16,8 @@ namespace GTToolsSharp.BTree
 {
     public class StringBTree : BTree<StringKey>
     {
-        public StringBTree(Memory<byte> buffer)
-            : base(buffer)
+        public StringBTree(Memory<byte> buffer, GTVolumeTOC parentToC)
+            : base(buffer, parentToC)
         {
 
         }

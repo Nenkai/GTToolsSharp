@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 using GTToolsSharp.BTree;
 
-namespace GTToolsSharp
+namespace GTToolsSharp.BinaryPatching
 {
     public class NodeInfo
     {

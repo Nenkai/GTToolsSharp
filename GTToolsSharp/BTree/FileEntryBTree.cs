@@ -20,8 +20,8 @@ namespace GTToolsSharp.BTree
     public class FileEntryBTree : BTree<FileEntryKey>
     {
         public FileEntryBTree() { }
-        public FileEntryBTree(Memory<byte> buffer)
-            : base(buffer)
+        public FileEntryBTree(Memory<byte> buffer, GTVolumeTOC parentToC)
+            : base(buffer, parentToC)
         {
 
         }

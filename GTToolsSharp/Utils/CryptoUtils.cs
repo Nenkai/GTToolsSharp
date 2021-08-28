@@ -8,12 +8,15 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Numerics;
 using System.Buffers;
+using System.Buffers.Binary;
 
 using Syroot.BinaryData.Memory;
 using Syroot.BinaryData.Core;
 using Syroot.BinaryData;
 
 using GTToolsSharp.Encryption;
+
+using PDTools.Compression;
 
 namespace GTToolsSharp.Utils
 {
@@ -68,29 +71,59 @@ namespace GTToolsSharp.Utils
             using (var newFileStream = new FileStream(outPath, FileMode.Create))
             {
                 var decryptStream = new CryptoStream(fs, new VolumeCryptoTransform(keyset, seed), CryptoStreamMode.Read);
-                decryptStream.Read(_tmpBuff, 0, 8); // Compress Ignore header
-
-                var ds = new DeflateStream(decryptStream, CompressionMode.Decompress);
-
-                int bytesLeft = (int)uncompressedSize;
-                int read;
-                const int bufSize = 0x20000;
-                byte[] buffer = ArrayPool<byte>.Shared.Rent(bufSize);
-
-                int currentPos = 0;
-                while (bytesLeft > 0 && (read = ds.Read(buffer, 0, Math.Min(buffer.Length, bytesLeft))) > 0)
-                {
-                    newFileStream.Write(buffer, 0, read);
-
-                    bytesLeft -= read;
-                }
-
-                ArrayPool<byte>.Shared.Return(buffer);
+                uint magic = decryptStream.ReadUInt32();
+                if (magic == PS2ZIP.PS2ZIP_MAGIC)
+                    PS2ZIP.TryInflate(decryptStream, newFileStream, skipMagic: true);
+                else if (magic == PDIZIP.PDIZIP_MAGIC)
+                    PDIZIP.Inflate(decryptStream, newFileStream, skipMagic: true); 
             }
 
             if (closeStream)
                 fs.Dispose();
         }
+
+        /// <summary>
+        /// Checks if compression is valid for the stream.
+        /// </summary>
+        /// <param name="fs"></param>
+        /// <param name="keyset"></param>
+        /// <param name="seed"></param>
+        /// <param name="outSize"></param>
+        /// <returns></returns>
+        public unsafe static bool DecryptCheckCompression(FileStream fs, Keyset keyset, uint seed, ulong outSize)
+        {
+            if (outSize > uint.MaxValue)
+                return false;
+
+            Span<byte> _tmpBuff = new byte[8];
+            fs.Read(_tmpBuff);
+            CryptoUtils.CryptBuffer(keyset, _tmpBuff, _tmpBuff, seed);
+
+            // Inflated is always little
+            uint zlibMagic = BinaryPrimitives.ReadUInt32LittleEndian(_tmpBuff);
+            uint sizeComplement = BinaryPrimitives.ReadUInt32LittleEndian(_tmpBuff[4..]);
+
+            if ((long)zlibMagic == PS2ZIP.PS2ZIP_MAGIC)
+            {
+                if ((uint)outSize + sizeComplement != 0)
+                    return false;
+
+                const int headerSize = 8;
+                if (fs.Length <= headerSize)
+                    return false;
+            }
+            else if (zlibMagic == PDIZIP.PDIZIP_MAGIC)
+            {
+                if ((uint)outSize != sizeComplement)
+                    return false;
+
+                if (fs.Length <= 0x20)
+                    return false;
+            }
+              
+            return true;
+        }
+
 
         /// <summary>
         /// Crypt a buffer.

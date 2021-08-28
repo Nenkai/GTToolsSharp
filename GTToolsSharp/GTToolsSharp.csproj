@@ -17,14 +17,15 @@
 
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.8.0" />
-    <PackageReference Include="SharpCompress" Version="0.26.0" />
-    <PackageReference Include="SharpZipLib" Version="1.2.0" />
-    <PackageReference Include="Syroot.BinaryData" Version="5.2.1" />
+    <PackageReference Include="SharpCompress" Version="0.28.3" />
+    <PackageReference Include="SharpZipLib" Version="1.3.2" />
+    <PackageReference Include="Syroot.BinaryData" Version="5.2.2" />
     <PackageReference Include="Syroot.BinaryData.Memory" Version="5.2.2" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\PDTools.Utils\PDTools.Utils.csproj" />
+    <ProjectReference Include="..\PDTools\PDTools.Compression\PDTools.Compression.csproj" />
+    <ProjectReference Include="..\PDTools\PDTools.Utils\PDTools.Utils.csproj" />
   </ItemGroup>
 
 </Project>
