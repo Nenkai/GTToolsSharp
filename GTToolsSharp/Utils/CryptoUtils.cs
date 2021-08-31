@@ -126,7 +126,6 @@ namespace GTToolsSharp.Utils
             // Our new file
             using (var newFileStream = new FileStream(outPath, FileMode.Create))
             {
-
                 int bytesLeft = (int)inputStream.Length;
                 const int bufSize = 0x20000;
                 byte[] buffer = ArrayPool<byte>.Shared.Rent(bufSize);
@@ -137,6 +136,8 @@ namespace GTToolsSharp.Utils
                     int read = inputStream.Read(buffer);
 
                     VolumeCrypto.DecryptBuffer(buffer, buffer, read, bitsTable, inputOffset);
+                    newFileStream.Write(buffer, 0, read);
+
                     bytesLeft -= read;
 
                     inputOffset += (uint)read;

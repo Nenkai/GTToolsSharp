@@ -69,6 +69,8 @@ namespace GTToolsSharp.Headers
             {
                 // TODO
             }
+
+            return header;
         }
 
         private string GetActualVolFileName(byte[] nameBytes)
