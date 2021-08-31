@@ -45,7 +45,17 @@ namespace GTToolsSharp.Headers
 
         public override byte[] Serialize()
         {
-            throw new NotImplementedException();
+            byte[] header = new byte[HeaderSize];
+            SpanWriter sw = new SpanWriter(header, Endian.Big);
+
+            sw.WriteBytes(HeaderMagic);
+            sw.WriteUInt32(ToCNodeIndex);
+            sw.WriteUInt32(CompressedTOCSize);
+            sw.WriteUInt32(ExpandedTOCSize);
+            sw.WriteUInt64(SerialNumber);
+            sw.WriteUInt64(TotalVolumeSize);
+            sw.WriteStringFix(TitleID, 0x80);
+            return header;
         }
     }
 }

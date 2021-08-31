@@ -17,6 +17,9 @@ using Syroot.BinaryData;
 using GTToolsSharp.Encryption;
 
 using PDTools.Compression;
+using ICSharpCode.SharpZipLib.Zip.Compression;
+using ICSharpCode.SharpZipLib.Zip.Compression.Streams;
+
 
 namespace GTToolsSharp.Utils
 {
@@ -33,53 +36,118 @@ namespace GTToolsSharp.Utils
             return ~crc;
         }
 
-        // Just used to seek and skip the compress header
-        private static byte[] _tmpBuff = new byte[8];
-
-        /// <summary>
-        /// Decrypts and decompress a file in a stream and saves it to the provided path.
-        /// </summary>
-        /// <param name="keyset"></param>
-        /// <param name="fs"></param>
-        /// <param name="seed"></param>
-        /// <param name="outPath"></param>
-        public static void DecryptAndInflateToFile(Keyset keyset, FileStream fs, uint seed, string outPath, bool closeStream = true)
-        {
-            // Our new file
-            using (var newFileStream = new FileStream(outPath, FileMode.Create))
-            {
-                var decryptStream = new CryptoStream(fs, new VolumeCryptoTransform(keyset, seed), CryptoStreamMode.Read);
-                decryptStream.Read(_tmpBuff, 0, 8); // Compress Ignore header
-                var ds = new DeflateStream(decryptStream, CompressionMode.Decompress);
-                ds.CopyTo(newFileStream);
-            }
-
-            if (closeStream)
-                fs.Dispose();
-        }
-
         /// <summary>
         /// Decrypts and decompress a file in a segmented stream and saves it to the provided path.
         /// </summary>
         /// <param name="keyset"></param>
-        /// <param name="fs"></param>
-        /// <param name="seed"></param>
+        /// <param name="inputStream"></param>
+        /// <param name="nodeSeed"></param>
         /// <param name="outPath"></param>
-        public static void DecryptAndInflateToFile(Keyset keyset, FileStream fs, uint seed, uint uncompressedSize, string outPath, bool closeStream = true)
+        public static bool DecryptAndInflateToFile(Keyset keyset, FileStream inputStream, uint nodeSeed, uint uncompressedSize, string outPath, bool closeStream = true)
         {
+            bool result = false;
             // Our new file
             using (var newFileStream = new FileStream(outPath, FileMode.Create))
             {
-                var decryptStream = new CryptoStream(fs, new VolumeCryptoTransform(keyset, seed), CryptoStreamMode.Read);
+                var decryptStream = new CryptoStream(inputStream, new VolumeCryptoTransform(keyset, nodeSeed), CryptoStreamMode.Read);
                 uint magic = decryptStream.ReadUInt32();
                 if (magic == PS2ZIP.PS2ZIP_MAGIC)
-                    PS2ZIP.TryInflate(decryptStream, newFileStream, skipMagic: true);
+                    result = PS2ZIP.TryInflate(decryptStream, newFileStream, skipMagic: true);
                 else if (magic == PDIZIP.PDIZIP_MAGIC)
-                    PDIZIP.Inflate(decryptStream, newFileStream, skipMagic: true); 
+                    result = PDIZIP.Inflate(decryptStream, newFileStream, skipMagic: true);
             }
 
             if (closeStream)
-                fs.Dispose();
+                inputStream.Dispose();
+
+            return result;
+        }
+
+        /// <summary>
+        /// Encrypts and compress a file stream to a provided output path.
+        /// </summary>
+        /// <param name="keyset"></param>
+        /// <param name="inputStream"></param>
+        /// <param name="nodeSeed"></param>
+        /// <param name="outPath"></param>
+        public static long EncryptAndDeflateToFile(Keyset keyset, FileStream inputStream, uint nodeSeed, string outPath, bool closeStream = true)
+        {
+            // Prepare encryption
+            uint crc = ~CRC32.CRC32_0x04C11DB7(keyset.Magic, 0);
+            uint[] keys = VolumeCrypto.PrepareKey(crc ^ nodeSeed, keyset.Key.Data);
+            byte[] bitsTable = VolumeCrypto.GenerateBitsTable(keys);
+
+            // Prepare compression and buffers
+            var deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(0x20000);
+            byte[] deflateBuffer = ArrayPool<byte>.Shared.Rent(0x20000);
+
+            using var outputStream = File.Open(outPath, FileMode.Create);
+            Span<byte> header = stackalloc byte[8];
+            BinaryPrimitives.WriteUInt32LittleEndian(header, PS2ZIP.PS2ZIP_MAGIC);
+            BinaryPrimitives.WriteInt32LittleEndian(header[4..], -(int)inputStream.Length);
+            VolumeCrypto.DecryptBuffer(header, header, header.Length, bitsTable, 0);
+            outputStream.Write(header);
+
+            long bytesLeft = inputStream.Length;
+            while (bytesLeft > 0)
+            {
+                int read = inputStream.Read(buffer);
+                deflater.SetInput(buffer);
+                deflater.Flush(); // Important
+
+                int nBytesDeflated = deflater.Deflate(deflateBuffer);
+                VolumeCrypto.DecryptBuffer(deflateBuffer, deflateBuffer, nBytesDeflated, bitsTable, (ulong)outputStream.Position);
+                outputStream.Write(deflateBuffer, 0, nBytesDeflated);
+
+                bytesLeft -= read;
+            }
+
+            if (closeStream)
+                inputStream.Dispose();
+
+            return outputStream.Length;
+        }
+
+
+        /// <summary>
+        /// Encrypts a file stream to a provided output path.
+        /// </summary>
+        /// <param name="keyset"></param>
+        /// <param name="inputStream"></param>
+        /// <param name="nodeSeed"></param>
+        /// <param name="outPath"></param>
+        public static void EncryptToFile(Keyset keyset, FileStream inputStream, uint nodeSeed, string outPath, bool closeStream = true)
+        {
+            uint crc = ~CRC32.CRC32_0x04C11DB7(keyset.Magic, 0);
+            uint[] keys = VolumeCrypto.PrepareKey(crc ^ nodeSeed, keyset.Key.Data);
+            byte[] bitsTable = VolumeCrypto.GenerateBitsTable(keys);
+
+            // Our new file
+            using (var newFileStream = new FileStream(outPath, FileMode.Create))
+            {
+
+                int bytesLeft = (int)inputStream.Length;
+                const int bufSize = 0x20000;
+                byte[] buffer = ArrayPool<byte>.Shared.Rent(bufSize);
+
+                ulong inputOffset = 0;
+                while (bytesLeft > 0)
+                {
+                    int read = inputStream.Read(buffer);
+
+                    VolumeCrypto.DecryptBuffer(buffer, buffer, read, bitsTable, inputOffset);
+                    bytesLeft -= read;
+
+                    inputOffset += (uint)read;
+                }
+
+                ArrayPool<byte>.Shared.Return(buffer);
+
+                if (closeStream)
+                    inputStream.Dispose();
+                newFileStream.Flush();
+            }
         }
 
         /// <summary>

@@ -14,21 +14,23 @@ namespace GTToolsSharp.Encryption
     class VolumeCryptoTransform : ICryptoTransform
     {
         private byte[] bitsTable;
-        private ulong pos = 0;
+        private ulong _offset = 0;
 
-        public VolumeCryptoTransform(Keyset keyset, uint seed)
+        public VolumeCryptoTransform(Keyset keyset, uint seed, ulong offset = 0)
         {
             uint crc = ~CRC32.CRC32_0x04C11DB7(keyset.Magic, 0);
             uint[] keys = VolumeCrypto.PrepareKey(crc ^ seed, keyset.Key.Data);
             bitsTable = VolumeCrypto.GenerateBitsTable(keys);
+
+            _offset = offset;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public unsafe int TransformBlock(byte[] inputBuffer, int inputOffset, int inputCount, byte[] outputBuffer, int outputOffset)
         {
-            VolumeCrypto.DecryptBuffer(inputBuffer, outputBuffer, inputCount, bitsTable, pos);
+            VolumeCrypto.DecryptBuffer(inputBuffer, outputBuffer, inputCount, bitsTable, _offset);
 
-            pos += (ulong)inputCount;
+            _offset += (ulong)inputCount;
             return inputCount;
         }
 
@@ -38,6 +40,9 @@ namespace GTToolsSharp.Encryption
             TransformBlock(inputBuffer, inputOffset, inputCount, transformed, 0);
             return transformed;
         }
+
+        public void SetOffset(ulong offset)
+            => _offset = offset;
 
         public bool CanReuseTransform
         {

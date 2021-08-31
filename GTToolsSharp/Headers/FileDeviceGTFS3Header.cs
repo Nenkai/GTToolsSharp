@@ -53,7 +53,22 @@ namespace GTToolsSharp.Headers
 
         public override byte[] Serialize()
         {
-            throw new NotImplementedException();
+            byte[] header = new byte[HeaderSize];
+            SpanWriter sw = new SpanWriter(header, Endian.Big);
+            sw.WriteBytes(HeaderMagic);
+            sw.WriteUInt64(JulianBuiltTime);
+            sw.WriteUInt64(SerialNumber);
+            sw.Position += sizeof(uint) * 16;
+
+            sw.Position = 0xF0;
+            sw.WriteUInt32(ToCNodeIndex);
+            sw.WriteUInt32(CompressedTOCSize);
+            sw.WriteUInt32(ExpandedTOCSize);
+            sw.WriteInt32(VolList.Length);
+            for (int i = 0; i < VolList.Length; i++)
+            {
+                // TODO
+            }
         }
 
         private string GetActualVolFileName(byte[] nameBytes)

@@ -62,7 +62,7 @@ namespace GTToolsSharp
 
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                 _fs.Position -= 8;
-                CryptoUtils.DecryptAndInflateToFile(keyset, _fs, nodeKey.FileIndex, nodeKey.UncompressedSize, filePath, false);
+                return CryptoUtils.DecryptAndInflateToFile(keyset, _fs, nodeKey.FileIndex, nodeKey.UncompressedSize, filePath, false);
             }
             else
             {

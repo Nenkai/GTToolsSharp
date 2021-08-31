@@ -270,24 +270,24 @@ namespace GTToolsSharp
             }
             else
             {
-                MainStream.Seek(GTVolumeTOC.SEGMENT_SIZE, SeekOrigin.Begin);
+                MainStream.Seek(GTVolumeTOC.SECTOR_SIZE, SeekOrigin.Begin);
 
                 var br = new BinaryReader(MainStream);
                 byte[] data = br.ReadBytes((int)VolumeHeader.CompressedTOCSize);
 
-                Program.Log($"[-] TOC Entry is {VolumeHeader.ToCNodeIndex} which is at offset {GTVolumeTOC.SEGMENT_SIZE}", true);
+                Program.Log($"[-] TOC Entry is {VolumeHeader.ToCNodeIndex} which is at offset {GTVolumeTOC.SECTOR_SIZE}", true);
 
                 // Decrypt it with the seed that the main header gave us
                 CryptoUtils.CryptBuffer(Keyset, data, data, VolumeHeader.ToCNodeIndex);
 
-                Program.Log($"[-] Decompressing TOC within volume.. (offset: {GTVolumeTOC.SEGMENT_SIZE})", true);
+                Program.Log($"[-] Decompressing TOC within volume.. (offset: {GTVolumeTOC.SECTOR_SIZE})", true);
                 if (!PS2ZIP.TryInflateInMemory(data, VolumeHeader.ExpandedTOCSize, out byte[] deflatedData))
                     return false;
 
                 TableOfContents = new GTVolumeTOC(VolumeHeader, this);
                 TableOfContents.Data = deflatedData;
 
-                DataOffset = MiscUtils.AlignValue(GTVolumeTOC.SEGMENT_SIZE + VolumeHeader.CompressedTOCSize, GTVolumeTOC.SEGMENT_SIZE);
+                DataOffset = MiscUtils.AlignValue(GTVolumeTOC.SECTOR_SIZE + VolumeHeader.CompressedTOCSize, GTVolumeTOC.SECTOR_SIZE);
             }
 
             return true;
@@ -354,7 +354,7 @@ namespace GTToolsSharp
             Directory.Move($"{outrepackDir}_temp", outrepackDir);
 
             Program.Log($"[-] Verifying and fixing Table of Contents segment sizes if needed");
-            if (!TableOfContents.TryCheckAndFixInvalidSegmentIndexes())
+            if (!TableOfContents.TryCheckAndFixInvalidSectorIndexes())
                 Program.Log($"[-] Re-ordered segment indexes.");
             else
                 Program.Log($"[/] Segment sizes are correct.");
@@ -464,7 +464,7 @@ namespace GTToolsSharp
             }
             else
             {
-                ulong offset = DataOffset + (ulong)nodeKey.SectorOffset * GTVolumeTOC.SEGMENT_SIZE;
+                ulong offset = DataOffset + (ulong)nodeKey.SectorOffset * GTVolumeTOC.SECTOR_SIZE;
                 if (!IsPatchVolume)
                 {
                     if (NoUnpack)
@@ -575,7 +575,8 @@ namespace GTToolsSharp
 
                     Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                     fs.Position = 0;
-                    CryptoUtils.DecryptAndInflateToFile(Keyset, fs, nodeKey.FileIndex, filePath);
+
+                    return CryptoUtils.DecryptAndInflateToFile(Keyset, fs, nodeKey.FileIndex, nodeKey.UncompressedSize, filePath);
                 }
                 else
                 {

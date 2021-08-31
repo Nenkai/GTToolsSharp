@@ -22,10 +22,10 @@ namespace GTToolsSharp
     /// </summary>
     public class GTVolumeTOC
     {
-        private readonly static byte[] SEGMENT_MAGIC_BE = { 0x5B, 0x74, 0x51, 0x6E };
-        private readonly static byte[] SEGMENT_MAGIC_LE = { 0x6E, 0x51, 0x74, 0x5B };
+        private readonly static byte[] TOC_MAGIC_BE = { 0x5B, 0x74, 0x51, 0x6E };
+        private readonly static byte[] TOC_MAGIC_LE = { 0x6E, 0x51, 0x74, 0x5B };
 
-        public const int SEGMENT_SIZE = 2048;
+        public const int SECTOR_SIZE = 2048;
 
         public string Location { get; set; }
         public byte[] Data { get; set; }
@@ -59,9 +59,9 @@ namespace GTToolsSharp
         {
             var sr = new SpanReader(Data, Endian.Big);
             byte[] magic = sr.ReadBytes(4);
-            if (magic.AsSpan().SequenceEqual(SEGMENT_MAGIC_BE.AsSpan()))
+            if (magic.AsSpan().SequenceEqual(TOC_MAGIC_BE.AsSpan()))
                 sr.Endian = Endian.Big;
-            else if (magic.AsSpan().SequenceEqual(SEGMENT_MAGIC_LE.AsSpan()))
+            else if (magic.AsSpan().SequenceEqual(TOC_MAGIC_LE.AsSpan()))
                 sr.Endian = Endian.Little;
             else
             {
@@ -119,7 +119,7 @@ namespace GTToolsSharp
         public void SaveToPatchFileSystem(string outputDir, out uint compressedTocSize, out uint uncompressedSize)
         {
             byte[] tocSerialized = Serialize();
-            byte[] compressedToc = PS2ZIP.Inflate(tocSerialized);
+            byte[] compressedToc = PS2ZIP.Deflate(tocSerialized);
 
             uncompressedSize = (uint)tocSerialized.Length;
             compressedTocSize = (uint)compressedToc.Length;
@@ -138,7 +138,7 @@ namespace GTToolsSharp
         {
             var bs = new BitStream(BitStreamMode.Write, 1024);
 
-            bs.WriteByteData(SEGMENT_MAGIC_BE);
+            bs.WriteByteData(TOC_MAGIC_BE);
             bs.SeekToByte(0x10);
             bs.WriteUInt32((uint)Files.Count);
             bs.Position += sizeof(uint) * Files.Count;
@@ -261,7 +261,7 @@ namespace GTToolsSharp
                     string movePath = Path.Combine($"{outputDir}_temp", pfsFilePath);
                     Directory.CreateDirectory(Path.GetDirectoryName(movePath));
                     File.Move(oldFilePath, Path.Combine($"{outputDir}_temp", pfsFilePath));
-                    UpdateKeyAndRetroactiveAdjustSegments(key, (uint)validCacheEntry.CompressedFileSize, (uint)validCacheEntry.FileSize);
+                    UpdateKeyAndRetroactiveAdjustSectors(key, (uint)validCacheEntry.CompressedFileSize, (uint)validCacheEntry.FileSize);
                     return;
                 }
                 else
@@ -270,12 +270,12 @@ namespace GTToolsSharp
                 }
             }
 
-            byte[] fileData;
+            FileStream fs;
             while (true)
             {
                 try
                 {
-                    fileData = File.ReadAllBytes(file.FullPath);
+                    fs = File.Open(file.FullPath, FileMode.Open);
                     break;
                 }
                 catch (Exception e)
@@ -290,23 +290,21 @@ namespace GTToolsSharp
             if (ParentVolume.NoCompress)
                 key.Flags &= ~FileInfoFlags.Compressed;
 
+            string outputFile = Path.Combine($"{outputDir}_temp", pfsFilePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(outputFile));
             if (key.Flags.HasFlag(FileInfoFlags.Compressed))
             {
                 Program.Log($"[:] Pack: Compressing + Encrypting {file.VolumeDirPath} -> {pfsFilePath}");
-                fileData = PS2ZIP.Deflate(fileData);
-                newCompressedSize = (uint)fileData.Length;
+                newCompressedSize = (uint)CryptoUtils.EncryptAndDeflateToFile(ParentVolume.Keyset, fs, key.FileIndex, outputFile, closeStream: true);
             }
             else
+            {
                 Program.Log($"[:] Pack: Encrypting {file.VolumeDirPath} -> {pfsFilePath}");
+                CryptoUtils.EncryptToFile(ParentVolume.Keyset, fs, key.FileIndex, outputFile, closeStream: true);
+            }
 
             // Will also update the ones we pre-registered
-            UpdateKeyAndRetroactiveAdjustSegments(key, newCompressedSize, newUncompressedSize);
-            CryptoUtils.CryptBuffer(ParentVolume.Keyset, fileData, fileData, key.FileIndex);
-
-            string outputFile = Path.Combine($"{outputDir}_temp", pfsFilePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(outputFile));
-
-            File.WriteAllBytes(outputFile, fileData);
+            UpdateKeyAndRetroactiveAdjustSectors(key, newCompressedSize, newUncompressedSize);
 
             if (ParentVolume.UsePackingCache)
             {
@@ -401,7 +399,7 @@ namespace GTToolsSharp
                         var fileInfo = new FileInfoKey(newKeyIndex);
                         fileInfo.CompressedSize = infoKey.CompressedSize;
                         fileInfo.UncompressedSize = infoKey.UncompressedSize;
-                        fileInfo.SectorOffset = NextSegmentIndex(); // Pushed to the end, so technically the segment is new, will be readjusted at the end anyway
+                        fileInfo.SectorOffset = NextSectorIndex(); // Pushed to the end, so technically the sector is new, will be readjusted at the end anyway
                         fileInfo.Flags = infoKey.Flags;
                         FileInfos.Entries.Add(fileInfo);
                         return fileInfo;
@@ -418,48 +416,48 @@ namespace GTToolsSharp
             return infoKey;
         }
 
-        public bool TryCheckAndFixInvalidSegmentIndexes()
+        public bool TryCheckAndFixInvalidSectorIndexes()
         {
             bool valid = true;
-            List<FileInfoKey> segmentSortedFiles = FileInfos.Entries.OrderBy(e => e.SectorOffset).ToList();
-            for (int i = 0; i < segmentSortedFiles.Count - 1; i++)
+            List<FileInfoKey> sectorSortedFiles = FileInfos.Entries.OrderBy(e => e.SectorOffset).ToList();
+            for (int i = 0; i < sectorSortedFiles.Count - 1; i++)
             {
-                FileInfoKey current = segmentSortedFiles[i];
-                FileInfoKey next = segmentSortedFiles[i + 1];
-                double segmentsTakenByCurrent = MathF.Ceiling(current.CompressedSize / (float)SEGMENT_SIZE);
-                if (next.SectorOffset != current.SectorOffset + segmentsTakenByCurrent)
+                FileInfoKey current = sectorSortedFiles[i];
+                FileInfoKey next = sectorSortedFiles[i + 1];
+                double sectorsTakenByCurrent = MathF.Ceiling(current.CompressedSize / (float)SECTOR_SIZE);
+                if (next.SectorOffset != current.SectorOffset + sectorsTakenByCurrent)
                 {
                     valid = false;
-                    next.SectorOffset = (uint)(current.SectorOffset + segmentsTakenByCurrent);
+                    next.SectorOffset = (uint)(current.SectorOffset + sectorsTakenByCurrent);
                 }
             }
             return valid;
         }
 
         /// <summary>
-        /// Updates a file entry, and adjusts all the key segments if needed.
+        /// Updates a file entry, and adjusts all the key sectors if needed.
         /// </summary>
         /// <param name="fileInfo"></param>
         /// <param name="newCompressedSize"></param>
         /// <param name="newUncompressedSize"></param>
-        private void UpdateKeyAndRetroactiveAdjustSegments(FileInfoKey fileInfo, uint newCompressedSize, uint newUncompressedSize)
+        private void UpdateKeyAndRetroactiveAdjustSectors(FileInfoKey fileInfo, uint newCompressedSize, uint newUncompressedSize)
         {
-            float oldTotalSegments = MathF.Ceiling(fileInfo.CompressedSize / (float)SEGMENT_SIZE);
-            float newTotalSegments = MathF.Ceiling(newCompressedSize / (float)SEGMENT_SIZE);
+            float oldTotalSectors = MathF.Ceiling(fileInfo.CompressedSize / (float)SECTOR_SIZE);
+            float newTotalSectors = MathF.Ceiling(newCompressedSize / (float)SECTOR_SIZE);
             fileInfo.CompressedSize = newCompressedSize;
             fileInfo.UncompressedSize = newUncompressedSize;
-            if (oldTotalSegments != newTotalSegments)
+            if (oldTotalSectors != newTotalSectors)
             {
-                List<FileInfoKey> orderedKeySegments = FileInfos.Entries.OrderBy(e => e.SectorOffset).ToList();
-                for (int i = orderedKeySegments.IndexOf(fileInfo); i < orderedKeySegments.Count - 1; i++)
+                List<FileInfoKey> orderedKeySectors = FileInfos.Entries.OrderBy(e => e.SectorOffset).ToList();
+                for (int i = orderedKeySectors.IndexOf(fileInfo); i < orderedKeySectors.Count - 1; i++)
                 {
-                    FileInfoKey currentFileInfo = orderedKeySegments[i];
-                    FileInfoKey nextFileInfo = orderedKeySegments[i + 1];
-                    float segmentCount = MathF.Ceiling(currentFileInfo.CompressedSize / (float)SEGMENT_SIZE);
+                    FileInfoKey currentFileInfo = orderedKeySectors[i];
+                    FileInfoKey nextFileInfo = orderedKeySectors[i + 1];
+                    float sectorCount = MathF.Ceiling(currentFileInfo.CompressedSize / (float)SECTOR_SIZE);
 
-                    // New file pushes older files beyond segment size? Update them by the amount of segments that increases
-                    if (nextFileInfo.SectorOffset != currentFileInfo.SectorOffset + segmentCount)
-                        nextFileInfo.SectorOffset = (uint)(currentFileInfo.SectorOffset + segmentCount);
+                    // New file pushes older files beyond sector size? Update them by the amount of sectors that increases
+                    if (nextFileInfo.SectorOffset != currentFileInfo.SectorOffset + sectorCount)
+                        nextFileInfo.SectorOffset = (uint)(currentFileInfo.SectorOffset + sectorCount);
                 }
             }
         }
@@ -474,9 +472,9 @@ namespace GTToolsSharp
             string ext = Path.GetExtension(path);
 
             FileInfoKey newKey = new FileInfoKey(this.NextEntryIndex());
-            newKey.SectorOffset = this.NextSegmentIndex();
+            newKey.SectorOffset = this.NextSectorIndex();
 
-            newKey.CompressedSize = 1; // Important for segments to count as at least one
+            newKey.CompressedSize = 1; // Important for sectors to count as at least one
             newKey.UncompressedSize = 1; // Same
 
             if (!ParentVolume.NoCompress && IsCompressableFile(path))
@@ -591,22 +589,22 @@ namespace GTToolsSharp
 
             if (removed > 0)
             {
-                List<FileInfoKey> orderedKeySegments = FileInfos.Entries.OrderBy(e => e.SectorOffset).ToList();
-                int fileSegmentIndex = orderedKeySegments.IndexOf(file);
+                List<FileInfoKey> orderedKeySectors = FileInfos.Entries.OrderBy(e => e.SectorOffset).ToList();
+                int fileSectorOffset = orderedKeySectors.IndexOf(file);
 
                 // Sort it all
-                FileInfoKey cur = orderedKeySegments[fileSegmentIndex];
-                FileInfoKey next = orderedKeySegments[fileSegmentIndex + 1];
+                FileInfoKey cur = orderedKeySectors[fileSectorOffset];
+                FileInfoKey next = orderedKeySectors[fileSectorOffset + 1];
                 cur.SectorOffset = next.SectorOffset;
-                for (int i = orderedKeySegments.IndexOf(file); i < orderedKeySegments.Count - 1; i++)
+                for (int i = orderedKeySectors.IndexOf(file); i < orderedKeySectors.Count - 1; i++)
                 {
-                    cur = orderedKeySegments[i];
-                    next = orderedKeySegments[i + 1];
-                    float segmentCountFromFile = MathF.Ceiling(cur.CompressedSize / (float)SEGMENT_SIZE);
+                    cur = orderedKeySectors[i];
+                    next = orderedKeySectors[i + 1];
+                    float sectorCountFromFile = MathF.Ceiling(cur.CompressedSize / (float)SECTOR_SIZE);
 
-                    // Re-update segments
-                    if (next.SectorOffset != cur.SectorOffset + segmentCountFromFile)
-                        next.SectorOffset = (uint)(cur.SectorOffset + segmentCountFromFile);
+                    // Re-update sectors
+                    if (next.SectorOffset != cur.SectorOffset + sectorCountFromFile)
+                        next.SectorOffset = (uint)(cur.SectorOffset + sectorCountFromFile);
                 }
 
                 FileInfos.Entries.Remove(file);
@@ -732,28 +730,28 @@ namespace GTToolsSharp
         }
 
         /// <summary>
-        /// Gets the highest next segment index.
+        /// Gets the highest next sector index.
         /// </summary>
         /// <returns></returns>
-        public uint NextSegmentIndex()
+        public uint NextSectorIndex()
         {
-            FileInfoKey lastSegmentKey = FileInfos.Entries.OrderByDescending(e => e.SectorOffset).FirstOrDefault();
+            FileInfoKey lastSectorKey = FileInfos.Entries.OrderByDescending(e => e.SectorOffset).FirstOrDefault();
 
             int minSize = 1;
-            if (lastSegmentKey.CompressedSize > minSize)
-                minSize = (int)lastSegmentKey.CompressedSize;
-            return (uint)(lastSegmentKey.SectorOffset + MathF.Ceiling(minSize / (float)SEGMENT_SIZE)); // Last + Size
+            if (lastSectorKey.CompressedSize > minSize)
+                minSize = (int)lastSectorKey.CompressedSize;
+            return (uint)(lastSectorKey.SectorOffset + MathF.Ceiling(minSize / (float)SECTOR_SIZE)); // Last + Size
         }
 
         public ulong GetTotalPatchFileSystemSize(uint compressedTocSize)
         {
             compressedTocSize -= 8; // Remove the header
 
-            uint lastSegmentIndex = FileInfos.Entries.Max(e => e.SectorOffset);
-            FileInfoKey lastFileInfoBySegment = FileInfos.Entries.FirstOrDefault(e => e.SectorOffset == lastSegmentIndex);
-            ulong pdiFileSize = (ulong)(lastSegmentIndex + MathF.Ceiling(lastFileInfoBySegment.CompressedSize / (float)SEGMENT_SIZE));
-            double tocSegSize = Math.Ceiling(compressedTocSize / (float)SEGMENT_SIZE);
-            return (ulong)((tocSegSize + pdiFileSize + 1) * (float)SEGMENT_SIZE);
+            uint lastSectorIndex = FileInfos.Entries.Max(e => e.SectorOffset);
+            FileInfoKey lastFileInfoBySector = FileInfos.Entries.FirstOrDefault(e => e.SectorOffset == lastSectorIndex);
+            ulong pdiFileSize = (ulong)(lastSectorIndex + MathF.Ceiling(lastFileInfoBySector.CompressedSize / (float)SECTOR_SIZE));
+            double tocSecSize = Math.Ceiling(compressedTocSize / (float)SECTOR_SIZE);
+            return (ulong)((tocSecSize + pdiFileSize + 1) * (float)SECTOR_SIZE);
         }
 
         /// <summary>
