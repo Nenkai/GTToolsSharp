@@ -38,13 +38,10 @@ namespace GTToolsSharp
         public string InputPath { get; set; }
         public bool IsPatchVolume { get; set; }
         public string PatchVolumeFolder { get; set; }
-        public bool NoUnpack { get; set; }
         public bool UsePackingCache { get; set; }
         public bool NoCompress { get; set; }
         public bool CreateBDMARK { get; set; }
         public bool IsGT5PDemoStyle { get; set; }
-
-        public string OutputDirectory { get; private set; }
 
         public Dictionary<string, InputPackEntry> FilesToPack = new Dictionary<string, InputPackEntry>();
 
@@ -198,9 +195,6 @@ namespace GTToolsSharp
         private void SetKeyset(Keyset keyset)
             => Keyset = keyset;
 
-        public void SetOutputDirectory(string dirPath)
-            => OutputDirectory = dirPath;
-
         /// <summary>
         /// Decrypts the header of the main volume file, using a provided seed.
         /// </summary>
@@ -291,33 +285,6 @@ namespace GTToolsSharp
             }
 
             return true;
-        }
-
-        /// <summary>
-        /// Unpacks all the files within the volume.
-        /// </summary>
-        public void UnpackFiles(IEnumerable<int> fileIndexesToExtract)
-        {
-            if (fileIndexesToExtract is null)
-                fileIndexesToExtract = Enumerable.Empty<int>();
-
-            // Lazy way
-            var files = TableOfContents.GetAllRegisteredFileMap();
-
-            // Cache it
-            Dictionary<uint, FileInfoKey> fileInfoKeys = new Dictionary<uint, FileInfoKey>();
-            foreach (var file in TableOfContents.FileInfos.Entries)
-                fileInfoKeys.Add(file.FileIndex, file);
-
-            foreach (var file in files)
-            {
-                if (!fileIndexesToExtract.Any() || fileIndexesToExtract.Contains((int)file.Value.EntryIndex))
-                {
-                    string volPath = file.Key;
-                    var fileInfo = fileInfoKeys[file.Value.EntryIndex];
-                    UnpackFile(fileInfo, volPath, Path.Combine(OutputDirectory, volPath));
-                }
-            }
         }
 
         public void PackFiles(string outrepackDir, List<string> filesToRemove, bool packAllAsNew, string customTitleID)
@@ -440,176 +407,6 @@ namespace GTToolsSharp
                     file.LastWriteTime.Hour, file.LastWriteTime.Minute, file.LastWriteTime.Second, DateTimeKind.Unspecified);
                 FilesToPack.Add(entry.VolumeDirPath, entry);
             }
-        }
-
-        /// <summary>
-        /// Unpacks a file node.
-        /// </summary>
-        /// <param name="nodeKey">Info of the file.</param>
-        /// <param name="entryPath">Entry path of the file.</param>
-        /// <param name="filePath">Local file path of the file.</param>
-        /// <returns></returns>
-        public bool UnpackFile(FileInfoKey nodeKey, string entryPath, string filePath)
-        {
-            // Split Volumes
-            if ((int)nodeKey.VolumeIndex != -1)
-            {
-                var volDevice = SplitVolumes[nodeKey.VolumeIndex];
-                if (volDevice is null)
-                    return false;
-
-                Program.Log($"[:] Unpacking '{entryPath}' from '{volDevice.Name}'..");
-
-                return SplitVolumes[nodeKey.VolumeIndex].UnpackFile(nodeKey, Keyset, entryPath);
-            }
-            else
-            {
-                ulong offset = DataOffset + (ulong)nodeKey.SectorOffset * GTVolumeTOC.SECTOR_SIZE;
-                if (!IsPatchVolume)
-                {
-                    if (NoUnpack)
-                        return false;
-
-                    return UnpackVolumeFile(nodeKey, filePath, offset);
-                }
-                else
-                    return UnpackPFSFile(nodeKey, entryPath, filePath);
-            }
-        }
-
-        private bool UnpackPFSFile(FileInfoKey nodeKey, string entryPath, string filePath)
-        {
-            string patchFilePath = PDIPFSPathResolver.GetPathFromSeed(nodeKey.FileIndex, IsGT5PDemoStyle);
-            string localPath = this.PatchVolumeFolder + "/" + patchFilePath;
-
-            if (NoUnpack)
-                return false;
-
-            /* I'm really not sure if there's a better way to do this.
-            * Volume files, at least nodes don't seem to even store any special flag whether
-            * it is located within an actual volume file or a patch volume. The only thing that is different is the sector index.. Sometimes node index when it's updated
-            * It's slow, but somewhat works I guess..
-            * */
-            if (!File.Exists(localPath))
-                return false;
-
-            Program.Log($"[:] Unpacking: {patchFilePath} -> {filePath}");
-            using var fs = new FileStream(localPath, FileMode.Open);
-            if (fs.Length >= 7)
-            {
-                Span<byte> magic = stackalloc byte[6];
-                fs.Read(magic);
-                if (Encoding.ASCII.GetString(magic).StartsWith("BSDIFF"))
-                {
-                    Program.Log($"[X] Detected BSDIFF file for {filePath} ({patchFilePath}), can not unpack yet. (fileID {nodeKey.FileIndex})", forceConsolePrint: true);
-                    return false;
-                }
-
-                fs.Position = 0;
-            }
-
-            if (IsGT5PDemoStyle)
-            {
-                bool customCrypt = nodeKey.Flags.HasFlag(FileInfoFlags.CustomSalsaCrypt)
-                    || entryPath == "piece/car_thumb_M/gtr_07_01.img" // Uncompressed files, but no special flag either...
-                    || entryPath == "piece/car_thumb_M/impreza_wrx_sti_07_03.img";
-
-                Salsa20 salsa = default;
-
-                if (customCrypt)
-                {
-                    if (Keyset.DecryptManager is null || !Keyset.DecryptManager.Keys.TryGetValue(entryPath, out string b64Key) || b64Key.Length < 32)
-                    {
-                        Program.Log($"[X] Could not find custom decryption key for {filePath}, skipping it.", forceConsolePrint: true);
-                        return false;
-                    }
-
-                    byte[] key = Convert.FromBase64String(b64Key).AsSpan(0, 32).ToArray();
-                    salsa = new Salsa20(key, key.Length);
-                    Program.Log($"[/] Attempting to decrypt custom encrypted file {entryPath}..");
-                }
-
-                try
-                {
-                    if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
-                    {
-                        Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                        using (var outCompressedFile = new FileStream(filePath + ".in", FileMode.Create))
-                            VolumeCrypto.DecryptOld(Keyset, fs, outCompressedFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
-
-                        using (var inCompressedFile = new FileStream(filePath + ".in", FileMode.Open))
-                        {
-                            using var outFile = new FileStream(filePath, FileMode.Create);
-
-                            inCompressedFile.Position = 8;
-                            using var ds = new DeflateStream(inCompressedFile, CompressionMode.Decompress);
-                            ds.CopyTo(outFile);
-                        }
-
-                        File.Delete(filePath + ".in");
-                    }
-                    else
-                    {
-                        Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                        using (var outFile = new FileStream(filePath, FileMode.Create))
-                            VolumeCrypto.DecryptOld(Keyset, fs, outFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
-                    }
-
-                    if (customCrypt)
-                        Program.Log($"[/] Successfully decrypted custom encrypted file {entryPath}.");
-                }
-                catch (Exception e)
-                {
-                    Program.Log($"[X] Failed to decrypt {entryPath} ({e.Message})");
-                }
-            }
-            else
-            {
-                if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
-                {
-                    if (!CryptoUtils.DecryptCheckCompression(fs, Keyset, nodeKey.FileIndex, nodeKey.UncompressedSize))
-                    {
-                        Program.Log($"[X] Failed to decompress file {filePath} ({patchFilePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
-                        return false;
-                    }
-
-                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                    fs.Position = 0;
-
-                    return CryptoUtils.DecryptAndInflateToFile(Keyset, fs, nodeKey.FileIndex, nodeKey.UncompressedSize, filePath);
-                }
-                else
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                    CryptoUtils.CryptToFile(Keyset, fs, nodeKey.FileIndex, filePath);
-                }
-            }
-
-            return true;
-        }
-
-        private bool UnpackVolumeFile(FileInfoKey nodeKey, string filePath, ulong offset)
-        {
-            MainStream.Position = (long)offset;
-            if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
-            {
-                if (!CryptoUtils.DecryptCheckCompression(MainStream, Keyset, nodeKey.FileIndex, nodeKey.UncompressedSize))
-                {
-                    Program.Log($"[X] Failed to decompress file ({filePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
-                    return false;
-                }
-
-                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                MainStream.Position -= 8;
-                CryptoUtils.DecryptAndInflateToFile(Keyset, MainStream, nodeKey.FileIndex, nodeKey.UncompressedSize, filePath, false);
-            }
-            else
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                CryptoUtils.CryptToFile(Keyset, MainStream, nodeKey.FileIndex, nodeKey.UncompressedSize, filePath, false);
-            }
-
-            return true;
         }
 
         public static string lastEntryPath = "";

@@ -19,11 +19,16 @@ namespace GTToolsSharp.BinaryPatching
         /// The new expected file size for the file info.
         /// </summary>
         public uint NewFileSize { get; set; }
-        
+
         /// <summary>
-        /// The new expected file flags for the file info.
+        /// The old file state after applying.
         /// </summary>
-        public FileInfoFlags NewFileInfoFlags { get; set; }
+        public TPPSFileState OldFileInfoFlags { get; set; }
+
+        /// <summary>
+        /// MD5 Check of the new file.
+        /// </summary>
+        public string MD5Checksum { get; set; }
 
         /// <summary>
         /// The older entry index for the file info.
@@ -31,9 +36,9 @@ namespace GTToolsSharp.BinaryPatching
         public uint CurrentEntryIndex { get; set; }
 
         /// <summary>
-        /// The older file info flags.
+        /// The new file state after applying.
         /// </summary>
-        public FileInfoFlags OldFileInfoFlags { get; set; }
+        public TPPSFileState NewFileInfoFlags { get; set; }
 
         /// <summary>
         /// The older compressed file size.

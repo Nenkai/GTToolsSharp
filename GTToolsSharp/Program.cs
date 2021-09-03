@@ -215,11 +215,15 @@ namespace GTToolsSharp
             }
 
             Program.Log("[-] Started unpacking process.");
-            vol.SetOutputDirectory(options.OutputPath);
-            if (options.OnlyLog)
-                vol.NoUnpack = true;
 
-            vol.UnpackFiles(options.FileIndexesToExtract);
+            VolumeUnpacker unpacker = new VolumeUnpacker(vol);
+            unpacker.SetOutputDirectory(options.OutputPath);
+            if (options.OnlyLog)
+                unpacker.NoUnpack = true;
+
+            unpacker.BasePFSFolder = options.BasePFSFolder;
+
+            unpacker.UnpackFiles(options.FileIndexesToExtract, options.BasePFSFolder);
         }
 
         public static void UnpackInstaller(UnpackInstallerVerbs options)

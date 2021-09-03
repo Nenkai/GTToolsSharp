@@ -18,6 +18,9 @@ namespace GTToolsSharp
         [Option('o', "output", Required = true, HelpText = "Output Folder for unpacked files. If you don't provide one, will display info about the volume.")]
         public string OutputPath { get; set; }
 
+        [Option("base-folder", HelpText = "Used for extracting PDIPFS with Binary Patching files introduced with Gran Turismo 1.05+.")]
+        public string BasePFSFolder { get; set; }
+
         [Option("unpack-log-only", HelpText = "Only log volume information while unpacking. (No unpacking will be done)")]
         public bool OnlyLog { get; set; }
 
