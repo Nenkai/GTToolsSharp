@@ -148,7 +148,7 @@ namespace GTToolsSharp
             vol.CreateBDMARK = options.CreateBDMARK;
 
             vol.NoCompress = options.NoCompress;
-            vol.RegisterEntriesToRepack(options.FolderToRepack, filesToIgnore);
+            vol.RegisterEntriesToRepack(options.FolderToRepack, filesToIgnore, options.UpdateNodeInfo);
 
             if (options.Version != null)
                 vol.VolumeHeader.SerialNumber = options.Version.Value;
@@ -156,7 +156,7 @@ namespace GTToolsSharp
             if (!string.IsNullOrEmpty(options.CustomGameID))
                 Program.Log($"[!] Volume Game ID will be set to '{options.CustomGameID}'. (--custom-game-id)");
 
-            vol.PackFiles(options.OutputPath, filesToRemove, !options.PackAsOverwrite, options.CustomGameID);
+            vol.PackFiles(options.OutputPath, filesToRemove, !options.PackAsOverwrite, options.CustomGameID, options.UpdateNodeInfo);
         }
 
         public static void Unpack(UnpackVerbs options)
@@ -328,7 +328,18 @@ namespace GTToolsSharp
             else
             {
                 Console.WriteLine($"[:] Crypting '{file}'..");
-                CryptoUtils.CryptBuffer(keys, input, input, 0);
+
+                // For some files, game code may be used, i.e "NPUA-80075"
+                if (!string.IsNullOrEmpty(options.KeysetSeedOverride))
+                {
+                    Console.WriteLine($"[!] Overriding {keys.Magic} with {options.KeysetSeedOverride}");
+                    keys.Magic = options.KeysetSeedOverride;
+                }
+
+                if (!options.UseAlternative)
+                    CryptoUtils.CryptBuffer(keys, input, input, options.Seed);
+                else
+                    CryptoUtils.CryptBufferAlternative(keys, input, input);
             }
 
             File.WriteAllBytes(file, input);

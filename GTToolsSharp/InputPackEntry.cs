@@ -21,7 +21,7 @@ namespace GTToolsSharp
         /// <summary>
         /// Uncompressed file size of this entry.
         /// </summary>
-        public long FileSize { get; set; }
+        public uint FileSize { get; set; }
 
         /// <summary>
         /// When the file was last modified to use against packing cache.
@@ -29,5 +29,10 @@ namespace GTToolsSharp
         public DateTime LastModified { get; set; }
 
         public bool IsAddedFile { get; set; }
+
+        /// <summary>
+        /// MD5 checksum of the file, mostly used for patching.
+        /// </summary>
+        public string MD5Checksum { get; set; }
     }
 }

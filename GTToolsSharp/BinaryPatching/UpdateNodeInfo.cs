@@ -8,7 +8,7 @@ using System.IO;
 
 namespace GTToolsSharp.BinaryPatching
 {
-    public class PDIBinaryPatcher
+    public class UpdateNodeInfo
     {
         public Dictionary<uint, NodeInfo> Entries { get; private set; } = new Dictionary<uint, NodeInfo>();
 
@@ -74,7 +74,7 @@ namespace GTToolsSharp.BinaryPatching
                 info.NewFileSize = newFileSize;
                 info.OldFileInfoFlags = (TPPSFileState)oldFileState;
                 info.CurrentEntryIndex = currentEntryIndex;
-                info.NewFileSize = compressedFileSize;
+                info.NewCompressedFileSize = compressedFileSize;
                 info.NewFileInfoFlags = (TPPSFileState)newFileState;
                 info.MD5Checksum = args[4];
 
@@ -82,15 +82,26 @@ namespace GTToolsSharp.BinaryPatching
             }
         }
 
+        public void WriteNodeInfo(string outputPath)
+        {
+            using var sw = new StreamWriter(outputPath);
+            foreach (var entry in Entries.Values)
+            {
+                sw.WriteLine($"{entry.NewEntryIndex:D6} {entry.NewFileSize:D10} {(byte)entry.OldFileInfoFlags}" +
+                    $" {entry.CurrentEntryIndex:D6} {entry.MD5Checksum} {(byte)entry.NewFileInfoFlags} {entry.NewCompressedFileSize:D10} {entry.NewCompressedFileSize:D10}");
+            }
+        }
+
         public bool TryGetEntry(uint index, out NodeInfo info)
             => Entries.TryGetValue(index, out info);
 
     }
-
+    
+    [Flags]
     public enum TPPSFileState
     {
         Uncompressed,
         Compressed,
-        BinaryPatch
+        CompressedInAndOut
     }
 }

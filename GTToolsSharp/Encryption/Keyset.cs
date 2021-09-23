@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Buffers.Binary;
 
 using GTToolsSharp.Utils;
+using PDTools.Crypto;
 
 namespace GTToolsSharp.Encryption
 {

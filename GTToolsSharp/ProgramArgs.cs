@@ -77,9 +77,16 @@ namespace GTToolsSharp
 
         [Option('i', "input", Required = true, HelpText = "Input files or folder to encrypt or decrypt.")]
         public IEnumerable<string> InputPath { get; set; }
-        
-        [Option('o', "output", HelpText = "Output file.", Default = "out.bin")]
-        public string OutputPath { get; set; }
+
+        [Option('s', "seed", Default = (uint)0, HelpText = "Encrypt Seed to use. Default is 0. Change only if you know what you are doing.")]
+        public uint Seed { get; set; }
+
+        [Option("keyset-seed-override", HelpText = "Override keyset seed with custom seed. Use only if you know what you are doing. Used by GT5P to " +
+            "decrypt some files in the grim folder by overriding with the game code, i.e 'NPUA-80075'.")]
+        public string KeysetSeedOverride { get; set; }
+
+        [Option("alternative", HelpText = "Use alternative method. Use only if you know what you are doing. Used by GT5P (NPUA80075).")]
+        public bool UseAlternative { get; set; }
 
         [Option("salsaencrypt", HelpText = "Advanced users. Salsa key (hex string) to use to encrypt. Do not provide to use default file volume encryption.")]
         public string Salsa20KeyEncrypt { get; set; }
@@ -112,7 +119,7 @@ namespace GTToolsSharp
         [Option('l', "log", HelpText = "Log file path. Default is log.txt.", Default = "log.txt")]
         public string LogPath { get; set; }
 
-        [Option("pack-all-as-new", HelpText = "ON BY DEFAULT. This marks all the files provided to pack, including existing ones in the volume as new files. " +
+        [Option("pack-all-as-new", HelpText = "On by default. This marks all the files provided to pack, including existing ones in the volume as new files. " +
             "This is useful when creating a mod that add or modifies file content from the game without actually modifying files, just adding new ones, so only a volume header (K/4D) backup is required to revert all of the changes.")]
         public bool PackAllAsNew { get; set; }
 
@@ -122,14 +129,17 @@ namespace GTToolsSharp
         [Option("custom-game-id", HelpText = "Custom Game-ID/Description to assign to the volume header. Must not be above 128 characters.")]
         public string CustomGameID { get; set; }
 
-        [Option("no-compress", HelpText = "Newly packed files won't be compressed, and will be marked as such in the TOC.")]
+        [Option("no-compress", HelpText = "Newly packed files won't be compressed, and will be marked as such in the TOC. Do not use with streamed files such as shapestream/texstream.")]
         public bool NoCompress { get; set; }
-
-        [Option("create_bdmark", HelpText = "Bdmark will be created")]
-        public bool CreateBDMARK { get; set; }
 
         [Option("start-index", HelpText = "Start index of which new files to pack will start from, useful when making files work across multiple updates by making it high.")]
         public uint StartIndex { get; set; }
+
+        [Option("create_bdmark", HelpText = "Bdmark will be created. Advanced users only. Used for patching games from their first version (i.e GT5 1.00) as bdmark tells which files were read from the disc and installed into the HDD.")]
+        public bool CreateBDMARK { get; set; }
+
+        [Option("updatenodeinfo", HelpText = "Creates an update node info file with the summary of the patch. Advanced users only.")]
+        public bool UpdateNodeInfo { get; set; }
 
         [Option("version", Hidden = true, HelpText = "Set version")]
         public ulong? Version { get; set; }

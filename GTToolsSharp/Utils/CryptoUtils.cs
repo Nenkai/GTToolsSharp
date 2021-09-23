@@ -15,6 +15,7 @@ using Syroot.BinaryData.Core;
 using Syroot.BinaryData;
 
 using GTToolsSharp.Encryption;
+using PDTools.Crypto;
 
 using PDTools.Compression;
 using ICSharpCode.SharpZipLib.Zip.Compression;
@@ -30,7 +31,7 @@ namespace GTToolsSharp.Utils
             uint crc = 0;
             for (uint i = 0; i < 4; ++i)
             {
-                crc = (crc << 8) ^ CRC32.checksum[(BitOperations.RotateLeft(x ^ crc, 10) & 0x3FC) >> 2];
+                crc = (crc << 8) ^ CRC32.checksum_0x04C11DB7[(BitOperations.RotateLeft(x ^ crc, 10) & 0x3FC) >> 2];
                 x <<= 8;
             }
             return ~crc;
@@ -70,7 +71,7 @@ namespace GTToolsSharp.Utils
         /// <param name="inputStream"></param>
         /// <param name="nodeSeed"></param>
         /// <param name="outPath"></param>
-        public static long EncryptAndDeflateToFile(Keyset keyset, FileStream inputStream, uint nodeSeed, string outPath, bool closeStream = true)
+        public static uint EncryptAndDeflateToFile(Keyset keyset, FileStream inputStream, uint nodeSeed, string outPath, bool closeStream = true)
         {
             // Prepare encryption
             uint crc = ~CRC32.CRC32_0x04C11DB7(keyset.Magic, 0);
@@ -93,10 +94,10 @@ namespace GTToolsSharp.Utils
             while (bytesLeft > 0)
             {
                 int read = inputStream.Read(buffer);
-                deflater.SetInput(buffer);
+                deflater.SetInput(buffer, 0, read);
                 deflater.Flush(); // Important
 
-                int nBytesDeflated = deflater.Deflate(deflateBuffer);
+                int nBytesDeflated = deflater.Deflate(deflateBuffer, 0, read);
                 VolumeCrypto.DecryptBuffer(deflateBuffer, deflateBuffer, nBytesDeflated, bitsTable, (ulong)outputStream.Position);
                 outputStream.Write(deflateBuffer, 0, nBytesDeflated);
 
@@ -106,7 +107,7 @@ namespace GTToolsSharp.Utils
             if (closeStream)
                 inputStream.Dispose();
 
-            return outputStream.Length;
+            return (uint)outputStream.Length;
         }
 
 
@@ -247,9 +248,37 @@ namespace GTToolsSharp.Utils
         /// <param name="seed">Entry seed for decryption.</param>
         public unsafe static void CryptBuffer(Keyset keyset, Span<byte> inBuf, Span<byte> outBuf, uint seed)
         {
-            uint crc = ~CRC32.CRC32_0x04C11DB7(keyset.Magic, 0);
-            uint[] keys = VolumeCrypto.PrepareKey(crc ^ seed, keyset.Key.Data);
-            var bitsTable = VolumeCrypto.GenerateBitsTable(keys);
+            byte[] bitsTable;
+            if (keyset != null)
+            {
+                uint crc = ~CRC32.CRC32_0x04C11DB7(keyset.Magic, 0);
+                uint[] keys = VolumeCrypto.PrepareKey(crc ^ seed, keyset.Key.Data);
+                bitsTable = VolumeCrypto.GenerateBitsTable(keys);
+            }
+            else 
+                bitsTable = new byte[0x2C0];
+
+            VolumeCrypto.DecryptBuffer(inBuf, outBuf, inBuf.Length, bitsTable, 0);
+        }
+
+        /// <summary>
+        /// Crypts a buffer (alternative version for certain files).
+        /// </summary>
+        /// <param name="keyset">Keys for crypto.</param>
+        /// <param name="inBuf">Incoming encrypted or decrypted buffer.</param>
+        /// <param name="outBuf">Output.</param>
+        /// <param name="seed">Entry seed for decryption.</param>
+        public unsafe static void CryptBufferAlternative(Keyset keyset, Span<byte> inBuf, Span<byte> outBuf)
+        {
+            byte[] bitsTable;
+            if (keyset != null)
+            {
+                uint crc = ~CRC32.CRC32_0x04C11DB7(keyset.Magic, 0);
+                uint[] keys = VolumeCrypto.PrepareKey(crc, keyset.Key.Data);
+                bitsTable = VolumeCrypto.GenerateBitsTable(keys);
+            }
+            else
+                bitsTable = new byte[0x2C0];
 
             VolumeCrypto.DecryptBuffer(inBuf, outBuf, inBuf.Length, bitsTable, 0);
         }

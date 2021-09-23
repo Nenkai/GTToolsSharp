@@ -15,6 +15,8 @@ using Syroot.BinaryData;
 using PDTools.Utils;
 using PDTools.Compression;
 
+using GTToolsSharp.BinaryPatching;
+
 namespace GTToolsSharp
 {
     /// <summary>
@@ -33,7 +35,7 @@ namespace GTToolsSharp
         public uint NameTreeOffset { get; set; }
         public uint FileExtensionTreeOffset { get; set; }
         public uint NodeTreeOffset { get; set; }
-        public List<uint> RootAndFolderOffsets { get; set; }
+        public List<uint> RootAndFolderOffsets { get; private set; }
 
         public StringBTree FileNames { get; private set; }
         public StringBTree Extensions { get; private set; }
@@ -43,7 +45,10 @@ namespace GTToolsSharp
         public VolumeHeaderBase ParentHeader { get; }
         public GTVolume ParentVolume { get; }
 
-        public BTreeEndian TreeEndian { get; private set; }
+        /// <summary>
+        /// Summary of the packed files
+        /// </summary>
+        public UpdateNodeInfo UpdateNodeInfo { get; private set; }
 
         public GTVolumeTOC(VolumeHeaderBase parentHeader, GTVolume parentVolume)
         {
@@ -196,6 +201,8 @@ namespace GTToolsSharp
         /// <param name="outputDir">Main output dir to use to expose the packed files.</param>
         public PackCache PackFilesForPatchFileSystem(Dictionary<string, InputPackEntry> FilesToPack, PackCache packCache, List<string> filesToRemove, string outputDir, bool packAllAsNewEntries)
         {
+            UpdateNodeInfo = new UpdateNodeInfo();
+
             // If we are packing as new, ensure the TOC is before all the files (that will come after it)
             if (packAllAsNewEntries)
                 ParentHeader.ToCNodeIndex = NextEntryIndex();
@@ -233,15 +240,24 @@ namespace GTToolsSharp
         {
             FileInfoKey key = FileInfos.GetByFileIndex(tocFile.EntryIndex);
 
+            // For potential patching
+            var nodeInfo = new NodeInfo();
+
             if (packAllAsNewEntries && !file.IsAddedFile)
             {
                 uint oldEntryFileIndex = key.FileIndex;
                 key = ModifyExistingEntryAsNew(key, file.VolumeDirPath);
                 Program.Log($"[:] Entry key for {file.VolumeDirPath} changed as new: {oldEntryFileIndex} -> {key.FileIndex}");
+
+                nodeInfo.NewEntryIndex = key.FileIndex;
+                nodeInfo.CurrentEntryIndex = oldEntryFileIndex;
+                nodeInfo.OldFileInfoFlags = key.Flags.HasFlag(FileInfoFlags.Compressed) ? TPPSFileState.CompressedInAndOut : TPPSFileState.Uncompressed;
+                nodeInfo.NewFileSize = file.FileSize;
+                nodeInfo.MD5Checksum = file.MD5Checksum;
             }
 
-            uint newUncompressedSize = (uint)file.FileSize;
-            uint newCompressedSize = (uint)file.FileSize;
+            uint newUncompressedSize = file.FileSize;
+            uint newCompressedSize = file.FileSize;
             string pfsFilePath = PDIPFSPathResolver.GetPathFromSeed(tocFile.EntryIndex);
 
             if (ParentVolume.CreateBDMARK)
@@ -249,6 +265,7 @@ namespace GTToolsSharp
                 Directory.CreateDirectory(Path.Combine("PDIPFS_bdmark", Path.GetDirectoryName(pfsFilePath)));
                 using var bdmarkfile = File.Create(Path.Combine("PDIPFS_bdmark", pfsFilePath));
             }
+
             // Check for cached file
             if (ParentVolume.UsePackingCache && packCache.HasValidCachedEntry(file, key.FileIndex, out PackedCacheEntry validCacheEntry))
             {
@@ -289,13 +306,15 @@ namespace GTToolsSharp
 
             if (ParentVolume.NoCompress)
                 key.Flags &= ~FileInfoFlags.Compressed;
+            nodeInfo.NewFileInfoFlags = key.Flags.HasFlag(FileInfoFlags.Compressed) ? TPPSFileState.Compressed : TPPSFileState.Uncompressed;
 
             string outputFile = Path.Combine($"{outputDir}_temp", pfsFilePath);
             Directory.CreateDirectory(Path.GetDirectoryName(outputFile));
             if (key.Flags.HasFlag(FileInfoFlags.Compressed))
             {
                 Program.Log($"[:] Pack: Compressing + Encrypting {file.VolumeDirPath} -> {pfsFilePath}");
-                newCompressedSize = (uint)CryptoUtils.EncryptAndDeflateToFile(ParentVolume.Keyset, fs, key.FileIndex, outputFile, closeStream: true);
+                newCompressedSize = CryptoUtils.EncryptAndDeflateToFile(ParentVolume.Keyset, fs, key.FileIndex, outputFile, closeStream: true);
+                nodeInfo.NewCompressedFileSize = newCompressedSize;
             }
             else
             {
@@ -320,6 +339,8 @@ namespace GTToolsSharp
 
                 newCache.Entries.Add(file.VolumeDirPath, newCacheEntry);
             }
+
+            UpdateNodeInfo.Entries.Add(nodeInfo.NewEntryIndex, nodeInfo);
         }
 
         /// <summary>

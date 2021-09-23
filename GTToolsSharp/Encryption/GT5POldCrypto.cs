@@ -6,16 +6,18 @@ using System.Threading.Tasks;
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 
+using PDTools.Crypto;
+
 namespace GTToolsSharp.Encryption
 {
 	class GT5POldCrypto
 	{
 		public static void DecryptPass(uint seed, Span<byte> input, Span<byte> output, int size)
 		{
-			uint one = CRC32.CRC32UInt(seed);
-			uint two = CRC32.CRC32UInt(one);
-			uint three = CRC32.CRC32UInt(two);
-			uint four = CRC32.CRC32UInt(three);
+			uint one = CRC32.CRC32_0x04C11DB7_UIntInverted(seed);
+			uint two = CRC32.CRC32_0x04C11DB7_UIntInverted(one);
+			uint three = CRC32.CRC32_0x04C11DB7_UIntInverted(two);
+			uint four = CRC32.CRC32_0x04C11DB7_UIntInverted(three);
 
 			if (size == 0)
 				return;
@@ -60,7 +62,7 @@ namespace GTToolsSharp.Encryption
 
 		public static uint CRCXor(Span<uint> input, uint input2)
 		{
-			uint crc = CRC32.CRC32UInt(input2);
+			uint crc = CRC32.CRC32_0x04C11DB7_UIntInverted(input2);
 
 			uint old = input[0];
 			input[0] ^= crc;

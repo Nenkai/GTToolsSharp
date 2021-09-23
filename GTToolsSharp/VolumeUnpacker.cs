@@ -14,13 +14,14 @@ using GTToolsSharp.Encryption;
 using GTToolsSharp.BinaryPatching;
 
 using PDTools.Compression;
+using PDTools.Utils;
 
 namespace GTToolsSharp
 {
     public class VolumeUnpacker
     {
         public GTVolume Volume { get; }
-        public PDIBinaryPatcher TPPS { get; set; }
+        public UpdateNodeInfo TPPS { get; set; }
 
         public string OutputDirectory { get; private set; }
         public bool NoUnpack { get; set; }
@@ -58,7 +59,7 @@ namespace GTToolsSharp
                 {
                     string volPath = file.Key;
                     var fileInfo = fileInfoKeys[file.Value.EntryIndex];
-                    UnpackFile(fileInfo, volPath, Path.Combine(OutputDirectory, volPath), basePFSFolder);
+                    UnpackFile(fileInfo, volPath, Path.Combine(OutputDirectory, volPath));
                 }
             }
         }
@@ -70,7 +71,7 @@ namespace GTToolsSharp
         /// <param name="entryPath">Entry path of the file.</param>
         /// <param name="filePath">Local file path of the file.</param>
         /// <returns></returns>
-        public bool UnpackFile(FileInfoKey nodeKey, string entryPath, string filePath, string basePFSFolder)
+        public bool UnpackFile(FileInfoKey nodeKey, string entryPath, string filePath)
         {
             // Split Volumes
             if ((int)nodeKey.VolumeIndex != -1)
@@ -94,11 +95,11 @@ namespace GTToolsSharp
                     return UnpackVolumeFile(nodeKey, filePath, offset);
                 }
                 else
-                    return UnpackPFSFile(nodeKey, entryPath, filePath, basePFSFolder);
+                    return UnpackPFSFile(nodeKey, entryPath, filePath);
             }
         }
 
-        private bool UnpackPFSFile(FileInfoKey nodeKey, string entryPath, string filePath, string basePFSFolder)
+        private bool UnpackPFSFile(FileInfoKey nodeKey, string entryPath, string filePath)
         {
             string patchFilePath = PDIPFSPathResolver.GetPathFromSeed(nodeKey.FileIndex, Volume.IsGT5PDemoStyle);
             string localPath = Volume.PatchVolumeFolder + "/" + patchFilePath;
@@ -122,15 +123,8 @@ namespace GTToolsSharp
                 fs.Read(magic);
                 if (Encoding.ASCII.GetString(magic).StartsWith("BSDIFF"))
                 {
-                    if (TPPS is null && !InitTPPS())
-                    {
-                        Program.Log($"[X] Detected BSDIFF file for {filePath} ({patchFilePath}), can not unpack yet. (fileID {nodeKey.FileIndex})", forceConsolePrint: true);
-                        return false;
-                    }
-
                     fs.Dispose();
-                    ApplyPatch(nodeKey);
-
+                    return UnpackTPPSFile(nodeKey, entryPath, patchFilePath);
                 }
 
                 fs.Position = 0;
@@ -240,6 +234,23 @@ namespace GTToolsSharp
             return true;
         }
 
+        private bool UnpackTPPSFile(FileInfoKey nodeKey, string filePath, string patchFilePath)
+        {
+            if (TPPS is null && !InitTPPS())
+            {
+                Program.Log($"[X] Detected BSDIFF file for {filePath} ({patchFilePath}) - could not initialize binary patcher.", forceConsolePrint: true);
+                return false;
+            }
+
+            if (ApplyFromPatchAndExtract(nodeKey, filePath))
+            {
+                Program.Log($"[/] Extracted binary patched file: {filePath} ({patchFilePath})", forceConsolePrint: true);
+                return true;
+            }
+
+            return false;
+        }
+
         private bool InitTPPS()
         {
             if (TPPS?.Entries?.Count > 0)
@@ -249,33 +260,65 @@ namespace GTToolsSharp
             if (!File.Exists(updateNodeInfopath))
                 return false;
 
-            TPPS = new PDIBinaryPatcher();
+            TPPS = new UpdateNodeInfo();
             TPPS.ParseNodeInfo(updateNodeInfopath);
 
             return true;
         }
 
-        private void ApplyPatch(FileInfoKey key)
+        /// <summary>
+        /// Applies a patch to an old PFS file and extracts it.
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="outputFilePath"></param>
+        /// <returns></returns>
+        private bool ApplyFromPatchAndExtract(FileInfoKey key, string outputFilePath)
         {
             if (!TPPS.TryGetEntry(key.FileIndex, out NodeInfo info))
-                return;
+                return false;
 
             string oldFilePfsPath = PDIPFSPathResolver.GetPathFromSeed(info.CurrentEntryIndex);
             string oldFilePath = Path.Combine(this.BasePFSFolder, oldFilePfsPath);
+
+            if (!File.Exists(oldFilePath))
+                return false;
+
             byte[] oldFile = File.ReadAllBytes(oldFilePath);
             Volume.Keyset.CryptBytes(oldFile, oldFile, info.CurrentEntryIndex);
-            PS2ZIP.InflateInMemory(oldFile, out byte[] inflatedData);
+
+            if (info.NewFileInfoFlags == TPPSFileState.Compressed)
+                PS2ZIP.InflateInMemory(oldFile, out oldFile);
 
             string patchPfsPath = PDIPFSPathResolver.GetPathFromSeed(info.NewEntryIndex);
             string patchPath = Path.Combine(Volume.InputPath, patchPfsPath);
 
-            using var outputFile = new FileStream("test", FileMode.Create);
-            BsPatch.Patch(new MemoryStream(inflatedData), outputFile, patchPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(outputFilePath));
+            using var outputFile = new FileStream(outputFilePath, FileMode.Create);
 
-            /*
+            using (var inflatedDataStream = new MemoryStream(oldFile))
+                BsPatch.Patch(inflatedDataStream, outputFile, patchPath);
+
+            outputFile.Position = 0;
+            string hash = ComputeMD5OfFile(outputFile);
+            if (hash == info.MD5Checksum)
+                return true;
+            else
+                File.Delete(outputFilePath);
+
+            return false;
+        }
+
+        private static string ComputeMD5OfFile(Stream input)
+        {
             using var md5 = MD5.Create();
-            md5.ComputeHash(outputFile);
-            */
+            byte[] hash = md5.ComputeHash(input);
+
+            StringBuilder result = new StringBuilder(hash.Length * 2);
+
+            for (int i = 0; i < hash.Length; i++)
+                result.Append(hash[i].ToString("x2"));
+
+            return result.ToString();
         }
     }
 }

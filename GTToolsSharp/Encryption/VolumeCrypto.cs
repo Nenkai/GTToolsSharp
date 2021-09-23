@@ -11,6 +11,7 @@ using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 
 using GTToolsSharp.Utils;
+using PDTools.Crypto;
 
 namespace GTToolsSharp.Encryption
 {
@@ -142,10 +143,10 @@ namespace GTToolsSharp.Encryption
 		{
 			var keysetSeedCrc = ~CRC32.CRC32_0x04C11DB7(keyset.Magic, 0);
 
-			uint one = CRC32.CRC32UInt(seed ^ keysetSeedCrc);
-			uint two = CRC32.CRC32UInt(one);
-			uint three = CRC32.CRC32UInt(two);
-			uint four = CRC32.CRC32UInt(three);
+			uint one = CRC32.CRC32_0x04C11DB7_UIntInverted(seed ^ keysetSeedCrc);
+			uint two = CRC32.CRC32_0x04C11DB7_UIntInverted(one);
+			uint three = CRC32.CRC32_0x04C11DB7_UIntInverted(two);
+			uint four = CRC32.CRC32_0x04C11DB7_UIntInverted(three);
 
 			uint[] keys = new uint[4];
 			keys[0] = one & 0x1FFFF;

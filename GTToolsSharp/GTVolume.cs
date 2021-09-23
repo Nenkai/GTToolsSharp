@@ -5,10 +5,9 @@ using System.Text;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.IO;
-using System.IO.Compression;
 using System.Buffers;
+using System.Security.Cryptography;
 
-using Syroot.BinaryData.Memory;
 using Syroot.BinaryData.Core;
 
 using GTToolsSharp.BTree;
@@ -119,10 +118,11 @@ namespace GTToolsSharp
                 return null;
             }
 
+
             fs.Position = 0;
             vol.InputPath = path;
             vol.VolumeHeader = VolumeHeaderBase.Load(fs, vol, headerType);
-
+  
             if (Program.SaveHeader)
                 File.WriteAllBytes("VolumeHeader.bin", vol.VolumeHeaderData);
 
@@ -287,7 +287,7 @@ namespace GTToolsSharp
             return true;
         }
 
-        public void PackFiles(string outrepackDir, List<string> filesToRemove, bool packAllAsNew, string customTitleID)
+        public void PackFiles(string outrepackDir, List<string> filesToRemove, bool packAllAsNew, string customTitleID, bool createUpdateNodeInfo = false)
         {
             if (FilesToPack.Count == 0 && filesToRemove.Count == 0)
             {
@@ -343,7 +343,6 @@ namespace GTToolsSharp
             VolumeHeader.CompressedTOCSize = compressedSize;
             VolumeHeader.ExpandedTOCSize = uncompressedSize;
             
-
             Program.Log($"[-] Saving main volume header ({PDIPFSPathResolver.Default})");
             byte[] header = VolumeHeader.Serialize();
 
@@ -355,6 +354,12 @@ namespace GTToolsSharp
             Directory.CreateDirectory(Path.GetDirectoryName(headerPath));
 
             File.WriteAllBytes(headerPath, header);
+
+            if (createUpdateNodeInfo)
+            {
+                Program.Log($"[-] Creating UPDATENODEINFO (for {TableOfContents.UpdateNodeInfo.Entries.Count} node(s) updated)");
+                TableOfContents.UpdateNodeInfo.WriteNodeInfo(Path.Combine(outrepackDir, "UPDATENODEINFO"));
+            }
 
             sw.Stop();
             Program.Log($"[/] Done packing in {sw.Elapsed}.", forceConsolePrint: true);
@@ -381,7 +386,7 @@ namespace GTToolsSharp
             }
         }
 
-        public void RegisterEntriesToRepack(string inputDir, List<string> filesToIgnore)
+        public void RegisterEntriesToRepack(string inputDir, List<string> filesToIgnore, bool doMD5 = false)
         {
             string[] fileNames = Directory.GetFiles(inputDir, "*", SearchOption.AllDirectories);
             Array.Sort(fileNames, StringComparer.OrdinalIgnoreCase);
@@ -401,11 +406,25 @@ namespace GTToolsSharp
                     continue;
                 }
 
-                entry.FileSize = file.Length;
+
+                Debug.Assert(entry.FileSize < uint.MaxValue, "Max file size must not be above 4gb (max unsigned integer)");
+                entry.FileSize = (uint)file.Length;
 
                 entry.LastModified = new DateTime(file.LastWriteTime.Year, file.LastWriteTime.Month, file.LastWriteTime.Day,
                     file.LastWriteTime.Hour, file.LastWriteTime.Minute, file.LastWriteTime.Second, DateTimeKind.Unspecified);
                 FilesToPack.Add(entry.VolumeDirPath, entry);
+
+                if (doMD5)
+                {
+                    using (var md5 = MD5.Create())
+                    {
+                        using (var stream = File.OpenRead(entry.FullPath))
+                        {
+                            var hash = md5.ComputeHash(stream);
+                            entry.MD5Checksum = BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+                        }
+                    }
+                }
             }
         }
 
