@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\PDTools\PDTools.Compression\PDTools.Compression.csproj" />
     <ProjectReference Include="..\PDTools\PDTools.Crypto\PDTools.Crypto.csproj" />
+    <ProjectReference Include="..\PDTools\PDTools.GrimPFS\PDTools.GrimPFS.csproj" />
     <ProjectReference Include="..\PDTools\PDTools.Utils\PDTools.Utils.csproj" />
   </ItemGroup>
 

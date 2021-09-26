@@ -37,17 +37,8 @@ namespace GTToolsSharp
         public string InputPath { get; set; }
         public bool IsPatchVolume { get; set; }
         public string PatchVolumeFolder { get; set; }
-        public bool UsePackingCache { get; set; }
         public bool NoCompress { get; set; }
-        public bool CreateBDMARK { get; set; }
         public bool IsGT5PDemoStyle { get; set; }
-
-        public Dictionary<string, InputPackEntry> FilesToPack = new Dictionary<string, InputPackEntry>();
-
-        /// <summary>
-        /// The packing cache to use to speed up packing which ignores already properly packed files.
-        /// </summary>
-        private PackCache _packCache { get; set; } = new PackCache();
 
         public VolumeHeaderBase VolumeHeader { get; set; }
         public byte[] VolumeHeaderData { get; private set; }
@@ -128,7 +119,7 @@ namespace GTToolsSharp
 
             Program.Log($"[>] PFS Version/Serial No: '{vol.VolumeHeader.SerialNumber}'");
             Program.Log($"[>] Table of Contents Entry Index: {vol.VolumeHeader.ToCNodeIndex}");
-            Program.Log($"[>] TOC Size: {vol.VolumeHeader.CompressedTOCSize} bytes ({vol.VolumeHeader.ExpandedTOCSize} expanded)");
+            Program.Log($"[>] TOC Size: 0x{vol.VolumeHeader.CompressedTOCSize:X8} bytes (0x{vol.VolumeHeader.ExpandedTOCSize:X8} expanded)");
             if (vol.VolumeHeader is FileDeviceGTFS2Header header2)
             {
                 Program.Log($"[>] Total Volume Size: {MiscUtils.BytesToString((long)header2.TotalVolumeSize)}");
@@ -143,15 +134,15 @@ namespace GTToolsSharp
                 return null;
             }
 
-            if (!vol.TableOfContents.LoadTOC())
+            if (!vol.TableOfContents.Load())
             {
                 fs?.Dispose();
                 return null;
             }
 
-            Program.Log($"[>] File names tree offset: {vol.TableOfContents.NameTreeOffset}", true);
-            Program.Log($"[>] File extensions tree offset: {vol.TableOfContents.FileExtensionTreeOffset}", true);
-            Program.Log($"[>] Node tree offset: {vol.TableOfContents.NodeTreeOffset}", true);
+            Program.Log($"[>] File names tree offset: 0x{vol.TableOfContents.NameTreeOffset:X8}", true);
+            Program.Log($"[>] File extensions tree offset: 0x{vol.TableOfContents.FileExtensionTreeOffset:X8}", true);
+            Program.Log($"[>] Node tree offset: 0x{vol.TableOfContents.NodeTreeOffset:X8}", true);
             Program.Log($"[>] Entry count: {vol.TableOfContents.RootAndFolderOffsets.Count}.", true);
 
             if (Program.SaveTOC)
@@ -269,12 +260,12 @@ namespace GTToolsSharp
                 var br = new BinaryReader(MainStream);
                 byte[] data = br.ReadBytes((int)VolumeHeader.CompressedTOCSize);
 
-                Program.Log($"[-] TOC Entry is {VolumeHeader.ToCNodeIndex} which is at offset {GTVolumeTOC.SECTOR_SIZE}", true);
+                Program.Log($"[-] TOC Entry Index is {VolumeHeader.ToCNodeIndex} (Offset: 0x{GTVolumeTOC.SECTOR_SIZE:X8})", true);
 
                 // Decrypt it with the seed that the main header gave us
                 CryptoUtils.CryptBuffer(Keyset, data, data, VolumeHeader.ToCNodeIndex);
 
-                Program.Log($"[-] Decompressing TOC within volume.. (offset: {GTVolumeTOC.SECTOR_SIZE})", true);
+                Program.Log($"[-] Decompressing TOC within volume.. (Offset: 0x{GTVolumeTOC.SECTOR_SIZE:X8})", true);
                 if (!PS2ZIP.TryInflateInMemory(data, VolumeHeader.ExpandedTOCSize, out byte[] deflatedData))
                     return false;
 
@@ -287,146 +278,6 @@ namespace GTToolsSharp
             return true;
         }
 
-        public void PackFiles(string outrepackDir, List<string> filesToRemove, bool packAllAsNew, string customTitleID, bool createUpdateNodeInfo = false)
-        {
-            if (FilesToPack.Count == 0 && filesToRemove.Count == 0)
-            {
-                Program.Log("[X] Found no files to pack or remove from volume.", forceConsolePrint: true);
-                Console.WriteLine("[?] Continue? (Y/N)");
-                if (Console.ReadKey().Key != ConsoleKey.Y)
-                    return;
-            }
-
-            var sw = Stopwatch.StartNew();
-
-            // Leftover?
-            if (Directory.Exists($"{outrepackDir}_temp"))
-                Directory.Delete($"{outrepackDir}_temp", true);
-
-            // Create temp to make sure we aren't transfering user leftovers
-            Directory.CreateDirectory($"{outrepackDir}_temp");
-
-            if (CreateBDMARK)
-                Directory.CreateDirectory("PDIPFS_bdmark");
-
-            Program.Log($"[-] Preparing to pack {FilesToPack.Count} files, and remove {filesToRemove.Count} files");
-            PackCache newCache = TableOfContents.PackFilesForPatchFileSystem(FilesToPack, _packCache, filesToRemove, outrepackDir, packAllAsNew);
-            if (UsePackingCache)
-                newCache.Save(".pack_cache");
-
-            // Delete main one if needed
-            if (Directory.Exists(outrepackDir))
-                Directory.Delete(outrepackDir, true);
-
-            Directory.Move($"{outrepackDir}_temp", outrepackDir);
-
-            Program.Log($"[-] Verifying and fixing Table of Contents segment sizes if needed");
-            if (!TableOfContents.TryCheckAndFixInvalidSectorIndexes())
-                Program.Log($"[-] Re-ordered segment indexes.");
-            else
-                Program.Log($"[/] Segment sizes are correct.");
-
-            if (packAllAsNew)
-                Program.Log($"[-] Packing as new: New TOC Entry Index is {VolumeHeader.ToCNodeIndex}.");
-
-            Program.Log($"[-] Saving Table of Contents ({PDIPFSPathResolver.GetPathFromSeed(VolumeHeader.ToCNodeIndex)})");
-            TableOfContents.SaveToPatchFileSystem(outrepackDir, out uint compressedSize, out uint uncompressedSize);
-
-            if (VolumeHeader is FileDeviceGTFS2Header header2)
-            {
-                if (!string.IsNullOrEmpty(customTitleID) && customTitleID.Length <= 128)
-                    header2.TitleID = customTitleID;
-
-                header2.TotalVolumeSize = TableOfContents.GetTotalPatchFileSystemSize(compressedSize);
-            }
-
-            VolumeHeader.CompressedTOCSize = compressedSize;
-            VolumeHeader.ExpandedTOCSize = uncompressedSize;
-            
-            Program.Log($"[-] Saving main volume header ({PDIPFSPathResolver.Default})");
-            byte[] header = VolumeHeader.Serialize();
-
-            Span<uint> headerBlocks = MemoryMarshal.Cast<byte, uint>(header);
-            Keyset.EncryptBlocks(headerBlocks, headerBlocks);
-            CryptoUtils.CryptBuffer(Keyset, header, header, BASE_VOLUME_ENTRY_INDEX);
-
-            string headerPath = Path.Combine(outrepackDir, PDIPFSPathResolver.Default);
-            Directory.CreateDirectory(Path.GetDirectoryName(headerPath));
-
-            File.WriteAllBytes(headerPath, header);
-
-            if (createUpdateNodeInfo)
-            {
-                Program.Log($"[-] Creating UPDATENODEINFO (for {TableOfContents.UpdateNodeInfo.Entries.Count} node(s) updated)");
-                TableOfContents.UpdateNodeInfo.WriteNodeInfo(Path.Combine(outrepackDir, "UPDATENODEINFO"));
-            }
-
-            sw.Stop();
-            Program.Log($"[/] Done packing in {sw.Elapsed}.", forceConsolePrint: true);
-        }
-
-        /// <summary>
-        /// Reads the specified packing cache, used to speed up the packing process by ignoring files that are already properly packed..
-        /// </summary>
-        /// <param name="path"></param>
-        public void ReadPackingCache(string path)
-        {
-            using var ts = File.OpenText(path);
-            while (!ts.EndOfStream)
-            {
-                var entry = new PackedCacheEntry();
-                string line = ts.ReadLine();
-                string[] args = line.Split("\t");
-                entry.VolumePath = args[0];
-                entry.FileIndex = uint.Parse(args[1]);
-                entry.LastModified = DateTime.Parse(args[2]);
-                entry.FileSize = long.Parse(args[3]);
-                entry.CompressedFileSize = long.Parse(args[4]);
-                _packCache.Entries.Add(entry.VolumePath, entry);
-            }
-        }
-
-        public void RegisterEntriesToRepack(string inputDir, List<string> filesToIgnore, bool doMD5 = false)
-        {
-            string[] fileNames = Directory.GetFiles(inputDir, "*", SearchOption.AllDirectories);
-            Array.Sort(fileNames, StringComparer.OrdinalIgnoreCase);
-            var files = fileNames.Select(fileName => new FileInfo(fileName))
-                //.OrderBy(e => e.FullName)
-                //.OrderBy(file => file.LastWriteTime) // For cache purposes, important!
-                .ToArray();
-
-            foreach (var file in files)
-            {
-                var entry = new InputPackEntry();
-                entry.FullPath = file.ToString();
-                entry.VolumeDirPath = entry.FullPath.AsSpan(inputDir.Length).TrimStart('\\').ToString().Replace('\\', '/');
-                if (filesToIgnore.Contains(entry.VolumeDirPath))
-                {
-                    Program.Log($"[:] Ignoring: '{entry.VolumeDirPath}'");
-                    continue;
-                }
-
-
-                Debug.Assert(entry.FileSize < uint.MaxValue, "Max file size must not be above 4gb (max unsigned integer)");
-                entry.FileSize = (uint)file.Length;
-
-                entry.LastModified = new DateTime(file.LastWriteTime.Year, file.LastWriteTime.Month, file.LastWriteTime.Day,
-                    file.LastWriteTime.Hour, file.LastWriteTime.Minute, file.LastWriteTime.Second, DateTimeKind.Unspecified);
-                FilesToPack.Add(entry.VolumeDirPath, entry);
-
-                if (doMD5)
-                {
-                    using (var md5 = MD5.Create())
-                    {
-                        using (var stream = File.OpenRead(entry.FullPath))
-                        {
-                            var hash = md5.ComputeHash(stream);
-                            entry.MD5Checksum = BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-                        }
-                    }
-                }
-            }
-        }
 
         public static string lastEntryPath = "";
         public string GetEntryPath(FileEntryKey key, string prefix)

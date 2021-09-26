@@ -104,9 +104,11 @@ namespace GTToolsSharp
 
             PrintToConsole = true;
 
+            PatchFileSystemBuilder builder = new PatchFileSystemBuilder(vol);
+
             if (options.Cache)
                 Program.Log("[!] Using packing cache. (--cache)");
-            vol.UsePackingCache = options.Cache;
+            builder.UsePackingCache = options.Cache;
 
             Program.Log("[-] Started packing process.");
 
@@ -134,8 +136,8 @@ namespace GTToolsSharp
                 Program.Log($"[!] Files to ignore: {filesToIgnore.Count} entries (--ignore-files)");
             }
 
-            if (vol.UsePackingCache && File.Exists(".pack_cache"))
-                vol.ReadPackingCache(".pack_cache");
+            if (builder.UsePackingCache && File.Exists(".pack_cache"))
+                builder.ReadPackingCache(".pack_cache");
 
             if (options.StartIndex != 0)
             {
@@ -145,18 +147,21 @@ namespace GTToolsSharp
 
             if (options.CreateBDMARK)
                 Program.Log("[!] PDIPFS_bdmark will be created. (--create_bdmark)");
-            vol.CreateBDMARK = options.CreateBDMARK;
+            builder.CreateBDMark = options.CreateBDMARK;
 
-            vol.NoCompress = options.NoCompress;
-            vol.RegisterEntriesToRepack(options.FolderToRepack, filesToIgnore, options.UpdateNodeInfo);
+            builder.NoCompress = options.NoCompress;
+            builder.CreateUpdateNodeInfo = options.UpdateNodeInfo;
+            builder.RegisterFilesToPackFromDirectory(options.FolderToRepack, filesToIgnore, options.UpdateNodeInfo);
+            builder.GrimPatch = options.GrimPatch;
+            builder.PackAllAsNewEntries = options.PackAllAsNew;
 
             if (options.Version != null)
-                vol.VolumeHeader.SerialNumber = options.Version.Value;
+                builder.NewSerial = options.Version.Value;
 
             if (!string.IsNullOrEmpty(options.CustomGameID))
                 Program.Log($"[!] Volume Game ID will be set to '{options.CustomGameID}'. (--custom-game-id)");
 
-            vol.PackFiles(options.OutputPath, filesToRemove, !options.PackAsOverwrite, options.CustomGameID, options.UpdateNodeInfo);
+            builder.Build(options.OutputPath, filesToRemove, options.CustomGameID);
         }
 
         public static void Unpack(UnpackVerbs options)

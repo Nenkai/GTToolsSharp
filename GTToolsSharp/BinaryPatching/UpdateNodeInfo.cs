@@ -100,8 +100,19 @@ namespace GTToolsSharp.BinaryPatching
     [Flags]
     public enum TPPSFileState
     {
-        Uncompressed,
-        Compressed,
-        CompressedInAndOut
+        /// <summary>
+        /// File should just be overwritten.
+        /// </summary>
+        Overwrite,
+        
+        /// <summary>
+        /// File should be binary patched.
+        /// </summary>
+        BinaryPatched,
+
+        /// <summary>
+        /// File should be used as a base for binary patching.
+        /// </summary>
+        BinaryPatchBase
     }
 }

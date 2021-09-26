@@ -119,12 +119,9 @@ namespace GTToolsSharp
         [Option('l', "log", HelpText = "Log file path. Default is log.txt.", Default = "log.txt")]
         public string LogPath { get; set; }
 
-        [Option("pack-all-as-new", HelpText = "On by default. This marks all the files provided to pack, including existing ones in the volume as new files. " +
+        [Option("pack-all-as-new", Default = true, HelpText = "On by default. This marks all the files provided to pack, including existing ones in the volume as new files. " +
             "This is useful when creating a mod that add or modifies file content from the game without actually modifying files, just adding new ones, so only a volume header (K/4D) backup is required to revert all of the changes.")]
-        public bool PackAllAsNew { get; set; }
-
-        [Option("pack-as-overwrite", HelpText = "Advanced users only. Instead of packing files as new files and leaving original entries untouched, they are overwritten.")]
-        public bool PackAsOverwrite { get; set; }
+        public bool PackAllAsNew { get; set; } = true;
 
         [Option("custom-game-id", HelpText = "Custom Game-ID/Description to assign to the volume header. Must not be above 128 characters.")]
         public string CustomGameID { get; set; }
@@ -138,8 +135,11 @@ namespace GTToolsSharp
         [Option("create_bdmark", HelpText = "Bdmark will be created. Advanced users only. Used for patching games from their first version (i.e GT5 1.00) as bdmark tells which files were read from the disc and installed into the HDD.")]
         public bool CreateBDMARK { get; set; }
 
-        [Option("updatenodeinfo", HelpText = "Creates an update node info file with the summary of the patch. Advanced users only.")]
+        [Option("updatenodeinfo", HelpText = "Advanced users only. Creates an update node info file with the summary of the patch.")]
         public bool UpdateNodeInfo { get; set; }
+
+        [Option("grim-patch", HelpText = "Advanced users only. Creates a grim patch summary file.")]
+        public bool GrimPatch { get; set; }
 
         [Option("version", Hidden = true, HelpText = "Set version")]
         public ulong? Version { get; set; }

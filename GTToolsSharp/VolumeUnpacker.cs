@@ -286,8 +286,8 @@ namespace GTToolsSharp
             byte[] oldFile = File.ReadAllBytes(oldFilePath);
             Volume.Keyset.CryptBytes(oldFile, oldFile, info.CurrentEntryIndex);
 
-            if (info.NewFileInfoFlags == TPPSFileState.Compressed)
-                PS2ZIP.InflateInMemory(oldFile, out oldFile);
+            if (info.NewFileInfoFlags == TPPSFileState.BinaryPatched)
+                PS2ZIP.TryInflateInMemory(oldFile, key.UncompressedSize, out oldFile);
 
             string patchPfsPath = PDIPFSPathResolver.GetPathFromSeed(info.NewEntryIndex);
             string patchPath = Path.Combine(Volume.InputPath, patchPfsPath);
