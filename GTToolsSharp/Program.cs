@@ -150,10 +150,11 @@ namespace GTToolsSharp
             builder.CreateBDMark = options.CreateBDMARK;
 
             builder.NoCompress = options.NoCompress;
-            builder.CreateUpdateNodeInfo = options.UpdateNodeInfo;
             builder.RegisterFilesToPackFromDirectory(options.FolderToRepack, filesToIgnore, options.UpdateNodeInfo);
             builder.GrimPatch = options.GrimPatch;
             builder.PackAllAsNewEntries = options.PackAllAsNew;
+            builder.CreateUpdateNodeInfo = options.UpdateNodeInfo;
+            builder.CreatePatchSequence = options.PatchSequence;
 
             if (options.Version != null)
                 builder.NewSerial = options.Version.Value;

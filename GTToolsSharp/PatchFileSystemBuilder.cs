@@ -39,10 +39,11 @@ namespace GTToolsSharp
         public bool PackAllAsNewEntries { get; set; }
         public bool CreateBDMark { get; set; }
         public bool CreateUpdateNodeInfo { get; set; }
+        public bool CreatePatchSequence { get; set; }
         public bool UsePackingCache { get; set; }
         public bool NoCompress { get; set; }
         public bool GrimPatch { get; set; }
-        public ulong? NewSerial { get; set; }
+        public ulong NewSerial { get; set; }
 
         /// <summary>
         /// The packing cache to use to speed up packing which ignores already properly packed files.
@@ -119,6 +120,20 @@ namespace GTToolsSharp
                     return;
             }
 
+            ulong oldSerial = _volumeHeader.SerialNumber;
+            /*
+            if (NewSerial == 0)
+            {
+                var now = DateTimeOffset.UtcNow;
+                NewSerial = (ulong)(now - TimeSpan.FromSeconds(978307200)).ToUnixTimeSeconds();
+                Program.Log($"[-] PFS Serial set to today's date -> {NewSerial} ({now})");
+            }
+            else
+            {
+                Program.Log($"[-] PFS Serial forced as ({NewSerial})");
+            }*/
+            NewSerial = oldSerial;
+
             if (GrimPatch)
             {
                 if (_volumeHeader is not FileDeviceGTFS2Header)
@@ -134,9 +149,9 @@ namespace GTToolsSharp
                         return;
                 }
 
-                if (NewSerial is null || NewSerial <= _volumeHeader.SerialNumber)
+                if (NewSerial <= _volumeHeader.SerialNumber)
                 {
-                    Program.Log($"[X] Volume version argument must be set and above the current volume's serial ({_volumeHeader.SerialNumber}).", forceConsolePrint: true);
+                    Program.Log($"[X] Volume version argument is set but be above the current volume's serial ({_volumeHeader.SerialNumber}).", forceConsolePrint: true);
                     return;
                 }
             }
@@ -152,6 +167,7 @@ namespace GTToolsSharp
 
             if (CreateBDMark)
                 Directory.CreateDirectory("PDIPFS_bdmark");
+
 
             Program.Log($"[-] Preparing to pack {FilesToPack.Count} file(s), and remove {filesToRemove.Count} file(s)");
             PackCache newCache = PackFilesForPatchFileSystem(FilesToPack, _packCache, filesToRemove, outrepackDir);
@@ -186,11 +202,6 @@ namespace GTToolsSharp
 
             _volumeHeader.CompressedTOCSize = compressedSize;
             _volumeHeader.ExpandedTOCSize = uncompressedSize;
-            if (NewSerial is not null)
-            {
-                Program.Log($"[-] Updating PFS Serial [{_volumeHeader.SerialNumber} -> {NewSerial}]");
-                _volumeHeader.SerialNumber = NewSerial.Value; // Apply our new version
-            }
 
             Program.Log($"[-] Saving Main Volume Header -> {PDIPFSPathResolver.Default}");
             byte[] header = _volumeHeader.Serialize();
@@ -216,6 +227,12 @@ namespace GTToolsSharp
                 UpdateNodeInfo.WriteNodeInfo(Path.Combine(outrepackDir, "UPDATENODEINFO"));
             }
 
+            if (CreatePatchSequence)
+            {
+                Program.Log($"[-] Creating PATCHSEQUENCE [{oldSerial} -> {NewSerial}]");
+                CreatePatchSequenceFile(Path.Combine(outrepackDir, "PATCHSEQUENCE"), oldSerial, NewSerial);
+            }
+
             if (Patch is not null)
             {
                 Program.Log($"[-] Creating Grim Patch");
@@ -237,7 +254,7 @@ namespace GTToolsSharp
                 UpdateNodeInfo = new UpdateNodeInfo();
 
             if (GrimPatch)
-                Patch = new GrimPatch((_volumeHeader as FileDeviceGTFS2Header).TitleID, _volumeHeader.SerialNumber, NewSerial.Value);
+                Patch = new GrimPatch((_volumeHeader as FileDeviceGTFS2Header).TitleID, _volumeHeader.SerialNumber, NewSerial);
 
             // If we are packing as new, ensure the TOC is before all the files (that will come after it)
             if (PackAllAsNewEntries)
@@ -395,6 +412,14 @@ namespace GTToolsSharp
 
             if (UpdateNodeInfo is not null)
                 UpdateNodeInfo.Entries.Add(nodeInfo.NewEntryIndex, nodeInfo);
+        }
+
+
+        private void CreatePatchSequenceFile(string outPath, ulong baseSerial, ulong targetSerial)
+        {
+            using var sw = new StreamWriter(outPath);
+            sw.WriteLine(baseSerial);
+            sw.WriteLine(targetSerial);
         }
 
         /// <summary>

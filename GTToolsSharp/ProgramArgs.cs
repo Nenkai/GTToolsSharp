@@ -138,6 +138,9 @@ namespace GTToolsSharp
         [Option("updatenodeinfo", HelpText = "Advanced users only. Creates an update node info file with the summary of the patch.")]
         public bool UpdateNodeInfo { get; set; }
 
+        [Option("patchsequence", HelpText = "Advanced users only. Creates a patch sequence file.")]
+        public bool PatchSequence { get; set; }
+
         [Option("grim-patch", HelpText = "Advanced users only. Creates a grim patch summary file.")]
         public bool GrimPatch { get; set; }
 

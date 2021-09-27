@@ -64,7 +64,7 @@ namespace GTToolsSharp.Headers
 
         }
 
-        public static VolumeHeaderBase Load(Stream input, GTVolume parentVolume, VolumeHeaderType volHeaderType)
+        public static VolumeHeaderBase Load(Stream input, GTVolume parentVolume, VolumeHeaderType volHeaderType, out byte[] headerBytes)
         {
             VolumeHeaderBase header = volHeaderType switch
             {
@@ -77,7 +77,7 @@ namespace GTToolsSharp.Headers
             if (input.Length < header.HeaderSize)
                 throw new Exception("Input stream was too small for the header size.");
 
-            var headerBytes = input.ReadBytes(header.HeaderSize);
+            headerBytes = input.ReadBytes(header.HeaderSize);
             parentVolume.DecryptHeader(headerBytes, GTVolume.BASE_VOLUME_ENTRY_INDEX);
             header.Read(headerBytes);
             return header;

@@ -112,8 +112,9 @@ namespace GTToolsSharp
 
             fs.Position = 0;
             vol.InputPath = path;
-            vol.VolumeHeader = VolumeHeaderBase.Load(fs, vol, headerType);
-  
+            vol.VolumeHeader = VolumeHeaderBase.Load(fs, vol, headerType, out byte[] headerBytes);
+            vol.VolumeHeaderData = headerBytes;
+
             if (Program.SaveHeader)
                 File.WriteAllBytes("VolumeHeader.bin", vol.VolumeHeaderData);
 
