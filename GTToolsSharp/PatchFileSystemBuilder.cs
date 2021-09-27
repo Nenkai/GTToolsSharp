@@ -121,7 +121,6 @@ namespace GTToolsSharp
             }
 
             ulong oldSerial = _volumeHeader.SerialNumber;
-            /*
             if (NewSerial == 0)
             {
                 var now = DateTimeOffset.UtcNow;
@@ -131,7 +130,7 @@ namespace GTToolsSharp
             else
             {
                 Program.Log($"[-] PFS Serial forced as ({NewSerial})");
-            }*/
+            }
             NewSerial = oldSerial;
 
             if (GrimPatch)

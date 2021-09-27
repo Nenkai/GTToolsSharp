@@ -73,6 +73,7 @@ namespace GTToolsSharp.Utils
         /// <param name="outPath"></param>
         public static uint EncryptAndDeflateToFile(Keyset keyset, FileStream inputStream, uint nodeSeed, string outPath, bool closeStream = true)
         {
+            const int bufferSize = 0x20000;
             // Prepare encryption
             uint crc = ~CRC32.CRC32_0x04C11DB7(keyset.Magic, 0);
             uint[] keys = VolumeCrypto.PrepareKey(crc ^ nodeSeed, keyset.Key.Data);
@@ -80,8 +81,8 @@ namespace GTToolsSharp.Utils
 
             // Prepare compression and buffers
             var deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
-            byte[] buffer = ArrayPool<byte>.Shared.Rent(0x20000);
-            byte[] deflateBuffer = ArrayPool<byte>.Shared.Rent(0x20000);
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
+            byte[] deflateBuffer = ArrayPool<byte>.Shared.Rent(bufferSize);
 
             using var outputStream = File.Open(outPath, FileMode.Create);
             Span<byte> header = stackalloc byte[8];
@@ -95,7 +96,10 @@ namespace GTToolsSharp.Utils
             {
                 int read = inputStream.Read(buffer);
                 deflater.SetInput(buffer, 0, read);
-                deflater.Flush(); // Important
+                if (bytesLeft <= bufferSize)
+                    deflater.Finish();
+                else
+                    deflater.Flush(); // Important
 
                 int nBytesDeflated = deflater.Deflate(deflateBuffer, 0, read);
                 VolumeCrypto.DecryptBuffer(deflateBuffer, deflateBuffer, nBytesDeflated, bitsTable, (ulong)outputStream.Position);
