@@ -96,24 +96,41 @@ namespace GTToolsSharp
             byte[] headerMagic = new byte[4];
             fs.Read(headerMagic);
 
-            if (!vol.DecryptHeader(headerMagic, BASE_VOLUME_ENTRY_INDEX))
+            Span<byte> tmp = new byte[4];
+            headerMagic.AsSpan().CopyTo(tmp);
+
+            if (!vol.DecryptHeader(tmp, BASE_VOLUME_ENTRY_INDEX))
             {
                 fs?.Dispose();
                 return null;
             }
 
-            var headerType = VolumeHeaderBase.Detect(headerMagic);
+            // Try old if failed
+            var headerType = VolumeHeaderBase.Detect(tmp);
+            if (headerType == VolumeHeaderType.Unknown)
+            {
+                tmp = new byte[0x14];
+                fs.Position = 0;
+                fs.Read(tmp);
+
+                if (vol.DecryptHeaderOld(tmp))
+                    headerType = VolumeHeaderBase.Detect(tmp);
+
+                if (headerType == VolumeHeaderType.PFS)
+                    vol.SetKeyset(KeysetStore.Keyset_GT5P_JP_DEMO);
+            }
+
             if (headerType == VolumeHeaderType.Unknown)
             {
                 fs?.Dispose();
                 return null;
             }
 
-
             fs.Position = 0;
             vol.InputPath = path;
             vol.VolumeHeader = VolumeHeaderBase.Load(fs, vol, headerType, out byte[] headerBytes);
             vol.VolumeHeaderData = headerBytes;
+            vol.IsGT5PDemoStyle = headerType == VolumeHeaderType.PFS;
 
             if (Program.SaveHeader)
                 File.WriteAllBytes("VolumeHeader.bin", vol.VolumeHeaderData);
@@ -195,16 +212,6 @@ namespace GTToolsSharp
         /// <returns></returns>
         public bool DecryptHeader(Span<byte> headerData, uint seed)
         {
-            if (VolumeHeader is FileDeviceGTFSHeader)
-            {
-                GT5POldCrypto.DecryptPass(1, headerData, headerData, 0x14);
-
-                byte[] outdata = new byte[0x14];
-                GT5POldCrypto.DecryptHeaderSpecific(outdata, headerData);
-                outdata.CopyTo(headerData);
-                return true;
-            }
-
             if (Keyset.Key.Data is null || Keyset.Key.Data.Length < 4)
                 return false;
 
@@ -215,13 +222,29 @@ namespace GTToolsSharp
             return true;
         }
 
+        /// <summary>
+        /// Decrypts the header of the main volume file, using a provided seed. GT5P JP Demo version.
+        /// </summary>
+        /// <param name="headerData"></param>
+        /// <param name="seed"></param>
+        /// <returns></returns>
+        public bool DecryptHeaderOld(Span<byte> headerData)
+        {
+            if (headerData.Length != 0x14)
+                return false;
+
+            GT5POldCrypto.DecryptPass(1, headerData, headerData, 0x14);
+
+            byte[] outdata = new byte[0x14];
+            GT5POldCrypto.DecryptHeaderSpecific(outdata, headerData);
+            outdata.CopyTo(headerData);
+            return true;
+        }
+
         private bool DecryptTOC()
         {
             if (VolumeHeader is null)
                 throw new InvalidOperationException("Header was not yet loaded");
-
-            if (Keyset.Key.Data is null || Keyset.Key.Data.Length < 4)
-                return false;
 
             if (IsPatchVolume)
             {

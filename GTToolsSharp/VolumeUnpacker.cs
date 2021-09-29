@@ -86,12 +86,12 @@ namespace GTToolsSharp
             }
             else
             {
-                ulong offset = Volume.DataOffset + (ulong)nodeKey.SectorOffset * GTVolumeTOC.SECTOR_SIZE;
                 if (!Volume.IsPatchVolume)
                 {
                     if (NoUnpack)
                         return false;
 
+                    ulong offset = Volume.DataOffset + (ulong)nodeKey.SectorOffset * GTVolumeTOC.SECTOR_SIZE;
                     return UnpackVolumeFile(nodeKey, filePath, offset);
                 }
                 else

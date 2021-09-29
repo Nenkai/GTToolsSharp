@@ -78,7 +78,12 @@ namespace GTToolsSharp.Headers
                 throw new Exception("Input stream was too small for the header size.");
 
             headerBytes = input.ReadBytes(header.HeaderSize);
-            parentVolume.DecryptHeader(headerBytes, GTVolume.BASE_VOLUME_ENTRY_INDEX);
+
+            if (volHeaderType == VolumeHeaderType.PFS)
+                parentVolume.DecryptHeaderOld(headerBytes);
+            else
+                parentVolume.DecryptHeader(headerBytes, GTVolume.BASE_VOLUME_ENTRY_INDEX);
+
             header.Read(headerBytes);
             return header;
         }

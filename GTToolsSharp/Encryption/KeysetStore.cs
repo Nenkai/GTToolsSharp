@@ -17,16 +17,16 @@ namespace GTToolsSharp
         {
             Keys = new()
             {
-                { "/car/lod/00030131", "SoyoGvyMYKCCjcYBCI8rY3GMy9eQlvy3KpEfuL2qZE4oAo5c" },
-                { "/car/menu/00030131", "SoyoGvyMYKCCjcYBCI8rY3GMy9eQlvy3KpEfuL2qZE6GuajW" },
-                { "/car/interior/00030131", "SoyoGvyMYKCCjcYBCI8rY3GMy9eQlvy3KpEfuL2qZE5JUizQ" },
-                { "/car/meter/00030131", "SoyoGvyMYKCCjcYBCI8rY3GMy9eQlvy3KpEfuL2qZE5iDFjf" },
-                { "/piece/car_thumb_M/gtr_07_01.img", "cjg1NDJzZDVmNGgyNXM0cnQ2eTJkcjg0Z3pkZmJ3ZmEtdwwS" },
+                { "car/lod/00030131", "SoyoGvyMYKCCjcYBCI8rY3GMy9eQlvy3KpEfuL2qZE4oAo5c" },
+                { "car/menu/00030131", "SoyoGvyMYKCCjcYBCI8rY3GMy9eQlvy3KpEfuL2qZE6GuajW" },
+                { "car/interior/00030131", "SoyoGvyMYKCCjcYBCI8rY3GMy9eQlvy3KpEfuL2qZE5JUizQ" },
+                { "car/meter/00030131", "SoyoGvyMYKCCjcYBCI8rY3GMy9eQlvy3KpEfuL2qZE5iDFjf" },
+                { "piece/car_thumb_M/gtr_07_01.img", "cjg1NDJzZDVmNGgyNXM0cnQ2eTJkcjg0Z3pkZmJ3ZmEtdwwS" },
 
-                { "/car/lod/00200032", "KeaQvtvmSURh566l5+kUB1DmtHtv8OVbCesIXJ0ETPI1QYGR" },
-                { "/car/menu/00200032", "KeaQvtvmSURh566l5+kUB1DmtHtv8OVbCesIXJ0ETPJS5l7P" },
-                { "/car/interior/00200032", "KeaQvtvmSURh566l5+kUB1DmtHtv8OVbCesIXJ0ETPKP9PTn" },
-                { "/piece/car_thumb_M/impreza_wrx_sti_07_03.img", "cTM0NWgzNTZ5djJoZzRmMTIzNDQ1NjQ1ajZqMjRoNWY4Rqik" },
+                { "car/lod/00200032", "KeaQvtvmSURh566l5+kUB1DmtHtv8OVbCesIXJ0ETPI1QYGR" },
+                { "car/menu/00200032", "KeaQvtvmSURh566l5+kUB1DmtHtv8OVbCesIXJ0ETPJS5l7P" },
+                { "car/interior/00200032", "KeaQvtvmSURh566l5+kUB1DmtHtv8OVbCesIXJ0ETPKP9PTn" },
+                { "piece/car_thumb_M/impreza_wrx_sti_07_03.img", "cTM0NWgzNTZ5djJoZzRmMTIzNDQ1NjQ1ajZqMjRoNWY4Rqik" },
             }
         });
 
