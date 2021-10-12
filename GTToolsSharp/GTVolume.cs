@@ -26,7 +26,7 @@ namespace GTToolsSharp
     public class GTVolume
     {
         public const int BASE_VOLUME_ENTRY_INDEX = 1;
-
+        
         /// <summary>
         /// Keyset used to decrypt and encrypt volume files.
         /// </summary>

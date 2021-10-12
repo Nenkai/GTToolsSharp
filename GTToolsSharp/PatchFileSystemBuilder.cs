@@ -131,7 +131,8 @@ namespace GTToolsSharp
             {
                 Program.Log($"[-] PFS Serial forced as ({NewSerial})");
             }
-            NewSerial = oldSerial;
+
+            _volumeHeader.SerialNumber = NewSerial;
 
             if (GrimPatch)
             {
@@ -148,9 +149,9 @@ namespace GTToolsSharp
                         return;
                 }
 
-                if (NewSerial <= _volumeHeader.SerialNumber)
+                if (NewSerial <= oldSerial)
                 {
-                    Program.Log($"[X] Volume version argument is set but be above the current volume's serial ({_volumeHeader.SerialNumber}).", forceConsolePrint: true);
+                    Program.Log($"[X] Volume version argument is set but be above the current volume's serial ({oldSerial}).", forceConsolePrint: true);
                     return;
                 }
             }
@@ -316,6 +317,9 @@ namespace GTToolsSharp
             {
                 uint oldEntryFileIndex = key.FileIndex;
                 key = _toc.ModifyExistingEntryAsNew(key, file.VolumeDirPath);
+
+                nodeInfo.NewEntryIndex = key.FileIndex;
+
                 Program.Log($"[:] Entry key for {file.VolumeDirPath} changed as new: {oldEntryFileIndex} -> {key.FileIndex}");
 
                 if (nodeInfo.OldFileInfoFlags == TPPSFileState.BinaryPatchBase)
