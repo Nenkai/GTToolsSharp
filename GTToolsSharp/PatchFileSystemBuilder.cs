@@ -43,6 +43,8 @@ namespace GTToolsSharp
         public bool UsePackingCache { get; set; }
         public bool NoCompress { get; set; }
         public bool GrimPatch { get; set; }
+
+        public ulong OldSerial { get; set; }
         public ulong NewSerial { get; set; }
 
         /// <summary>
@@ -120,7 +122,7 @@ namespace GTToolsSharp
                     return;
             }
 
-            ulong oldSerial = _volumeHeader.SerialNumber;
+            OldSerial = _volumeHeader.SerialNumber;
             if (NewSerial == 0)
             {
                 var now = DateTimeOffset.UtcNow;
@@ -149,9 +151,9 @@ namespace GTToolsSharp
                         return;
                 }
 
-                if (NewSerial <= oldSerial)
+                if (NewSerial <= OldSerial)
                 {
-                    Program.Log($"[X] Volume version argument is set but be above the current volume's serial ({oldSerial}).", forceConsolePrint: true);
+                    Program.Log($"[X] Volume version argument is set but be above the current volume's serial ({OldSerial}).", forceConsolePrint: true);
                     return;
                 }
             }
@@ -229,8 +231,8 @@ namespace GTToolsSharp
 
             if (CreatePatchSequence)
             {
-                Program.Log($"[-] Creating PATCHSEQUENCE [{oldSerial} -> {NewSerial}]");
-                CreatePatchSequenceFile(Path.Combine(outrepackDir, "PATCHSEQUENCE"), oldSerial, NewSerial);
+                Program.Log($"[-] Creating PATCHSEQUENCE [{OldSerial} -> {NewSerial}]");
+                CreatePatchSequenceFile(Path.Combine(outrepackDir, "PATCHSEQUENCE"), OldSerial, NewSerial);
             }
 
             if (Patch is not null)
@@ -254,7 +256,7 @@ namespace GTToolsSharp
                 UpdateNodeInfo = new UpdateNodeInfo();
 
             if (GrimPatch)
-                Patch = new GrimPatch((_volumeHeader as FileDeviceGTFS2Header).TitleID, _volumeHeader.SerialNumber, NewSerial);
+                Patch = new GrimPatch((_volumeHeader as FileDeviceGTFS2Header).TitleID, OldSerial, NewSerial);
 
             // If we are packing as new, ensure the TOC is before all the files (that will come after it)
             if (PackAllAsNewEntries)
