@@ -49,7 +49,7 @@ namespace GTToolsSharp
 
         public bool UnpackFile(FileInfoKey nodeKey, Keyset keyset, string filePath)
         {
-            long offset = SectorSize * nodeKey.SectorOffset;
+            long offset = SectorSize * (long)nodeKey.SectorOffset;
             _fs.Position = offset;
 
             if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed) || (int)nodeKey.Flags == 34)

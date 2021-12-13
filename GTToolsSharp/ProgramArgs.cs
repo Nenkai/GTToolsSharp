@@ -82,10 +82,11 @@ namespace GTToolsSharp
         public uint Seed { get; set; }
 
         [Option("keyset-seed-override", HelpText = "Override keyset seed with custom seed. Use only if you know what you are doing. Used by GT5P to " +
-            "decrypt some files in the grim folder by overriding with the game code, i.e 'NPUA-80075'.")]
+            "decrypt some files in the grim folder by overriding with the DISC game code (even on PSN versions!), " +
+            "i.e for NPUA-80075 which is the GT5P US PSN game code, you would have to use BCUS-98158 which is the DISC game code.")]
         public string KeysetSeedOverride { get; set; }
 
-        [Option("alternative", HelpText = "Use alternative method. Use only if you know what you are doing. Used by GT5P (NPUA80075).")]
+        [Option("alternative", HelpText = "Use alternative method. Only use if you absolutely know what you are doing.")]
         public bool UseAlternative { get; set; }
 
         [Option("salsaencrypt", HelpText = "Advanced users. Salsa key (hex string) to use to encrypt. Do not provide to use default file volume encryption.")]

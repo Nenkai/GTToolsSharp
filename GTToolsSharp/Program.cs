@@ -294,6 +294,13 @@ namespace GTToolsSharp
                     continue;
                 }
 
+                // For some files, game code may be used, i.e "NPUA-80075"
+                if (!string.IsNullOrEmpty(options.KeysetSeedOverride))
+                {
+                    Console.WriteLine($"[!] Overriding {keys.Magic} with {options.KeysetSeedOverride}");
+                    keys.Magic = options.KeysetSeedOverride;
+                }
+
                 bool isDir = File.GetAttributes(file).HasFlag(FileAttributes.Directory);
                 if (isDir)
                 {
@@ -318,7 +325,7 @@ namespace GTToolsSharp
                 byte[] dataKey = new byte[8];
 
                 Console.WriteLine($"[:] Salsa Encrypting '{file}'..");
-                using var decrypt = salsa20.CreateDecryptor(keyBytes, dataKey);
+                using var decrypt = salsa20.CreateEncryptor(keyBytes, dataKey);
                 decrypt.TransformBlock(input, 0, input.Length, input, 0);
             }
             else if (!string.IsNullOrEmpty(options.Salsa20KeyDecrypt))
@@ -328,19 +335,12 @@ namespace GTToolsSharp
                 byte[] dataKey = new byte[8];
 
                 Console.WriteLine($"[:] Salsa Decrypting '{file}'..");
-                using var encrypt = salsa20.CreateEncryptor(keyBytes, dataKey);
+                using var encrypt = salsa20.CreateDecryptor(keyBytes, dataKey);
                 encrypt.TransformBlock(input, 0, input.Length, input, 0);
             }
             else
             {
                 Console.WriteLine($"[:] Crypting '{file}'..");
-
-                // For some files, game code may be used, i.e "NPUA-80075"
-                if (!string.IsNullOrEmpty(options.KeysetSeedOverride))
-                {
-                    Console.WriteLine($"[!] Overriding {keys.Magic} with {options.KeysetSeedOverride}");
-                    keys.Magic = options.KeysetSeedOverride;
-                }
 
                 if (!options.UseAlternative)
                     CryptoUtils.CryptBuffer(keys, input, input, options.Seed);
