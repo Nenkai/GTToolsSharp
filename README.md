@@ -5,18 +5,20 @@ The main motivation for writing this tool was to allow modding GT5/6 through rep
 
 ### Features
 * Unpacking from any PS3-era Gran Turismo. (You'll need the keys to decrypt the volumes).
-* Unpacking **Patch File Systems** (PDIPFS) from game updates (except 1.06 Bsdiff GT6 files, planned)
-* **Packing files for modding** (PDIPFS only, packing an entire 10+gigs GT.VOL is kind of pointless). (Read packing sections)
-* Unpacking files for older version of volumes such as GT5 Prologue Demo
+* **Packing files for modding** (PDIPFS only) (Read packing sections)
+* Unpacking **Patch File Systems** (PDIPFS) from game updates.
+* Unpacking GT Sport Volumes (gt01.vol->gt99.vol & others).
+* Unpacking files for older version of volumes such as GT5 Prologue JP Demo
+* Creating online update patches for GT6
 
 Files can be extracted for GT.VOL (main build volume) and PDIPFS (update patches).
-To unpack/pack certain builds you will need the keys for each one of them. Only the keys for GT5 (EU/US) and GT6 are provided. There is no current support for GT Sport.
+To unpack/pack certain builds you will need the keys for each one of them. Only the keys for GT5P, GT5 (EU/US) and GT6 are provided.
 
 # [DOWNLOAD LINK](https://github.com/Nenkai/GTToolsSharp/releases)
 
 ## Usage
 ### Unpacking
-Input: `GTToolsSharp unpack -i <input GT.VOL or PDIPFS path> -o <Folder to extract to> (--noprint)`
+Input: `GTToolsSharp unpack -i <input GT.VOL or PDIPFS path> -o <Folder to extract to>`
 
 Examples:
   * Normal Unpack: `GTToolsSharp unpack -i PDIPFS -o PDIPFS_EXTRACTED`
@@ -25,8 +27,8 @@ Examples:
 Input: `GTToolsSharp pack -i <PDIPFS> -p <Folder with source files to pack> -o <output of repacked files>`
 
 Examples:
-  * Normal Pack: `GTToolsSharp pack -i PDIPFS --folder-to-pack RepackInput -o RepackedFiles`
-  * To Delete files: `GTToolsSharp pack -i PDIPFS  --folder-to-pack RepackInput -o RepackedFiles --packremovefiles` (Needs files_to_remove.txt in current folder)
+  * Normal Pack: `GTToolsSharp pack -i PDIPFS -p RepackInput -o RepackedFiles`
+  * To Delete files: `GTToolsSharp pack -i PDIPFS  -p RepackInput -o RepackedFiles --remove-files` (Needs files_to_remove.txt in current folder)
   Where `RepackInput` must contain the same game paths for files, i.e `RepackInput/piece/gt5/course_logo_LL/akasaka.img`
 Recommended usage is to **not** to pack to the same input folder. If your input folder is PDIPFS (original), your output folder should not be PDIPFS.
 
