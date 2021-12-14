@@ -82,7 +82,7 @@ namespace GTToolsSharp
 
                 Program.Log($"[:] Unpacking '{entryPath}' from '{volDevice.Name}'..");
 
-                return Volume.SplitVolumes[nodeKey.VolumeIndex].UnpackFile(nodeKey, Volume.Keyset, entryPath);
+                return Volume.SplitVolumes[nodeKey.VolumeIndex].UnpackFile(nodeKey, Volume.Keyset, filePath);
             }
             else
             {

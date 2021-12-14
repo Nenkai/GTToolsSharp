@@ -36,8 +36,8 @@ namespace GTToolsSharp
         [Option('l', "log", HelpText = "Log file path. Default is log.txt.", Default = "log.txt")]
         public string LogPath { get; set; }
 
-        [Option("indexes", HelpText = "List of file specific entry indexes to extract")]
-        public IEnumerable<int> FileIndexesToExtract { get; set; }
+        [Option("indices", HelpText = "List of file specific entry indices to extract")]
+        public IEnumerable<int> FileIndicesToExtract { get; set; }
 
         [Usage(ApplicationAlias = "GTToolsSharp")]
         public static IEnumerable<Example> Examples
@@ -47,7 +47,8 @@ namespace GTToolsSharp
                 return new List<Example>()
                     {
                         new Example("Unpack a GT.VOL", new UnpackVerbs { InputPath = @"C:\XXXXXX\GT.VOL", OutputPath = "GTVOL_EXTRACTED" } ),
-                        new Example("Unpack a PDIPFS", new UnpackVerbs { InputPath = @"C:\XXXXXX\USRDIR\PDIPFS", OutputPath = "PDIPFS_EXTRACTED" } )
+                        new Example("Unpack a PDIPFS", new UnpackVerbs { InputPath = @"C:\XXXXXX\USRDIR\PDIPFS", OutputPath = "PDIPFS_EXTRACTED" } ),
+                        new Example("Unpack a GT Sport Volume", new UnpackVerbs { InputPath = @"C:\XXXXXX\USRDIR\gt.idx", OutputPath = "GTVOL_EXTRACTED" } )
                     };
             }
         }

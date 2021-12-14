@@ -229,7 +229,7 @@ namespace GTToolsSharp
 
             unpacker.BasePFSFolder = options.BasePFSFolder;
 
-            unpacker.UnpackFiles(options.FileIndexesToExtract, options.BasePFSFolder);
+            unpacker.UnpackFiles(options.FileIndicesToExtract, options.BasePFSFolder);
         }
 
         public static void UnpackInstaller(UnpackInstallerVerbs options)
