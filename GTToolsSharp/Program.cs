@@ -25,7 +25,7 @@ namespace GTToolsSharp
         public static bool SaveHeader = false;
         public static bool SaveTOC = false;
 
-        public const string Version = "3.0.1";
+        public const string Version = "4.0.2";
 
         static void Main(string[] args)
         {
