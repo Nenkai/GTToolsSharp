@@ -170,6 +170,9 @@ namespace GTToolsSharp
 
         [Option('o', "output", HelpText = "Output folder for the files to pack.", Default = "volume_entries.txt")]
         public string OutputPath { get; set; }
+
+        [Option("order-by-file-index", HelpText = "Order the file list by their file index.", Default = false)]
+        public bool OrderByFileIndex { get; set; }
     }
 
     [Verb("compress", HelpText = "Custom compresses a file (also known as PS2ZIP)")]

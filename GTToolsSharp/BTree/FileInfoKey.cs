@@ -62,7 +62,7 @@ namespace GTToolsSharp.BTree
             FileIndex = (uint)stream.ReadVarInt();
             CompressedSize = (uint)stream.ReadVarInt();
 
-            if (Flags.HasFlag(FileInfoFlags.Compressed) || (int)Flags == 34)
+            if (Flags.HasFlag(FileInfoFlags.Compressed) || (parentToC.ParentHeader is FileDeviceGTFS3Header && Flags.HasFlag(FileInfoFlags.PDIZIPCompressed)))
                 UncompressedSize = (uint)stream.ReadVarInt();
             else
                 UncompressedSize = CompressedSize;
@@ -77,7 +77,7 @@ namespace GTToolsSharp.BTree
             bs.WriteByte((byte)Flags);
             bs.WriteVarInt((int)FileIndex);
             bs.WriteVarInt((int)CompressedSize);
-            if (Flags.HasFlag(FileInfoFlags.Compressed))
+            if (Flags.HasFlag(FileInfoFlags.Compressed) || (UsesMultipleVolumes && Flags.HasFlag(FileInfoFlags.PDIZIPCompressed)))
                 bs.WriteVarInt((int)UncompressedSize);
 
             if (UsesMultipleVolumes)
@@ -91,7 +91,7 @@ namespace GTToolsSharp.BTree
             uint keyLength = 1;
             keyLength += (uint)BitStream.GetSizeOfVarInt((int)FileIndex);
             keyLength += (uint)BitStream.GetSizeOfVarInt((int)CompressedSize);
-            if (Flags.HasFlag(FileInfoFlags.Compressed))
+            if (Flags.HasFlag(FileInfoFlags.Compressed) || (UsesMultipleVolumes && Flags.HasFlag(FileInfoFlags.PDIZIPCompressed)))
                 keyLength += (uint)BitStream.GetSizeOfVarInt((int)UncompressedSize);
 
             if (UsesMultipleVolumes)
@@ -132,12 +132,29 @@ namespace GTToolsSharp.BTree
     [Flags]
     public enum FileInfoFlags
     {
+        /// <summary>
+        /// File is not compressed.
+        /// </summary>
         Uncompressed = 0x0,
+
+        /// <summary>
+        /// Regular PS2ZIP Compression
+        /// </summary>
         Compressed = 0x01,
+
+        /// <summary>
+        /// GT Sport and above, using newer PDIZIP Chunked Compression
+        /// </summary>
+        PDIZIPCompressed = 0x02,
+
+        /// <summary>
+        /// GT5P Only
+        /// </summary>
         CustomSalsaCrypt = 0x02,
-        a = 0x04,
-        b = 0x08,
-        c = 0x10,
-        d = 0x20,
+
+        UnkFlag0x04 = 0x04,
+        UnkFlag0x08 = 0x08,
+        UnkFlag0x10 = 0x10,
+        UnkFlag0x20 = 0x20,
     }
 }

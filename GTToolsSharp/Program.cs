@@ -25,7 +25,7 @@ namespace GTToolsSharp
         public static bool SaveHeader = false;
         public static bool SaveTOC = false;
 
-        public const string Version = "4.0.2";
+        public const string Version = "4.0.3";
 
         static void Main(string[] args)
         {
@@ -390,6 +390,8 @@ namespace GTToolsSharp
 
             using var sw = new StreamWriter(options.OutputPath);
             var entries = vol.TableOfContents.GetAllRegisteredFileMap();
+            if (options.OrderByFileIndex)
+                entries = entries.OrderBy(e => e.Value.EntryIndex).ToDictionary(x => x.Key, x => x.Value);
 
             if (vol.VolumeHeader is FileDeviceGTFS3Header header3)
             {
@@ -407,7 +409,6 @@ namespace GTToolsSharp
                     sw.WriteLine($"{entry.Key} - {entryInfo} - {header33.VolList[entryInfo.VolumeIndex].Name}");
 
                 }
-
             }
 
             sw.WriteLine($"[!] Wrote {entries.Count} at {options.OutputPath}.");

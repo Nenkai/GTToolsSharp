@@ -52,7 +52,7 @@ namespace GTToolsSharp
             long offset = SectorSize * (long)nodeKey.SectorOffset;
             _fs.Position = offset;
 
-            if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed) || (int)nodeKey.Flags == 34)
+            if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed) || nodeKey.Flags.HasFlag(FileInfoFlags.PDIZIPCompressed))
             {
                 if (!CryptoUtils.DecryptCheckCompression(_fs, keyset, nodeKey.FileIndex, nodeKey.UncompressedSize))
                 {
