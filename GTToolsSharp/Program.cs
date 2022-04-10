@@ -393,7 +393,8 @@ namespace GTToolsSharp
             if (options.OrderByFileIndex)
                 entries = entries.OrderBy(e => e.Value.EntryIndex).ToDictionary(x => x.Key, x => x.Value);
 
-            if (vol.VolumeHeader is FileDeviceGTFS3Header header3)
+            var header3 = vol.VolumeHeader as FileDeviceGTFS3Header;
+            if (header3 is not null)
             {
                 sw.WriteLine("[Volumes]");
                 for (int i = 0; i < header3.VolList.Length; i++)
@@ -403,11 +404,12 @@ namespace GTToolsSharp
 
             foreach (var entry in entries)
             {
-                if (vol.VolumeHeader is FileDeviceGTFS3Header header33)
+                var entryInfo = vol.TableOfContents.FileInfos.GetByFileIndex(entry.Value.EntryIndex);
+                if (header3 is not null)
+                    sw.WriteLine($"{entry.Key} - {entryInfo} - {header3.VolList[entryInfo.VolumeIndex].Name}");
+                else
                 {
-                    var entryInfo = vol.TableOfContents.FileInfos.GetByFileIndex(entry.Value.EntryIndex);
-                    sw.WriteLine($"{entry.Key} - {entryInfo} - {header33.VolList[entryInfo.VolumeIndex].Name}");
-
+                    sw.WriteLine($"{entry.Key} - {entryInfo}");
                 }
             }
 
