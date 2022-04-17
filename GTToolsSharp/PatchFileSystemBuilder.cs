@@ -377,8 +377,12 @@ namespace GTToolsSharp
             }
 
 
-            if (NoCompress && !IsMustBeCompressedFile(file.VolumeDirPath))
-                key.Flags &= ~FileInfoFlags.Compressed;
+            if (key.Flags.HasFlag(FileInfoFlags.Compressed))
+            {
+                bool compressable = IsCompressableFile(file.VolumeDirPath);
+                if (!compressable || (compressable && NoCompress))
+                    key.Flags &= ~FileInfoFlags.Compressed;
+            }
 
             string outputFile = Path.Combine($"{outputDir}_temp", pfsFilePath);
             Directory.CreateDirectory(Path.GetDirectoryName(outputFile));
@@ -473,10 +477,37 @@ namespace GTToolsSharp
         /// </summary>
         /// <param name="path"></param>
         /// <returns></returns>
-        private bool IsMustBeCompressedFile(string path)
+        private bool IsCompressableFile(string path)
         {
             if (path.StartsWith("crs/") && path.EndsWith("stream")) // Stream files should NOT be compressed. Else they don't load.
-                return true;
+                return false;
+
+            if (path.EndsWith(".pam")) // Movies
+                return false;
+
+            if (path.EndsWith(".mpackage")) // Adhoc Packages - Already compressed
+                return false;
+
+            if (path.EndsWith(".png")) // PNG Images - Already compressed
+                return false;
+
+            if (path.EndsWith(".vec")) // Vector Fonts - Bit compressed
+                return false;
+
+            if (path.StartsWith("car/") && (path.EndsWith("body_s") || path.EndsWith("interior_s")) ) // Car Streams - Zlib compressed
+                return false;
+
+            if (path.StartsWith("sound_gt") || path.EndsWith(".sgd") || path.EndsWith(".esgx")) // Music - Bit compressed
+                return false;
+
+            if ((path.StartsWith("database") || path.StartsWith("specdb")) && path.EndsWith(".dat")) // Databases - Anything possibly SQLite
+                return false;
+
+            if (path.EndsWith(".fgp")) // Game Parameter Caches
+                return false;
+
+            if (path.EndsWith(".ted")) // Track Editor files
+                return false;
 
             return true;
         }
