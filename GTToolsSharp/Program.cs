@@ -25,7 +25,7 @@ namespace GTToolsSharp
         public static bool SaveHeader = false;
         public static bool SaveTOC = false;
 
-        public const string Version = "4.0.4";
+        public const string Version = "4.0.5";
 
         static void Main(string[] args)
         {
@@ -272,7 +272,7 @@ namespace GTToolsSharp
         public static void Crypt(CryptVerbs options)
         {
             Keyset keys = null;
-            if (string.IsNullOrEmpty(options.Salsa20KeyEncrypt) && string.IsNullOrEmpty(options.Salsa20KeyDecrypt))
+            if (string.IsNullOrEmpty(options.Salsa20KeyEncrypt))
             {
                 Keyset[] keysets = CheckKeys();
                 if (keysets is null)
@@ -317,38 +317,51 @@ namespace GTToolsSharp
 
         private static void DecryptFile(CryptVerbs options, Keyset keys, string file)
         {
-            byte[] input = File.ReadAllBytes(file);
+            
             if (!string.IsNullOrEmpty(options.Salsa20KeyEncrypt))
             {
                 byte[] keyBytes = MiscUtils.StringToByteArray(options.Salsa20KeyEncrypt);
-                using SymmetricAlgorithm salsa20 = new Salsa20SymmetricAlgorithm();
-                byte[] dataKey = new byte[8];
 
                 Console.WriteLine($"[:] Salsa Encrypting '{file}'..");
-                using var decrypt = salsa20.CreateEncryptor(keyBytes, dataKey);
-                decrypt.TransformBlock(input, 0, input.Length, input, 0);
-            }
-            else if (!string.IsNullOrEmpty(options.Salsa20KeyDecrypt))
-            {
-                byte[] keyBytes = MiscUtils.StringToByteArray(options.Salsa20KeyDecrypt);
-                using SymmetricAlgorithm salsa20 = new Salsa20SymmetricAlgorithm();
-                byte[] dataKey = new byte[8];
 
-                Console.WriteLine($"[:] Salsa Decrypting '{file}'..");
-                using var encrypt = salsa20.CreateDecryptor(keyBytes, dataKey);
-                encrypt.TransformBlock(input, 0, input.Length, input, 0);
+                using (FileStream fs = new FileStream(file, FileMode.Open))
+                using (FileStream fsOut = new FileStream(file + ".out", FileMode.Create))
+                {
+                    byte[] dataKey = new byte[8];
+                    using SymmetricAlgorithm salsa20 = new Salsa20SymmetricAlgorithm();
+                    using var decrypt = salsa20.CreateEncryptor(keyBytes, dataKey);
+
+                    byte[] buffer = new byte[0x8000];
+                    int read;
+                    while ((read = fs.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        decrypt.TransformBlock(buffer, 0, read, buffer, 0);
+                        fsOut.Write(buffer, 0, read);
+                    }
+                }
+
+                // Make backup while replacing
+                if (File.Exists(file))
+                    File.Move(file, file + ".bak");
+                
+                File.Move(file + ".out", file);
+
+                // If replace was done correctly and backup exists, delete it
+                if (File.Exists(file) && File.Exists(file + ".bak"))
+                    File.Delete(file + ".bak");
             }
             else
             {
                 Console.WriteLine($"[:] Crypting '{file}'..");
 
+                byte[] input = File.ReadAllBytes(file);
                 if (!options.UseAlternative)
                     CryptoUtils.CryptBuffer(keys, input, input, options.Seed);
                 else
                     CryptoUtils.CryptBufferAlternative(keys, input, input);
-            }
 
-            File.WriteAllBytes(file, input);
+                File.WriteAllBytes(file, input);
+            }
         }
 
         public static void List(ListVerbs options)

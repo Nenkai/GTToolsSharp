@@ -90,11 +90,8 @@ namespace GTToolsSharp
         [Option("alternative", HelpText = "Use alternative method. Only use if you absolutely know what you are doing.")]
         public bool UseAlternative { get; set; }
 
-        [Option("salsaencrypt", HelpText = "Advanced users. Salsa key (hex string) to use to encrypt. Do not provide to use default file volume encryption.")]
+        [Option("salsacrypt", HelpText = "Advanced users. Salsa key (hex string) to use to encrypt. Do not provide to use default file volume encryption.")]
         public string Salsa20KeyEncrypt { get; set; }
-
-        [Option("salsadecrypt", HelpText = "Advanced users. Salsa key (hex string) to use to decrypt. Do not provide to use default file volume encryption.")]
-        public string Salsa20KeyDecrypt { get; set; }
     }
 
     [Verb("pack", HelpText = "Packs a volume file.")]
