@@ -8,9 +8,11 @@ using Syroot.BinaryData;
 using Syroot.BinaryData.Core;
 using Syroot.BinaryData.Memory;
 
+using PDTools.Utils;
+
 namespace GTToolsSharp.Headers
 {
-    public class FileDeviceGTFS2Header : VolumeHeaderBase
+    public class FileDeviceGTFS2Header : PFSVolumeHeaderBase
     {
         private static readonly byte[] HeaderMagic = { 0x5B, 0x74, 0x51, 0x62 };
 
@@ -56,6 +58,15 @@ namespace GTToolsSharp.Headers
             sw.WriteUInt64(TotalVolumeSize);
             sw.WriteStringFix(TitleID, 0x80);
             return header;
+        }
+
+        public override void PrintInfo()
+        {
+            Program.Log($"[>] PFS Version/Serial No: '{SerialNumber}'");
+            Program.Log($"[>] Table of Contents Entry Index: {ToCNodeIndex}");
+            Program.Log($"[>] TOC Size: 0x{CompressedTOCSize:X8} bytes (0x{ExpandedTOCSize:X8} expanded)");
+            Program.Log($"[>] Total Volume Size: {MiscUtils.BytesToString((long)TotalVolumeSize)}");
+            Program.Log($"[>] Title ID: '{TitleID}'");
         }
     }
 }

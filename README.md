@@ -57,5 +57,8 @@ If you would like your mod to actually overwrite *TOC* entries and original file
 ## Compiling
 If you anyhow want to compile this, Visual Studio 2019 Preview & .NET Core 5.0 is required.
 
+## Credits
+
+flatz for all his invaluable work on volumes, from GT5 to 7.
 
 

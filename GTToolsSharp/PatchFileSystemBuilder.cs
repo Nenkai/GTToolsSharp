@@ -12,6 +12,7 @@ using GTToolsSharp.BinaryPatching;
 using GTToolsSharp.BTree;
 using GTToolsSharp.Headers;
 using GTToolsSharp.Utils;
+using GTToolsSharp.Volumes;
 
 using PDTools.Utils;
 using PDTools.Crypto;
@@ -21,9 +22,9 @@ namespace GTToolsSharp
 {
     public class PatchFileSystemBuilder
     {
-        private GTVolume _volume { get; set; }
-        private GTVolumeTOC _toc { get; set; }
-        private VolumeHeaderBase _volumeHeader => _volume.VolumeHeader;
+        private GTVolumePFS _volume { get; set; }
+        private PFSBTree _toc { get; set; }
+        private PFSVolumeHeaderBase _volumeHeader => _volume.VolumeHeader;
 
         /// <summary>
         /// Difference of files between a volume and a newer one
@@ -52,10 +53,10 @@ namespace GTToolsSharp
         /// </summary>
         private PackCache _packCache { get; set; } = new PackCache();
 
-        public PatchFileSystemBuilder(GTVolume parentVolume)
+        public PatchFileSystemBuilder(GTVolumePFS parentVolume)
         {
             _volume = parentVolume;
-            _toc = _volume.TableOfContents;
+            _toc = _volume.BTree;
         }
 
         /// <summary>
@@ -210,7 +211,7 @@ namespace GTToolsSharp
 
             Span<uint> headerBlocks = MemoryMarshal.Cast<byte, uint>(header);
             _volume.Keyset.EncryptBlocks(headerBlocks, headerBlocks);
-            CryptoUtils.CryptBuffer(_volume.Keyset, header, header, GTVolume.BASE_VOLUME_ENTRY_INDEX);
+            CryptoUtils.CryptBuffer(_volume.Keyset, header, header, GTVolumePFS.BASE_VOLUME_ENTRY_INDEX);
 
             string headerPath = Path.Combine(outrepackDir, PDIPFSPathResolver.Default);
             Directory.CreateDirectory(Path.GetDirectoryName(headerPath));
@@ -238,7 +239,7 @@ namespace GTToolsSharp
             if (Patch is not null)
             {
                 Program.Log($"[-] Creating Grim Patch");
-                Patch.Save(Path.Combine(outrepackDir, "PatchInfo.txt"), GTVolume.BASE_VOLUME_ENTRY_INDEX, _volumeHeader.ToCNodeIndex);
+                Patch.Save(Path.Combine(outrepackDir, "PatchInfo.txt"), GTVolumePFS.BASE_VOLUME_ENTRY_INDEX, _volumeHeader.ToCNodeIndex);
             }
 
             sw.Stop();

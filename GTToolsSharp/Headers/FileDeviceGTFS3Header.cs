@@ -8,9 +8,11 @@ using Syroot.BinaryData;
 using Syroot.BinaryData.Core;
 using Syroot.BinaryData.Memory;
 
+using PDTools.Utils;
+
 namespace GTToolsSharp.Headers
 {
-    public class FileDeviceGTFS3Header : VolumeHeaderBase
+    public class FileDeviceGTFS3Header : PFSVolumeHeaderBase
     {
         private static readonly byte[] HeaderMagic = { 0x5B, 0x74, 0x51, 0x62 };
 
@@ -18,9 +20,9 @@ namespace GTToolsSharp.Headers
 
         public ulong JulianBuiltTime { get; set; }
 
-        public VolEntry[] VolList { get; set; }
+        public VolEntryGTFS3[] VolList { get; set; }
 
-        public record VolEntry(string Name, ulong Size);
+        public record VolEntryGTFS3(string Name, ulong Size);
 
         public override void Read(Span<byte> buffer)
         {
@@ -41,13 +43,13 @@ namespace GTToolsSharp.Headers
             ExpandedTOCSize = sr.ReadUInt32();
             uint volListCount = sr.ReadUInt32();
 
-            VolList = new VolEntry[(int)volListCount];
+            VolList = new VolEntryGTFS3[(int)volListCount];
 
             for (int i = 0; i < volListCount; i++)
             {
                 byte[] name = sr.ReadBytes(16);
                 ulong size = sr.ReadUInt64();
-                VolList[i] = new VolEntry(GetActualVolFileName(name), size);
+                VolList[i] = new VolEntryGTFS3(GetActualVolFileName(name), size);
             }
         }
 
@@ -84,6 +86,13 @@ namespace GTToolsSharp.Headers
 
             string s = Encoding.ASCII.GetString(nameSpan);
             return s.TrimEnd('\0');
+        }
+
+        public override void PrintInfo()
+        {
+            Program.Log($"[>] PFS Version/Serial No: '{SerialNumber}'");
+            Program.Log($"[>] Table of Contents Entry Index: {ToCNodeIndex}");
+            Program.Log($"[>] TOC Size: 0x{CompressedTOCSize:X8} bytes (0x{ExpandedTOCSize:X8} expanded)");
         }
     }
 }

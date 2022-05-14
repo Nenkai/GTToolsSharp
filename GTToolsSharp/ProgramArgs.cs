@@ -54,6 +54,29 @@ namespace GTToolsSharp
         }
     }
 
+    [Verb("gt7unpack", HelpText = "Unpacks a GT7 volume file.")]
+    public class GT7UnpackVerbs
+    {
+        [Option('i', "input", Required = true, HelpText = "Input file volume or folder. Usually GT.VOL, or if game update, a PDIPFS folder.")]
+        public string InputPath { get; set; }
+
+        [Option('o', "output", Required = true, HelpText = "Output Folder for unpacked files. If you don't provide one, will display info about the volume.")]
+        public string OutputPath { get; set; }
+
+        [Option("unpack-log-only", HelpText = "Only log volume information while unpacking. (No unpacking will be done)")]
+        public bool OnlyLog { get; set; }
+
+        [Option("no-print", HelpText = "Whether to disable printing messages if unpacking. Disabling this can speed up the unpacking process")]
+        public bool NoPrint { get; set; }
+
+        [Option("save-volume-header", HelpText = "Decrypts and saves the volume header (as VolumeHeader.bin)")]
+        public bool SaveVolumeHeader { get; set; }
+
+        [Option('l', "log", HelpText = "Log file path. Default is log.txt.", Default = "log.txt")]
+        public string LogPath { get; set; }
+    }
+
+
     [Verb("unpackinstaller", HelpText = "Unpacks an installation file (TV.DAT)")]
     public class UnpackInstallerVerbs
     {

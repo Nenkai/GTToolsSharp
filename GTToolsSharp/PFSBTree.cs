@@ -16,13 +16,14 @@ using PDTools.Utils;
 using PDTools.Compression;
 
 using GTToolsSharp.BinaryPatching;
+using GTToolsSharp.Volumes;
 
 namespace GTToolsSharp
 {
     /// <summary>
     /// Represents multiple B-Trees designing file offsets within an entire volume.
     /// </summary>
-    public class GTVolumeTOC
+    public class PFSBTree
     {
         private readonly static byte[] TOC_MAGIC_BE = { 0x5B, 0x74, 0x51, 0x6E };
         private readonly static byte[] TOC_MAGIC_LE = { 0x6E, 0x51, 0x74, 0x5B };
@@ -42,10 +43,10 @@ namespace GTToolsSharp
         public FileInfoBTree FileInfos { get; private set; }
         public List<FileEntryBTree> Files { get; private set; }
 
-        public VolumeHeaderBase ParentHeader { get; }
-        public GTVolume ParentVolume { get; }
+        public PFSVolumeHeaderBase ParentHeader { get; }
+        public GTVolumePFS ParentVolume { get; }
 
-        public GTVolumeTOC(VolumeHeaderBase parentHeader, GTVolume parentVolume)
+        public PFSBTree(PFSVolumeHeaderBase parentHeader, GTVolumePFS parentVolume)
         {
             ParentHeader = parentHeader;
             ParentVolume = parentVolume;
@@ -645,6 +646,14 @@ namespace GTToolsSharp
                 return false;
 
             return true;
+        }
+
+        public void PrintOffsetInfo()
+        {
+            Program.Log($"[>] File names tree offset: 0x{NameTreeOffset:X8}", true);
+            Program.Log($"[>] File extensions tree offset: 0x{FileExtensionTreeOffset:X8}", true);
+            Program.Log($"[>] Node tree offset: 0x{NodeTreeOffset:X8}", true);
+            Program.Log($"[>] Entry count: {RootAndFolderOffsets.Count}.", true);
         }
     }
 }

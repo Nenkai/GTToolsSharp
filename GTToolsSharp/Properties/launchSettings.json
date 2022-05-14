@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "GTToolsSharp": {
+      "commandName": "Project",
+      "commandLineArgs": "gt7unpack -i"
+    }
+  }
+}

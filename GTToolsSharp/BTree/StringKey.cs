@@ -19,7 +19,7 @@ namespace GTToolsSharp.BTree
 
         public string Value { get; private set; }
 
-        public void Deserialize(ref BitStream stream, GTVolumeTOC parentToC)
+        public void Deserialize(ref BitStream stream, PFSBTree parentToC)
         {
             Value = stream.ReadVarPrefixString();
         }

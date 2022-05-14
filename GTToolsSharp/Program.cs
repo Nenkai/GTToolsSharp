@@ -12,6 +12,7 @@ using GTToolsSharp.Headers;
 using GTToolsSharp.Encryption;
 using GTToolsSharp.Utils;
 using GTToolsSharp.PackedFileInstaller;
+using GTToolsSharp.Volumes;
 
 using PDTools.Compression;
 using PDTools.Utils;
@@ -20,7 +21,8 @@ namespace GTToolsSharp
 {
     class Program
     {
-        private static StreamWriter sw;
+        private static StreamWriter sw = new StreamWriter("log.txt");
+
         public static bool PrintToConsole = true;
         public static bool SaveHeader = false;
         public static bool SaveTOC = false;
@@ -32,7 +34,8 @@ namespace GTToolsSharp
             Console.WriteLine($"-- GTToolsSharp {Version} - (c) Nenkai#9075, ported from flatz's gttool --");
             Console.WriteLine();
             
-            Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, UnpackInstallerVerbs, CryptVerbs, ListVerbs, CompressVerbs>(args)
+            Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, UnpackInstallerVerbs, CryptVerbs, ListVerbs, CompressVerbs, GT7UnpackVerbs>(args)
+                .WithParsed<GT7UnpackVerbs>(UnpackGT7)
                 .WithParsed<PackVerbs>(Pack)
                 .WithParsed<UnpackVerbs>(Unpack)
                 .WithParsed<UnpackInstallerVerbs>(UnpackInstaller)
@@ -85,10 +88,10 @@ namespace GTToolsSharp
             }
 
             bool found = false;
-            GTVolume vol = null;
+            GTVolumePFS vol = null;
             foreach (var k in keyset)
             {
-                vol = GTVolume.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Big);
+                vol = GTVolumePFS.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Big);
                 if (vol != null)
                 {
                     found = true;
@@ -203,10 +206,10 @@ namespace GTToolsSharp
             }
 
             bool found = false;
-            GTVolume vol = null;
+            GTVolumePFS vol = null;
             foreach (var k in keyset)
             {
-                vol = GTVolume.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Big);
+                vol = GTVolumePFS.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Big);
                 if (vol != null)
                 {
                     found = true;
@@ -222,7 +225,7 @@ namespace GTToolsSharp
 
             Program.Log("[-] Started unpacking process.");
 
-            VolumeUnpacker unpacker = new VolumeUnpacker(vol);
+            PFSVolumeUnpacker unpacker = new PFSVolumeUnpacker(vol);
             unpacker.SetOutputDirectory(options.OutputPath);
             if (options.OnlyLog)
                 unpacker.NoUnpack = true;
@@ -230,6 +233,19 @@ namespace GTToolsSharp
             unpacker.BasePFSFolder = options.BasePFSFolder;
 
             unpacker.UnpackFiles(options.FileIndicesToExtract, options.BasePFSFolder);
+        }
+
+        public static void UnpackGT7(GT7UnpackVerbs options)
+        {
+            var vol = GTVolumeMPH.Load(options.InputPath);
+            if (vol == null)
+            {
+                Console.WriteLine($"[X] Could not unpack volume.");
+                return;
+            }
+
+            Program.Log("[-] Started unpacking process.");
+            vol.Unpack(null);
         }
 
         public static void UnpackInstaller(UnpackInstallerVerbs options)
@@ -384,10 +400,10 @@ namespace GTToolsSharp
                 return;
 
             bool found = false;
-            GTVolume vol = null;
+            GTVolumePFS vol = null;
             foreach (var k in keyset)
             {
-                vol = GTVolume.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Big);
+                vol = GTVolumePFS.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Big);
                 if (vol != null)
                 {
                     found = true;
@@ -402,7 +418,7 @@ namespace GTToolsSharp
             }
 
             using var sw = new StreamWriter(options.OutputPath);
-            var entries = vol.TableOfContents.GetAllRegisteredFileMap();
+            var entries = vol.BTree.GetAllRegisteredFileMap();
             if (options.OrderByFileIndex)
                 entries = entries.OrderBy(e => e.Value.EntryIndex).ToDictionary(x => x.Key, x => x.Value);
 
@@ -417,7 +433,7 @@ namespace GTToolsSharp
 
             foreach (var entry in entries)
             {
-                var entryInfo = vol.TableOfContents.FileInfos.GetByFileIndex(entry.Value.EntryIndex);
+                var entryInfo = vol.BTree.FileInfos.GetByFileIndex(entry.Value.EntryIndex);
                 if (header3 is not null)
                     sw.WriteLine($"{entry.Key} - {entryInfo} - {header3.VolList[entryInfo.VolumeIndex].Name}");
                 else

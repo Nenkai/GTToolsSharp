@@ -22,7 +22,7 @@ namespace GTToolsSharp.BTree
         public const int BTREE_SEGMENT_SIZE = 0x1000;
 
         protected Memory<byte> _buffer;
-        private GTVolumeTOC _parentToC;
+        private PFSBTree _parentToC;
 
         public List<TKey> Entries = new List<TKey>();
 
@@ -31,7 +31,7 @@ namespace GTToolsSharp.BTree
 
         }
 
-        public BTree(Memory<byte> buffer, GTVolumeTOC parentToC)
+        public BTree(Memory<byte> buffer, PFSBTree parentToC)
         {
             _buffer = buffer;
             _parentToC = parentToC;
@@ -162,7 +162,7 @@ namespace GTToolsSharp.BTree
 
         public abstract TKey SearchByKey(Span<byte> data);
 
-        public abstract void Serialize(ref BitStream stream, GTVolumeTOC parentTOC);
+        public abstract void Serialize(ref BitStream stream, PFSBTree parentTOC);
 
         public abstract int LessThanKeyCompareOp(TKey key, Span<byte> data);
 
