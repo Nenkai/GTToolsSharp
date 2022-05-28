@@ -18,12 +18,12 @@ using GTToolsSharp.Headers;
 using PDTools.Utils;
 using PDTools.Compression;
 
-namespace GTToolsSharp
+namespace GTToolsSharp.Volumes
 {
     /// <summary>
-    /// Represents a container for all the files used within Gran Turismo games.
+    /// Represents a container for all the files used within Gran Turismo games. GT5, 6, Sport.
     /// </summary>
-    public class GTVolume
+    public class GTVolumePFS
     {
         public const int BASE_VOLUME_ENTRY_INDEX = 1;
         
@@ -40,22 +40,22 @@ namespace GTToolsSharp
         public bool NoCompress { get; set; }
         public bool IsGT5PDemoStyle { get; set; }
 
-        public VolumeHeaderBase VolumeHeader { get; set; }
+        public PFSVolumeHeaderBase VolumeHeader { get; set; }
         public byte[] VolumeHeaderData { get; private set; }
 
-        public GTVolumeTOC TableOfContents { get; set; }
+        public PFSBTree BTree { get; set; }
         public FileDeviceVol[] SplitVolumes { get; set; }
 
         public uint DataOffset;
         public FileStream MainStream { get; }
 
-        public GTVolume(FileStream sourceStream, Endian endianness)
+        public GTVolumePFS(FileStream sourceStream, Endian endianness)
         {
             MainStream = sourceStream;
             Endian = endianness;
         }
 
-        public GTVolume(string patchVolumeFolder, Endian endianness)
+        public GTVolumePFS(string patchVolumeFolder, Endian endianness)
         {
             PatchVolumeFolder = patchVolumeFolder;
             IsPatchVolume = true;
@@ -70,10 +70,10 @@ namespace GTToolsSharp
         /// <param name="isPatchVolume"></param>
         /// <param name="endianness"></param>
         /// <returns></returns>
-        public static GTVolume Load(Keyset keyset, string path, bool isPatchVolume, Endian endianness)
+        public static GTVolumePFS Load(Keyset keyset, string path, bool isPatchVolume, Endian endianness)
         {
             FileStream fs;
-            GTVolume vol;
+            GTVolumePFS vol;
             if (isPatchVolume)
             {
                 if (File.Exists(Path.Combine(path, PDIPFSPathResolver.Default)))
@@ -83,12 +83,12 @@ namespace GTToolsSharp
                 else
                     return null;
 
-                vol = new GTVolume(path, endianness);
+                vol = new GTVolumePFS(path, endianness);
             }
             else
             {
                 fs = new FileStream(path, FileMode.Open);
-                vol = new GTVolume(fs, endianness);
+                vol = new GTVolumePFS(fs, endianness);
             }
 
             vol.SetKeyset(keyset);
@@ -105,22 +105,23 @@ namespace GTToolsSharp
                 return null;
             }
 
-            // Try old if failed
-            var headerType = VolumeHeaderBase.Detect(tmp);
-            if (headerType == VolumeHeaderType.Unknown)
+
+            // Try GT5P if failed
+            var headerType = PFSVolumeHeaderBase.Detect(tmp);
+            if (headerType == PFSVolumeHeaderType.Unknown)
             {
                 tmp = new byte[0x14];
                 fs.Position = 0;
                 fs.Read(tmp);
 
-                if (vol.DecryptHeaderOld(tmp))
-                    headerType = VolumeHeaderBase.Detect(tmp);
+                vol.DecryptHeaderGT5PDemo(tmp);
+                headerType = PFSVolumeHeaderBase.Detect(tmp);
 
-                if (headerType == VolumeHeaderType.PFS)
+                if (headerType == PFSVolumeHeaderType.PFS)
                     vol.SetKeyset(KeysetStore.Keyset_GT5P_JP_DEMO);
             }
 
-            if (headerType == VolumeHeaderType.Unknown)
+            if (headerType == PFSVolumeHeaderType.Unknown)
             {
                 fs?.Dispose();
                 return null;
@@ -128,21 +129,14 @@ namespace GTToolsSharp
 
             fs.Position = 0;
             vol.InputPath = path;
-            vol.VolumeHeader = VolumeHeaderBase.Load(fs, vol, headerType, out byte[] headerBytes);
+            vol.VolumeHeader = PFSVolumeHeaderBase.Load(fs, vol, headerType, out byte[] headerBytes);
             vol.VolumeHeaderData = headerBytes;
-            vol.IsGT5PDemoStyle = headerType == VolumeHeaderType.PFS;
+            vol.IsGT5PDemoStyle = headerType == PFSVolumeHeaderType.PFS;
 
             if (Program.SaveHeader)
                 File.WriteAllBytes("VolumeHeader.bin", vol.VolumeHeaderData);
 
-            Program.Log($"[>] PFS Version/Serial No: '{vol.VolumeHeader.SerialNumber}'");
-            Program.Log($"[>] Table of Contents Entry Index: {vol.VolumeHeader.ToCNodeIndex}");
-            Program.Log($"[>] TOC Size: 0x{vol.VolumeHeader.CompressedTOCSize:X8} bytes (0x{vol.VolumeHeader.ExpandedTOCSize:X8} expanded)");
-            if (vol.VolumeHeader is FileDeviceGTFS2Header header2)
-            {
-                Program.Log($"[>] Total Volume Size: {MiscUtils.BytesToString((long)header2.TotalVolumeSize)}");
-                Program.Log($"[>] Title ID: '{header2.TitleID}'");
-            }
+            vol.VolumeHeader.PrintInfo();
 
             Program.Log("[-] Reading table of contents.", true);
 
@@ -152,19 +146,17 @@ namespace GTToolsSharp
                 return null;
             }
 
-            if (!vol.TableOfContents.Load())
+            if (!vol.BTree.Load())
             {
                 fs?.Dispose();
                 return null;
             }
 
-            Program.Log($"[>] File names tree offset: 0x{vol.TableOfContents.NameTreeOffset:X8}", true);
-            Program.Log($"[>] File extensions tree offset: 0x{vol.TableOfContents.FileExtensionTreeOffset:X8}", true);
-            Program.Log($"[>] Node tree offset: 0x{vol.TableOfContents.NodeTreeOffset:X8}", true);
-            Program.Log($"[>] Entry count: {vol.TableOfContents.RootAndFolderOffsets.Count}.", true);
+            vol.BTree.PrintOffsetInfo();
 
             if (Program.SaveTOC)
-                File.WriteAllBytes("VolumeTOC.bin", vol.TableOfContents.Data);
+                File.WriteAllBytes("VolumeTOC.bin", vol.BTree.Data);
+            
 
             vol.LoadSplitVolumesIfNeeded();
 
@@ -173,31 +165,31 @@ namespace GTToolsSharp
 
         public void LoadSplitVolumesIfNeeded()
         {
-            if (VolumeHeader is not FileDeviceGTFS3Header header3)
-                return;
-
-            string inputDir = Path.GetDirectoryName(InputPath);
-            SplitVolumes = new FileDeviceVol[header3.VolList.Length];
-
-            for (int i = 0; i < header3.VolList.Length; i++)
+            if (VolumeHeader is FileDeviceGTFS3Header header3)
             {
-                FileDeviceGTFS3Header.VolEntry volEntry = header3.VolList[i];
-                string localPath = Path.Combine(inputDir, volEntry.Name);
-                if (!File.Exists(localPath))
-                {
-                    Console.WriteLine($"[!] Linked volume file '{volEntry.Name}' not found, will be skipped");
-                    continue;
-                }
+                string inputDir = Path.GetDirectoryName(InputPath);
+                SplitVolumes = new FileDeviceVol[header3.VolList.Length];
 
-                var vol = FileDeviceVol.Read(localPath);
-                if (vol is null)
+                for (int i = 0; i < header3.VolList.Length; i++)
                 {
-                    Console.WriteLine($"[!] Unable to read vol file '{localPath}'.");
-                    continue;
-                }
+                    FileDeviceGTFS3Header.VolEntryGTFS3 volEntry = header3.VolList[i];
+                    string localPath = Path.Combine(inputDir, volEntry.Name);
+                    if (!File.Exists(localPath))
+                    {
+                        Console.WriteLine($"[!] Linked volume file '{volEntry.Name}' not found, will be skipped");
+                        continue;
+                    }
 
-                vol.Name = volEntry.Name;
-                SplitVolumes[i] = vol;
+                    var vol = FileDeviceVol.Read(localPath);
+                    if (vol is null)
+                    {
+                        Console.WriteLine($"[!] Unable to read vol file '{localPath}'.");
+                        continue;
+                    }
+
+                    vol.Name = volEntry.Name;
+                    SplitVolumes[i] = vol;
+                }
             }
         }
 
@@ -228,7 +220,7 @@ namespace GTToolsSharp
         /// <param name="headerData"></param>
         /// <param name="seed"></param>
         /// <returns></returns>
-        public bool DecryptHeaderOld(Span<byte> headerData)
+        public bool DecryptHeaderGT5PDemo(Span<byte> headerData)
         {
             if (headerData.Length != 0x14)
                 return false;
@@ -273,61 +265,33 @@ namespace GTToolsSharp
                 if (!PS2ZIP.TryInflateInMemory(data, VolumeHeader.ExpandedTOCSize, out byte[] deflatedData))
                     return false;
 
-                TableOfContents = new GTVolumeTOC(VolumeHeader, this);
-                TableOfContents.Location = path;
-                TableOfContents.Data = deflatedData;
+                BTree = new PFSBTree(VolumeHeader, this);
+                BTree.Location = path;
+                BTree.Data = deflatedData;
             }
             else
             {
-                MainStream.Seek(GTVolumeTOC.SECTOR_SIZE, SeekOrigin.Begin);
+                MainStream.Seek(PFSBTree.SECTOR_SIZE, SeekOrigin.Begin);
 
                 var br = new BinaryReader(MainStream);
                 byte[] data = br.ReadBytes((int)VolumeHeader.CompressedTOCSize);
 
-                Program.Log($"[-] TOC Entry Index is {VolumeHeader.ToCNodeIndex} (Offset: 0x{GTVolumeTOC.SECTOR_SIZE:X8})", true);
+                Program.Log($"[-] TOC Entry Index is {VolumeHeader.ToCNodeIndex} (Offset: 0x{PFSBTree.SECTOR_SIZE:X8})", true);
 
                 // Decrypt it with the seed that the main header gave us
                 CryptoUtils.CryptBuffer(Keyset, data, data, VolumeHeader.ToCNodeIndex);
 
-                Program.Log($"[-] Decompressing TOC within volume.. (Offset: 0x{GTVolumeTOC.SECTOR_SIZE:X8})", true);
+                Program.Log($"[-] Decompressing TOC within volume.. (Offset: 0x{PFSBTree.SECTOR_SIZE:X8})", true);
                 if (!PS2ZIP.TryInflateInMemory(data, VolumeHeader.ExpandedTOCSize, out byte[] deflatedData))
                     return false;
 
-                TableOfContents = new GTVolumeTOC(VolumeHeader, this);
-                TableOfContents.Data = deflatedData;
+                BTree = new PFSBTree(VolumeHeader, this);
+                BTree.Data = deflatedData;
 
-                DataOffset = MiscUtils.AlignValue(GTVolumeTOC.SECTOR_SIZE + VolumeHeader.CompressedTOCSize, GTVolumeTOC.SECTOR_SIZE);
+                DataOffset = MiscUtils.AlignValue(PFSBTree.SECTOR_SIZE + VolumeHeader.CompressedTOCSize, PFSBTree.SECTOR_SIZE);
             }
 
             return true;
         }
-
-
-        public static string lastEntryPath = "";
-        public string GetEntryPath(FileEntryKey key, string prefix)
-        {
-            string entryPath = prefix;
-            StringBTree nameBTree = new StringBTree(TableOfContents.Data.AsMemory((int)TableOfContents.NameTreeOffset), TableOfContents);
-
-            if (nameBTree.TryFindIndex(key.NameIndex, out StringKey nameKey))
-                entryPath += nameKey.Value;
-
-            if (key.Flags.HasFlag(EntryKeyFlags.File))
-            {
-                // If it's a file, find the extension aswell
-                StringBTree extBTree = new StringBTree(TableOfContents.Data.AsMemory((int)TableOfContents.FileExtensionTreeOffset), TableOfContents);
-
-                if (extBTree.TryFindIndex(key.FileExtensionIndex, out StringKey extKey) && !string.IsNullOrEmpty(extKey.Value))
-                    entryPath += extKey.Value;
-
-            }
-            else if (key.Flags.HasFlag(EntryKeyFlags.Directory))
-                entryPath += '/';
-
-            lastEntryPath = entryPath;
-
-            return entryPath;
-        }
-
     }
 }

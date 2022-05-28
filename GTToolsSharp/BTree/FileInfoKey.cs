@@ -56,7 +56,7 @@ namespace GTToolsSharp.BTree
         }
 
 
-        public void Deserialize(ref BitStream stream, GTVolumeTOC parentToC)
+        public void Deserialize(ref BitStream stream, PFSBTree parentToC)
         {
             Flags = (FileInfoFlags)stream.ReadByte();
             FileIndex = (uint)stream.ReadVarInt();

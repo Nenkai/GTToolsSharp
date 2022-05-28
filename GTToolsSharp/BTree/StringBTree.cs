@@ -16,7 +16,7 @@ namespace GTToolsSharp.BTree
 {
     public class StringBTree : BTree<StringKey>
     {
-        public StringBTree(Memory<byte> buffer, GTVolumeTOC parentToC)
+        public StringBTree(Memory<byte> buffer, PFSBTree parentToC)
             : base(buffer, parentToC)
         {
 
@@ -78,7 +78,7 @@ namespace GTToolsSharp.BTree
             return 0;
         }
 
-        public override void Serialize(ref BitStream stream, GTVolumeTOC parentTOC)
+        public override void Serialize(ref BitStream stream, PFSBTree parentTOC)
         {
             int baseTreePos = stream.Position;
             stream.Position += 6;

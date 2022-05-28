@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
 
 using CommandLine;
 
@@ -12,6 +13,7 @@ using GTToolsSharp.Headers;
 using GTToolsSharp.Encryption;
 using GTToolsSharp.Utils;
 using GTToolsSharp.PackedFileInstaller;
+using GTToolsSharp.Volumes;
 
 using PDTools.Compression;
 using PDTools.Utils;
@@ -20,26 +22,29 @@ namespace GTToolsSharp
 {
     class Program
     {
-        private static StreamWriter sw;
+        private static StreamWriter sw = new StreamWriter("log.txt");
+
         public static bool PrintToConsole = true;
         public static bool SaveHeader = false;
         public static bool SaveTOC = false;
 
-        public const string Version = "4.0.6";
+        public const string Version = "5.0.0";
 
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             Console.WriteLine($"-- GTToolsSharp {Version} - (c) Nenkai#9075, ported from flatz's gttool --");
             Console.WriteLine();
-            
-            Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, UnpackInstallerVerbs, CryptVerbs, ListVerbs, CompressVerbs>(args)
-                .WithParsed<PackVerbs>(Pack)
-                .WithParsed<UnpackVerbs>(Unpack)
-                .WithParsed<UnpackInstallerVerbs>(UnpackInstaller)
-                .WithParsed<CryptVerbs>(Crypt)
-                .WithParsed<ListVerbs>(List)
-                .WithParsed<CompressVerbs>(Compress)
-                .WithNotParsed(HandleNotParsedArgs);
+
+            var p = Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, UnpackInstallerVerbs, CryptVerbs, ListVerbs, CompressVerbs, GT7UnpackVerbs>(args);
+            p = await p.WithParsedAsync<GT7UnpackVerbs>(UnpackGT7);
+             
+            p.WithParsed<PackVerbs>(Pack)
+             .WithParsed<UnpackVerbs>(Unpack)
+             .WithParsed<UnpackInstallerVerbs>(UnpackInstaller)
+             .WithParsed<CryptVerbs>(Crypt)
+             .WithParsed<ListVerbs>(List)
+             .WithParsed<CompressVerbs>(Compress)
+             .WithNotParsed(HandleNotParsedArgs);
 
             Program.Log("Exiting.");
             sw?.Dispose();
@@ -85,10 +90,10 @@ namespace GTToolsSharp
             }
 
             bool found = false;
-            GTVolume vol = null;
+            GTVolumePFS vol = null;
             foreach (var k in keyset)
             {
-                vol = GTVolume.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Big);
+                vol = GTVolumePFS.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Big);
                 if (vol != null)
                 {
                     found = true;
@@ -203,10 +208,10 @@ namespace GTToolsSharp
             }
 
             bool found = false;
-            GTVolume vol = null;
+            GTVolumePFS vol = null;
             foreach (var k in keyset)
             {
-                vol = GTVolume.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Big);
+                vol = GTVolumePFS.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Big);
                 if (vol != null)
                 {
                     found = true;
@@ -220,9 +225,9 @@ namespace GTToolsSharp
                 return;
             }
 
-            Program.Log("[-] Started unpacking process.");
+            Program.Log("[-] Started unpacking process.", forceConsolePrint: true);
 
-            VolumeUnpacker unpacker = new VolumeUnpacker(vol);
+            PFSVolumeUnpacker unpacker = new PFSVolumeUnpacker(vol);
             unpacker.SetOutputDirectory(options.OutputPath);
             if (options.OnlyLog)
                 unpacker.NoUnpack = true;
@@ -230,6 +235,44 @@ namespace GTToolsSharp
             unpacker.BasePFSFolder = options.BasePFSFolder;
 
             unpacker.UnpackFiles(options.FileIndicesToExtract, options.BasePFSFolder);
+        }
+
+        public static async Task UnpackGT7(GT7UnpackVerbs options)
+        {
+            if (!File.Exists(options.InputPath))
+            {
+                Console.WriteLine($"[X] Input index file does not exist.");
+                return;
+            }
+
+            var vol = GTVolumeMPH.Load(options.InputPath);
+            if (vol == null)
+            {
+                Console.WriteLine($"[X] Could not unpack volume.");
+                return;
+            }
+
+            Program.Log("[-] Started unpacking process.", forceConsolePrint: true);
+            Program.SaveHeader = options.SaveVolumeHeader;
+
+            if (string.IsNullOrEmpty(options.OutputPath))
+                options.OutputPath = Path.Combine(Path.GetDirectoryName(options.InputPath), "Unpacked");
+
+            if (!string.IsNullOrEmpty(options.FileToUnpack))
+            {
+                if (vol.UnpackFile(options.FileToUnpack, options.OutputPath))
+                {
+                    Program.Log($"[/] Successfully unpacked '{options.FileToUnpack}'.");
+                }
+                else
+                {
+                    Program.Log($"[/] Failed to unpack '{options.FileToUnpack}'. Error while unpacking or file was not found in the hashed volume.");
+                }
+            }
+            else
+            {
+                await vol.UnpackAllFiles(options.OutputPath);
+            }
         }
 
         public static void UnpackInstaller(UnpackInstallerVerbs options)
@@ -384,10 +427,10 @@ namespace GTToolsSharp
                 return;
 
             bool found = false;
-            GTVolume vol = null;
+            GTVolumePFS vol = null;
             foreach (var k in keyset)
             {
-                vol = GTVolume.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Big);
+                vol = GTVolumePFS.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Big);
                 if (vol != null)
                 {
                     found = true;
@@ -402,7 +445,7 @@ namespace GTToolsSharp
             }
 
             using var sw = new StreamWriter(options.OutputPath);
-            var entries = vol.TableOfContents.GetAllRegisteredFileMap();
+            var entries = vol.BTree.GetAllRegisteredFileMap();
             if (options.OrderByFileIndex)
                 entries = entries.OrderBy(e => e.Value.EntryIndex).ToDictionary(x => x.Key, x => x.Value);
 
@@ -417,7 +460,7 @@ namespace GTToolsSharp
 
             foreach (var entry in entries)
             {
-                var entryInfo = vol.TableOfContents.FileInfos.GetByFileIndex(entry.Value.EntryIndex);
+                var entryInfo = vol.BTree.FileInfos.GetByFileIndex(entry.Value.EntryIndex);
                 if (header3 is not null)
                     sw.WriteLine($"{entry.Key} - {entryInfo} - {header3.VolList[entryInfo.VolumeIndex].Name}");
                 else

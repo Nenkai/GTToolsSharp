@@ -15,7 +15,7 @@ namespace GTToolsSharp.BTree
 
         public T CompareGetDiff(T key);
 
-        public void Deserialize(ref BitStream sr, GTVolumeTOC parentToC);
+        public void Deserialize(ref BitStream sr, PFSBTree parentToC);
 
         public void Serialize(ref BitStream sr);
 

@@ -13,7 +13,7 @@ using Syroot.BinaryData;
 
 using PDTools.Compression;
 
-namespace GTToolsSharp
+namespace GTToolsSharp.Volumes
 {
     public class FileDeviceVol
     {

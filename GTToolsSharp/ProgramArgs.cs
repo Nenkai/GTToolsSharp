@@ -54,6 +54,36 @@ namespace GTToolsSharp
         }
     }
 
+    [Verb("gt7unpack", HelpText = "Unpacks a GT7 volume file.")]
+    public class GT7UnpackVerbs
+    {
+        [Option('i', "input", Required = true, HelpText = "Input file volume or folder. Usually gt.idx.")]
+        public string InputPath { get; set; }
+
+        [Option('f', "file", HelpText = "Specific file to unpack. If it doesn't exist, the whole volume will be unpacked. Note: Path/file must match exact volume game paths.")]
+        public string FileToUnpack { get; set; }
+
+        [Option('o', "output", HelpText = "Output Folder for unpacked files. If you don't provide one, will display info about the volume. Defaults to 'Unpacked' next to index file.")]
+        public string OutputPath { get; set; }
+
+        [Option("save-volume-header", HelpText = "Decrypts and saves the volume header (as VolumeHeader.bin)")]
+        public bool SaveVolumeHeader { get; set; }
+
+        [Usage(ApplicationAlias = "GTToolsSharp")]
+        public static IEnumerable<Example> Examples
+        {
+            get
+            {
+                return new List<Example>()
+                    {
+                        new Example("Unpack all volumes", new GT7UnpackVerbs { InputPath = @"C:\XXXXXX\GT.IDX", OutputPath = "GTVOL_EXTRACTED" } ),
+                        new Example("Unpack a file", new GT7UnpackVerbs { InputPath = @"C:\XXXXXX\GT.IDX", FileToUnpack = "sound_gt/se/gt7sys.szd", OutputPath = "PDIPFS_EXTRACTED" } ),
+                    };
+            }
+        }
+    }
+
+
     [Verb("unpackinstaller", HelpText = "Unpacks an installation file (TV.DAT)")]
     public class UnpackInstallerVerbs
     {

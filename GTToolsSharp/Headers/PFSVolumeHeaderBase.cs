@@ -12,9 +12,11 @@ using Syroot.BinaryData.Core;
 using Syroot.BinaryData;
 using Syroot.BinaryData.Memory;
 
+using GTToolsSharp.Volumes;
+
 namespace GTToolsSharp.Headers
 {
-    public abstract class VolumeHeaderBase
+    public abstract class PFSVolumeHeaderBase
     {
         private static readonly byte[] HeaderMagic = { 0x5B, 0x74, 0x51, 0x62 };
         private static readonly byte[] OldHeaderMagic = { 0x5B, 0x74, 0x51, 0x61 };
@@ -45,44 +47,47 @@ namespace GTToolsSharp.Headers
 
         public const uint GTSPMagicEncryptKey = 0x9AEFDE67;
 
-        public static VolumeHeaderType Detect(Span<byte> header)
+        public static PFSVolumeHeaderType Detect(Span<byte> header)
         {
             SpanReader sr = new SpanReader(header, Endian.Big);
 
             byte[] magic = sr.ReadBytes(4);
             if (magic.AsSpan().SequenceEqual(OldHeaderMagic.AsSpan()))
-                return VolumeHeaderType.PFS;
+                return PFSVolumeHeaderType.PFS;
 
             if (magic.AsSpan().SequenceEqual(HeaderMagic.AsSpan()))
-                return VolumeHeaderType.PFS2;
+                return PFSVolumeHeaderType.PFS2;
 
             uint magicInt = BinaryPrimitives.ReadUInt32BigEndian(magic);
             if ((magicInt ^ GTSPMagicEncryptKey) == 0x5B745162)
-                return VolumeHeaderType.PFS3;
-            else
-                return VolumeHeaderType.Unknown;
+                return PFSVolumeHeaderType.PFS3;
 
+            return PFSVolumeHeaderType.Unknown;
         }
 
-        public static VolumeHeaderBase Load(Stream input, GTVolume parentVolume, VolumeHeaderType volHeaderType, out byte[] headerBytes)
+        public static PFSVolumeHeaderBase Load(Stream input, GTVolumePFS parentVolume, PFSVolumeHeaderType volHeaderType, out byte[] headerBytes)
         {
-            VolumeHeaderBase header = volHeaderType switch
+            PFSVolumeHeaderBase header = volHeaderType switch
             {
-                VolumeHeaderType.PFS => new FileDeviceGTFSHeader(),
-                VolumeHeaderType.PFS2 => new FileDeviceGTFS2Header(),
-                VolumeHeaderType.PFS3 => new FileDeviceGTFS3Header(),
+                PFSVolumeHeaderType.PFS => new FileDeviceGTFSHeader(),
+                PFSVolumeHeaderType.PFS2 => new FileDeviceGTFS2Header(),
+                PFSVolumeHeaderType.PFS3 => new FileDeviceGTFS3Header(),
                 _ => throw new Exception("Invalid volume type provided."),
             };
 
             if (input.Length < header.HeaderSize)
                 throw new Exception("Input stream was too small for the header size.");
 
-            headerBytes = input.ReadBytes(header.HeaderSize);
-
-            if (volHeaderType == VolumeHeaderType.PFS)
-                parentVolume.DecryptHeaderOld(headerBytes);
+            if (volHeaderType == PFSVolumeHeaderType.PFS)
+            {
+                headerBytes = new byte[header.HeaderSize];
+                parentVolume.DecryptHeaderGT5PDemo(headerBytes);
+            }
             else
-                parentVolume.DecryptHeader(headerBytes, GTVolume.BASE_VOLUME_ENTRY_INDEX);
+            {
+                headerBytes = new byte[header.HeaderSize];
+                parentVolume.DecryptHeader(headerBytes, GTVolumePFS.BASE_VOLUME_ENTRY_INDEX);
+            }
 
             header.Read(headerBytes);
             return header;
@@ -91,9 +96,11 @@ namespace GTToolsSharp.Headers
         public abstract void Read(Span<byte> buffer);
 
         public abstract byte[] Serialize();
+
+        public abstract void PrintInfo();
     }
 
-    public enum VolumeHeaderType
+    public enum PFSVolumeHeaderType
     {
         Unknown,
 

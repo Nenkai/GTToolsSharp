@@ -12,15 +12,17 @@ using GTToolsSharp.BTree;
 using GTToolsSharp.Utils;
 using GTToolsSharp.Encryption;
 using GTToolsSharp.BinaryPatching;
+using GTToolsSharp.Volumes;
 
 using PDTools.Compression;
 using PDTools.Utils;
+using PDTools.Crypto;
 
 namespace GTToolsSharp
 {
-    public class VolumeUnpacker
+    public class PFSVolumeUnpacker
     {
-        public GTVolume Volume { get; }
+        public GTVolumePFS Volume { get; }
         public UpdateNodeInfo TPPS { get; set; }
 
         public string OutputDirectory { get; private set; }
@@ -30,7 +32,7 @@ namespace GTToolsSharp
         public void SetOutputDirectory(string dirPath)
             => OutputDirectory = dirPath;
 
-        public VolumeUnpacker(GTVolume vol)
+        public PFSVolumeUnpacker(GTVolumePFS vol)
         {
             Volume = vol;
         }
@@ -46,11 +48,11 @@ namespace GTToolsSharp
                 fileIndexesToExtract = Enumerable.Empty<int>();
 
             // Lazy way
-            var files = Volume.TableOfContents.GetAllRegisteredFileMap();
+            var files = Volume.BTree.GetAllRegisteredFileMap();
 
             // Cache it
             Dictionary<uint, FileInfoKey> fileInfoKeys = new Dictionary<uint, FileInfoKey>();
-            foreach (var file in Volume.TableOfContents.FileInfos.Entries)
+            foreach (var file in Volume.BTree.FileInfos.Entries)
                 fileInfoKeys.Add(file.FileIndex, file);
 
             foreach (var file in files)
@@ -91,7 +93,7 @@ namespace GTToolsSharp
                     if (NoUnpack)
                         return false;
 
-                    ulong offset = Volume.DataOffset + (ulong)nodeKey.SectorOffset * GTVolumeTOC.SECTOR_SIZE;
+                    ulong offset = Volume.DataOffset + (ulong)nodeKey.SectorOffset * PFSBTree.SECTOR_SIZE;
                     return UnpackVolumeFile(nodeKey, filePath, offset);
                 }
                 else
