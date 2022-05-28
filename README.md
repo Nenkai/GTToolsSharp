@@ -7,7 +7,7 @@ The main motivation for writing this tool was to allow modding GT5/6 through rep
 * Unpacking from any PS3-era Gran Turismo. (You'll need the keys to decrypt the volumes).
 * **Packing files for modding** (PDIPFS only) (Read packing sections)
 * Unpacking **Patch File Systems** (PDIPFS) from game updates.
-* Unpacking GT Sport Volumes (gt01.vol->gt99.vol & others).
+* Unpacking GT Sport and GT7 Volumes (gt01.vol->gt99.vol & others).
 * Unpacking files for older version of volumes such as GT5 Prologue JP Demo
 * Creating online update patches for GT6
 
@@ -16,14 +16,17 @@ To unpack/pack certain builds you will need the keys for each one of them. Only 
 
 # [DOWNLOAD LINK](https://github.com/Nenkai/GTToolsSharp/releases)
 
-## Usage
-### Unpacking
-Input: `GTToolsSharp unpack -i <input GT.VOL or PDIPFS path> -o <Folder to extract to>`
+# Usage
+## Unpacking
+Input: 
+* GT5/6 `GTToolsSharp unpack -i <input GT.VOL/PDIPFS> -o <Folder to extract to>`
+* GTS: `GTToolsSharp unpack -i <input gt.idx> -o <Folder to extract to>`
+* GT7:  `GTToolsSharp gt7unpack -i <input gt.idx> -f <optional specific game file to unpack> -o <Folder to extract to>`
 
 Examples:
   * Normal Unpack: `GTToolsSharp unpack -i PDIPFS -o PDIPFS_EXTRACTED`
 
-### (Re)Packing (PDIPFS only)
+## (Re)Packing (PDIPFS only)
 Input: `GTToolsSharp pack -i <PDIPFS> -p <Folder with source files to pack> -o <output of repacked files>`
 
 Examples:
@@ -34,8 +37,8 @@ Recommended usage is to **not** to pack to the same input folder. If your input 
 
 **Make sure to make backups of the files you are reverting. If you get a black screen upon starting the game, revert your files.**
 
-## Advanced Packing Notes (Modders Read)
-The Gran Turismo 5 and above uses a file system that allows editing existing files while keeping the actual original files intact. This allows for extremely easy modding and easy revert method.
+## Advanced Packing Notes for GT5/6 (Modders Read)
+The Gran Turismo 5 and 6 uses a file system that allows editing existing files while keeping the actual original files intact. This allows for extremely easy modding and easy revert method.
 
 Important things to know:
 1. *Main Volume Header File* - **Always** `PDIPFS/K/4D`
