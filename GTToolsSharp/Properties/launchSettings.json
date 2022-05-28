@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "GTToolsSharp": {
-      "commandName": "Project",
-      "commandLineArgs": "gt7unpack -i \"D:\\Modding_Research\\Gran_Turismo\\Gran_Turismo_7\\Package\\GT7-1.00\\Image0\\contents\\gt.idx\""
-    }
-  }
-}
