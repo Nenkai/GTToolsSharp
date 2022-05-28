@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 
 using PDTools.Utils;
 
+using GTToolsSharp.Entities;
+
 namespace GTToolsSharp.Headers
 {
     internal class FileDeviceMPHSuperintendentHeader : MPHVolumeHeaderBase
@@ -15,11 +17,26 @@ namespace GTToolsSharp.Headers
         private static readonly uint HeaderMagic = 0x5B745163;
 
         public ulong JulianTimestamp { get; set; }
+
+        // 0x01 = Encrypt
         public uint Flags { get; set; }
         public uint FormatterCode { get; set; }
 
         public IndexerMPH Indexer = new IndexerMPH();
         public MPHNodeInfo[] Nodes { get; set; }
+
+        public uint IndexDataOffset { get; set; }
+        public uint IndexDataSize { get; set; }
+        public uint NodeInfoOffset { get; set; }
+        public uint NodeInfoSize { get; set; }
+
+        public uint VolumeInfoCount { get; set; }
+        public uint VolumeInfoOffset { get; set; }
+
+        public uint DictInfoCount { get; set; }
+        public uint DictInfoOffset { get; set; }
+
+        public const uint NR_DICT_MAX = 16;
 
         public override void Read(Span<byte> buffer)
         {
@@ -28,21 +45,38 @@ namespace GTToolsSharp.Headers
             Magic = new byte[4];
             bs.ReadIntoByteArray(4, Magic, 8);
 
-            bs.ReadInt32();
+            int unk = bs.ReadInt32();
             JulianTimestamp = bs.ReadUInt64();
             SerialNumber = bs.ReadUInt64();
-            bs.ReadInt32();
+            int unk2 = bs.ReadInt32();
             Flags = bs.ReadUInt32();
             FormatterCode = bs.ReadUInt32();
 
             if (FormatterCode != 0x11160000)
                 Program.Log("Warning: Superintendent formatter code does not match 0x11160000");
 
-            int IndexDataOffset = bs.ReadInt32();
-            int IndexDataSize = bs.ReadInt32();
-            int NodeInfoOffset = bs.ReadInt32();
-            int NodeInfoSize = bs.ReadInt32();
-            int VolumeInfoCount = bs.ReadInt32();
+            IndexDataOffset = bs.ReadUInt32();
+            IndexDataSize = bs.ReadUInt32();
+            NodeInfoOffset = bs.ReadUInt32();
+            NodeInfoSize = bs.ReadUInt32();
+            
+            if (SerialNumber > 660770580)
+            {
+                VolumeInfoOffset = bs.ReadUInt32();
+                VolumeInfoCount = bs.ReadUInt32();
+                DictInfoOffset = bs.ReadUInt32();
+                DictInfoCount = bs.ReadUInt32();
+                
+                byte[] digest = new byte[0x10];
+                bs.ReadIntoByteArray(digest.Length, digest, 8);
+
+                bs.Position = (int)VolumeInfoOffset;
+            }
+            else
+            {
+                VolumeInfoCount = bs.ReadUInt32();
+            }
+                
 
             VolumeInfo = new ClusterVolumeInfoMPH[VolumeInfoCount];
             for (var i = 0; i < VolumeInfoCount; i++)
@@ -52,14 +86,15 @@ namespace GTToolsSharp.Headers
                 VolumeInfo[i] = clusterVolume;
             }
 
-            bs.Position = IndexDataOffset;
+            bs.Position = (int)IndexDataOffset;
             Indexer.Read(ref bs);
 
-            bs.Position = NodeInfoOffset;
+            bs.Position = (int)NodeInfoOffset;
             Nodes = new MPHNodeInfo[Indexer.NodeCount];
             for (var i = 0; i < Indexer.NodeCount; i++)
             {
                 MPHNodeInfo node = new MPHNodeInfo();
+                node.NodeIndex = i;
                 node.Read(ref bs);
                 Nodes[i] = node;
             }
@@ -73,9 +108,19 @@ namespace GTToolsSharp.Headers
         public override void PrintInfo()
         {
             Program.Log($"[>] PFS Version/Serial No: '{SerialNumber}'");
+            Program.Log($"[>] Serial Date: {new DateTime(2001, 1, 1) + TimeSpan.FromSeconds(SerialNumber)}");
             Program.Log($"[>] Formatter Code: 0x{FormatterCode:X8}");
             Program.Log($"[>] VOL Count: {VolumeInfo.Length}");
             Program.Log($"[>] Flags: 0x{Flags:X8}");
+
+            Program.Log($"[>] Index Data Offset: 0x{IndexDataOffset:X8}");
+            Program.Log($"[>] Index Data Size: 0x{IndexDataSize:X8}");
+            Program.Log($"[>] Node Info Offset: 0x{NodeInfoOffset:X8}");
+            Program.Log($"[>] Node Info Size: 0x{NodeInfoSize:X8}");
+            Program.Log($"[>] Volume Info Offset: 0x{VolumeInfoOffset}");
+            Program.Log($"[>] Volume Info Count: {VolumeInfoCount}");
+            Program.Log($"[>] Dict Info Offset: 0x{DictInfoOffset}");
+            Program.Log($"[>] Dict Info Count: {DictInfoCount}");
         }
 
         public MPHNodeInfo GetNodeByPath(string path)
@@ -221,61 +266,5 @@ namespace GTToolsSharp.Headers
         {
             return 3 & (GValues[i / 4] >> ((i % 4) * 2));
         }
-    }
-
-    public class MPHNodeInfo
-    {
-        public uint EntryHash { get; set; }
-        public uint Nonce { get; set; }
-        public uint CompressedSize { get; set; }
-        public uint UncompressedSize;
-        public uint SectorIndex { get; set; }
-        public byte VolumeIndex { get; set; }
-        public MPHNodeFormat Format { get; set; }
-        public MPHNodeKind Kind { get; set; }
-        public MPHNodeAlgo Algo { get; set; }
-        public byte ExtraFlags { get; set; }
-
-        public void Read(ref BitStream bs)
-        {
-            EntryHash = bs.ReadUInt32();
-            uint compressedSizeLow = bs.ReadUInt32();
-            Nonce = bs.ReadUInt32();
-            uint uncompressedSizeLow = bs.ReadUInt32();
-
-            SectorIndex = (uint)bs.ReadBits(25);
-            VolumeIndex = (byte)bs.ReadBits(7);
-
-            CompressedSize = (uint)(bs.ReadByte() << 32) | compressedSizeLow;
-
-            Format = (MPHNodeFormat)bs.ReadBits(4);
-            Kind = (MPHNodeKind)bs.ReadBits(2);
-            Algo = (MPHNodeAlgo)bs.ReadBits(2);
-
-            UncompressedSize = (uint)(bs.ReadByte() << 32) | uncompressedSizeLow;
-
-            ExtraFlags = (byte)bs.ReadByte();
-        }
-    }
-
-    public enum MPHNodeFormat
-    {
-        PLAIN,
-        PZ1,
-        PZ2,
-        PFS
-    }
-
-    public enum MPHNodeKind
-    {
-        LUMP,
-        FRAG,
-    }
-
-    public enum MPHNodeAlgo
-    {
-        ZLIB,
-        ZSTD,
-        KRAKEN,
     }
 }

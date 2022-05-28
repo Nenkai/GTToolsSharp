@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
 
 using CommandLine;
 
@@ -29,20 +30,21 @@ namespace GTToolsSharp
 
         public const string Version = "4.0.6";
 
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             Console.WriteLine($"-- GTToolsSharp {Version} - (c) Nenkai#9075, ported from flatz's gttool --");
             Console.WriteLine();
-            
-            Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, UnpackInstallerVerbs, CryptVerbs, ListVerbs, CompressVerbs, GT7UnpackVerbs>(args)
-                .WithParsed<GT7UnpackVerbs>(UnpackGT7)
-                .WithParsed<PackVerbs>(Pack)
-                .WithParsed<UnpackVerbs>(Unpack)
-                .WithParsed<UnpackInstallerVerbs>(UnpackInstaller)
-                .WithParsed<CryptVerbs>(Crypt)
-                .WithParsed<ListVerbs>(List)
-                .WithParsed<CompressVerbs>(Compress)
-                .WithNotParsed(HandleNotParsedArgs);
+
+            var p = Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, UnpackInstallerVerbs, CryptVerbs, ListVerbs, CompressVerbs, GT7UnpackVerbs>(args);
+            p = await p.WithParsedAsync<GT7UnpackVerbs>(UnpackGT7);
+             
+            p.WithParsed<PackVerbs>(Pack)
+             .WithParsed<UnpackVerbs>(Unpack)
+             .WithParsed<UnpackInstallerVerbs>(UnpackInstaller)
+             .WithParsed<CryptVerbs>(Crypt)
+             .WithParsed<ListVerbs>(List)
+             .WithParsed<CompressVerbs>(Compress)
+             .WithNotParsed(HandleNotParsedArgs);
 
             Program.Log("Exiting.");
             sw?.Dispose();
@@ -223,7 +225,7 @@ namespace GTToolsSharp
                 return;
             }
 
-            Program.Log("[-] Started unpacking process.");
+            Program.Log("[-] Started unpacking process.", forceConsolePrint: true);
 
             PFSVolumeUnpacker unpacker = new PFSVolumeUnpacker(vol);
             unpacker.SetOutputDirectory(options.OutputPath);
@@ -235,8 +237,14 @@ namespace GTToolsSharp
             unpacker.UnpackFiles(options.FileIndicesToExtract, options.BasePFSFolder);
         }
 
-        public static void UnpackGT7(GT7UnpackVerbs options)
+        public static async Task UnpackGT7(GT7UnpackVerbs options)
         {
+            if (!File.Exists(options.InputPath))
+            {
+                Console.WriteLine($"[X] Input index file does not exist.");
+                return;
+            }
+
             var vol = GTVolumeMPH.Load(options.InputPath);
             if (vol == null)
             {
@@ -244,8 +252,27 @@ namespace GTToolsSharp
                 return;
             }
 
-            Program.Log("[-] Started unpacking process.");
-            vol.Unpack(null);
+            Program.Log("[-] Started unpacking process.", forceConsolePrint: true);
+            Program.SaveHeader = options.SaveVolumeHeader;
+
+            if (string.IsNullOrEmpty(options.OutputPath))
+                options.OutputPath = Path.Combine(Path.GetDirectoryName(options.InputPath), "Unpacked");
+
+            if (!string.IsNullOrEmpty(options.FileToUnpack))
+            {
+                if (vol.UnpackFile(options.FileToUnpack, options.OutputPath))
+                {
+                    Program.Log($"[/] Successfully unpacked '{options.FileToUnpack}'.");
+                }
+                else
+                {
+                    Program.Log($"[/] Failed to unpack '{options.FileToUnpack}'. Error while unpacking or file was not found in the hashed volume.");
+                }
+            }
+            else
+            {
+                await vol.UnpackAllFiles(options.OutputPath);
+            }
         }
 
         public static void UnpackInstaller(UnpackInstallerVerbs options)

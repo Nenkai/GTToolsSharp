@@ -1,0 +1,68 @@
+﻿void Main()
+{
+	string path = @"<path to stage folder goes here>";
+	
+	HashSet<string> list = new HashSet<string>();
+	
+	foreach (var file in Directory.GetFiles(path, "*", SearchOption.AllDirectories))
+	{
+		if (!file.EndsWith(".txt"))
+			continue;
+			
+		using var sr = new StreamReader(file);
+		while (!sr.EndOfStream)
+		{
+			string line = sr.ReadLine();
+			if (string.IsNullOrEmpty(line))
+				continue;
+				
+			string[] args = line.Split(" ");
+			
+			string entityName = "";
+			if (args[0] == "loadModel")
+			{
+				entityName = args[1].Contains("%") ? args[1].Split("%")[0] : args[1];
+				if (!entityName.StartsWith("//"))
+					entityName = entityName;
+				else
+				{
+					if (!list.Contains(entityName.Substring(2)))
+						list.Add(entityName.Substring(2));
+					continue;
+				}
+			}
+			else if (args[0] == "loadLayoutInstance" || args[0] == "loadRunway" ||
+				args[0] == "loadSchedule" || args[0] == "deserialize" ||
+				args[0] == "loadTexture" || args[0] == "loadMovieTexture" || args[0] == "swapTexture" || args[0] == "prepareSceneSwap")
+			{
+				if (!args[1].StartsWith("//"))
+					entityName = args[1];
+				else
+				{
+					if (!list.Contains(args[1].Substring(2)))
+						list.Add(args[1]);
+					continue;
+				}
+			}
+			else
+				continue;
+			
+			if (!string.IsNullOrEmpty(entityName))
+			{
+				string stageDir = Path.GetDirectoryName(file).Substring(file.IndexOf("stage")).Replace('\\', '/');
+				string entityPath = stageDir + "/" + entityName;
+				
+				string stageName = Path.GetFileNameWithoutExtension(Path.GetDirectoryName(file));
+				
+				if (!list.Contains(entityPath))
+					list.Add(entityPath);
+
+				if (!list.Contains(stageDir + "/" + stageName + ".eba"))
+					list.Add(stageDir + "/" + stageName + ".eba");
+			}
+		}
+	}
+	
+	foreach (var item in list)
+		Console.WriteLine(item);
+}

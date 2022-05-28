@@ -18,7 +18,7 @@ using PDTools.Compression;
 using GTToolsSharp.BinaryPatching;
 using GTToolsSharp.Volumes;
 
-namespace GTToolsSharp
+namespace GTToolsSharp.BTree
 {
     /// <summary>
     /// Represents multiple B-Trees designing file offsets within an entire volume.

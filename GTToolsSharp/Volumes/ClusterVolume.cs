@@ -12,9 +12,9 @@ using Syroot.BinaryData;
 
 using GTToolsSharp.Headers;
 using GTToolsSharp.Encryption;
+using GTToolsSharp.Entities;
 
-using GTToolsSharp;
-using ZstdNet;
+using ImpromptuNinjas.ZStd;
 
 namespace GTToolsSharp.Volumes
 {
@@ -26,6 +26,8 @@ namespace GTToolsSharp.Volumes
         // Same magic as GTS
         public const ulong Magic = 0x2B26958523AD;
 
+        public GTVolumeMPH ParentMasterVolume { get; set; }
+
         private FileStream _fs;
 
         public string Name { get; set; }
@@ -33,7 +35,7 @@ namespace GTToolsSharp.Volumes
         public uint SectorSize { get; set; }
         public uint ClusterSize { get; set; }
         public ulong VolumeSize { get; set; }
-        public uint Flags { get; set; }
+        public ClusterVolumeFlags Flags { get; set; }
         public uint Seed { get; set; }
 
         private ClusterVolume(FileStream fs)
@@ -52,29 +54,23 @@ namespace GTToolsSharp.Volumes
             fileDevice.SectorSize = bs.ReadUInt32();
             fileDevice.ClusterSize = bs.ReadUInt32();
             fileDevice.VolumeSize = bs.ReadUInt64();
-            fileDevice.Flags = bs.ReadUInt32();
+            fileDevice.Flags = (ClusterVolumeFlags)bs.ReadUInt32();
             fileDevice.Seed = bs.ReadUInt32();
 
             return fileDevice;
         }
 
-        public bool UnpackFile(MPHNodeInfo nodeKey, string filePath, int nodeIndex)
+        public bool UnpackFile(MPHNodeInfo nodeKey, string filePath, string volPath, int nodeIndex)
         {
             long offset = SectorSize * (long)nodeKey.SectorIndex;
             _fs.Position = offset;
 
-            Stream fileStream;
+            Stream fileStream = PrepareStreamCryptor(_fs, nodeKey);
 
-            if (nodeKey.Format != MPHNodeFormat.PLAIN)
-            {
-                fileStream = new ChaCha20Stream(_fs, KeysetStore.GT7_Volume_Data_Key, GetStreamCryptorIVByNonce(nodeKey.Nonce));   
-            }
-            else if (nodeKey.Format == MPHNodeFormat.PLAIN && nodeKey.ExtraFlags != 0x85 && nodeKey.ExtraFlags != 0x83)
-                fileStream = new ChaCha20Stream(_fs, KeysetStore.GT7_Volume_Data_Key, GetStreamCryptorIVByNonce(nodeKey.Nonce));
+            if (!string.IsNullOrEmpty(volPath))
+                Program.Log($"[-] Unpacking: {volPath} [{nodeKey.Algo}-{nodeKey.Format}-{nodeKey.Kind}] - VolumeIndex:{nodeKey.VolumeIndex}");
             else
-                fileStream = _fs;
-
-            Program.Log($"Unpacking: {filePath} (Index{nodeIndex}:{nodeKey.Algo}-{nodeKey.Format}-{nodeKey.Kind}, 0x{nodeKey.UncompressedSize}), Flag: 0x{nodeKey.ExtraFlags:X2}");
+                Program.Log($"[-] Unpacking undiscovered file: {nodeKey.EntryHash:X8} [{nodeKey.Algo}-{nodeKey.Format}-{nodeKey.Kind}] - VolumeIndex:{nodeKey.VolumeIndex}");
 
             string fileDir = Path.GetDirectoryName(filePath);
             Directory.CreateDirectory(fileDir);
@@ -90,7 +86,7 @@ namespace GTToolsSharp.Volumes
 
                 switch (magic)
                 {
-                    case 0xFFF7ED85: // ZSTD_TINY
+                    case 0xFFF7ED85:
                         if (fragmented)
                             throw new InvalidDataException("Got fragmented as ZStd Tiny");
 
@@ -102,9 +98,7 @@ namespace GTToolsSharp.Volumes
                         break;
 
                     case 0xFFF7EEC5: // ZLIB
-                        throw new NotImplementedException("ZLib decompression not implemented");
-                        break;
-
+                        throw new NotImplementedException("ZLib decompression not implemented yet");
                 }
             }
             else
@@ -124,7 +118,7 @@ namespace GTToolsSharp.Volumes
 
                 if (outMagic == 0)
                 {
-                    File.Move(filePath, fileDir + $"/{nodeIndex}_{nodeKey.EntryHash:X8}.bin");
+                    File.Move(filePath, fileDir + $"/{nodeIndex}_{nodeKey.EntryHash:X8}.bin", overwrite: true);
                 }
                 else
                 {
@@ -179,10 +173,43 @@ namespace GTToolsSharp.Volumes
             return stream.ReadUInt32();
         }
 
+        // 3A229B0
+        public Stream PrepareStreamCryptor(Stream baseStream, MPHNodeInfo info)
+        {
+            bool encrypt = true; // May be defaulted to false? Works for now, but double check later
+            if (info.ForcedEncryptionIfPlain)
+                encrypt = true; 
+
+            if (info.Format != MPHNodeFormat.PLAIN)
+                encrypt = true;
+
+            if (encrypt)
+            {
+                if ((info.ExtraFlags & 0x80) != 0) // Node Extra Flags - Cluster Vol
+                {
+                    if (!Flags.HasFlag(ClusterVolumeFlags.Encrypted)) // Cluster Flags - 0x18
+                        return baseStream; // Cluster Vol does not have encryption flag, no encryption in this cluster volume at all
+                }
+                else // if ((mphVol.Flags & 1) == 0)
+                {
+                    var header = ParentMasterVolume.VolumeHeader as FileDeviceMPHSuperintendentHeader;
+                    if ((header.Flags & 1) == 0) 
+                        return baseStream; // Superintendent Header does not have encryption flag, no encryption in this MPH System at all
+                }
+
+                // File is encrypted
+                return new ChaCha20Stream(baseStream, KeysetStore.GT7_Volume_Data_Key, GetStreamCryptorIVByNonce(info.Nonce));
+            }
+
+            // No encryption
+            return baseStream;
+        }
+
         public void HandlePlain(Stream input, Stream outputStream, ulong size)
         {
             byte[] buffer = ArrayPool<byte>.Shared.Rent(0x20000);
             ulong rem = size;
+
             while (rem > 0)
             {
                 Span<byte> current = buffer.AsSpan(0, (int)Math.Min(rem, (ulong)buffer.Length));
@@ -192,6 +219,8 @@ namespace GTToolsSharp.Volumes
 
                 rem -= (uint)read;
             }
+
+            ArrayPool<byte>.Shared.Return(buffer);
         }
 
         public void HandleZStdTiny(Stream stream, Stream outputStream, bool isFragmented)
@@ -200,50 +229,53 @@ namespace GTToolsSharp.Volumes
 
             if (!isFragmented)
             {
-                var decompressor = new DecompressionStream(stream);
-
-                var rem = uncompressed_size;
-                byte[] buffer = ArrayPool<byte>.Shared.Rent(0x20000);
-                while (rem > 0)
+                const int bufferSize = 0x20000;
+                using (var decompressor = new ZStdDecompressStream(stream, bufferSize))
                 {
-                    Span<byte> current = buffer.AsSpan(0, Math.Min(rem, buffer.Length));
-                    var read = decompressor.Read(current);
+                    var rem = uncompressed_size;
+                    byte[] buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
+                    while (rem > 0)
+                    {
+                        int len = (int)Math.Min((long)rem, buffer.Length);
+                        var read = decompressor.Read(buffer, 0, len);
+                        outputStream.Write(buffer, 0, read);
 
+                        rem -= read;
+                    }
 
-                    outputStream.Write(current);
-
-                    rem -= read;
+                    ArrayPool<byte>.Shared.Return(buffer);
                 }
-
-                ArrayPool<byte>.Shared.Return(buffer);
             }
             else
             {
-                var decompressor = new Decompressor();
-                while (true)
+                using (var decompressor = new ZStdDecompressor())
                 {
-                    uint magic = stream.ReadUInt32();
-                    if (magic != 0xFFF7F32E)
-                        break;
+                    while (true)
+                    {
+                        uint magic = stream.ReadUInt32();
+                        if (magic != 0xFFF7F32E)
+                            break;
 
-                    int chunk_uncompressed_size = stream.ReadInt32();
-                    int chunk_compressed_size = stream.ReadInt32();
-                    uint crc_checksum = stream.ReadUInt32();
+                        int chunk_uncompressed_size = stream.ReadInt32();
+                        int chunk_compressed_size = stream.ReadInt32();
+                        uint crc_checksum = stream.ReadUInt32();
 
-                    byte[] chunkBuffer = ArrayPool<byte>.Shared.Rent(chunk_uncompressed_size);
-                    byte[] inputBuffer = ArrayPool<byte>.Shared.Rent(chunk_compressed_size);
-                    stream.Read(inputBuffer.AsSpan(0, chunk_compressed_size));
+                        byte[] chunkBuffer = ArrayPool<byte>.Shared.Rent(chunk_uncompressed_size);
+                        byte[] inputBuffer = ArrayPool<byte>.Shared.Rent(chunk_compressed_size);
+                        stream.Read(inputBuffer.AsSpan(0, chunk_compressed_size));
 
-                    decompressor.Unwrap(
-                        inputBuffer.AsSpan(0, chunk_compressed_size),
-                        chunkBuffer.AsSpan(0, chunk_uncompressed_size), bufferSizePrecheck: false);
+                        decompressor.Decompress(
+                             chunkBuffer.AsSpan(0, chunk_uncompressed_size),
+                             inputBuffer.AsSpan(0, chunk_compressed_size)
+                             );
 
-                    outputStream.Write(chunkBuffer.AsSpan(0, chunk_uncompressed_size));
+                        outputStream.Write(chunkBuffer.AsSpan(0, chunk_uncompressed_size));
 
-                    stream.Align(0x10000);
+                        stream.Align(0x10000);
 
-                    ArrayPool<byte>.Shared.Return(chunkBuffer);
-                    ArrayPool<byte>.Shared.Return(inputBuffer);
+                        ArrayPool<byte>.Shared.Return(chunkBuffer);
+                        ArrayPool<byte>.Shared.Return(inputBuffer);
+                    }
                 }
             }
         }
@@ -260,58 +292,64 @@ namespace GTToolsSharp.Volumes
             uint compressed_size_hi = stream.ReadUInt16();
             ulong compressed_size = (ulong)compressed_size_hi << 32 | compressed_size_lo;
 
-            int[] unk = stream.ReadInt32s(3);
+            stream.Position += 0x0C;
 
             int flags = stream.ReadInt32();
             
             if (!isFragmented)
             {
-                var decompressor = new DecompressionStream(stream);
-
-                var rem = uncompressed_size;
-                byte[] buffer = new byte[0x2000];
-                while (rem > 0)
+                const int bufferSize = 0x20000;
+                using (var decompressor = new ZStdDecompressStream(stream, bufferSize))
                 {
-                    Span<byte> current = buffer.AsSpan(0, (int)Math.Min(rem, (ulong)buffer.Length));
-                    var read = decompressor.Read(current);
+                    var rem = uncompressed_size;
+                    byte[] buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
 
-                    outputStream.Write(current);
+                    while (rem > 0)
+                    {
+                        int len = (int)Math.Min((long)rem, buffer.Length);
 
-                    rem -= (uint)read;
+                        var read = decompressor.Read(buffer, 0, len);
+                        outputStream.Write(buffer, 0, read);
+
+                        rem -= (uint)read;
+                    }
+
+                    ArrayPool<byte>.Shared.Return(buffer);
                 }
             }
             else
             {
-                var decompressor = new Decompressor();
-                
-                while (true)
+                using (var decompressor = new ZStdDecompressor())
                 {
-                    uint magic = stream.ReadUInt32();
-                    if (magic != 0xFFF7F32E)
-                        break;
+                    while (true)
+                    {
+                        uint magic = stream.ReadUInt32();
+                        if (magic != 0xFFF7F32E)
+                            break;
 
-                    int chunk_uncompressed_size = stream.ReadInt32();
-                    int chunk_compressed_size = stream.ReadInt32();
-                    uint crc_checksum = stream.ReadUInt32();
+                        int chunk_uncompressed_size = stream.ReadInt32();
+                        int chunk_compressed_size = stream.ReadInt32();
+                        uint crc_checksum = stream.ReadUInt32();
 
-                    byte[] chunkBuffer = ArrayPool<byte>.Shared.Rent(chunk_uncompressed_size);
-                    byte[] inputBuffer = ArrayPool<byte>.Shared.Rent(chunk_compressed_size);
-                    stream.Read(inputBuffer.AsSpan(0, chunk_compressed_size));
+                        byte[] chunkBuffer = ArrayPool<byte>.Shared.Rent(chunk_uncompressed_size);
+                        byte[] inputBuffer = ArrayPool<byte>.Shared.Rent(chunk_compressed_size);
 
-                    decompressor.Unwrap(
-                        inputBuffer.AsSpan(0, chunk_compressed_size), 
-                        chunkBuffer.AsSpan(0, chunk_uncompressed_size), bufferSizePrecheck: false);
+                        stream.Read(inputBuffer.AsSpan(0, chunk_compressed_size));
 
-                    outputStream.Write(chunkBuffer.AsSpan(0, chunk_uncompressed_size));
+                        decompressor.Decompress(
+                            chunkBuffer.AsSpan(0, chunk_uncompressed_size),
+                            inputBuffer.AsSpan(0, chunk_compressed_size)
+                            );
 
-                    stream.Align(0x10000);
+                        outputStream.Write(chunkBuffer.AsSpan(0, chunk_uncompressed_size));
+
+                        stream.Align(0x10000);
+
+                        ArrayPool<byte>.Shared.Return(chunkBuffer);
+                        ArrayPool<byte>.Shared.Return(inputBuffer);
+                    }
                 }
             }
-        }
-
-        public void HandleZStdChunks()
-        {
-
         }
 
         public byte[] GetStreamCryptorIVByNonce(uint nonce)
@@ -325,5 +363,11 @@ namespace GTToolsSharp.Volumes
         {
             return $"{Name} (Size: 0x{VolumeSize:X16})";
         }
+    }
+
+    public enum ClusterVolumeFlags : uint
+    {
+        None,
+        Encrypted,
     }
 }

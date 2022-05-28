@@ -338,3 +338,6 @@ ASALocalRun/
 
 # BeatPulse healthcheck temp database
 healthchecksdb
+
+/GTToolsSharp/FileLists/gt7_files.txt
+/GTToolsSharp/FileLists/dmsdata.txt

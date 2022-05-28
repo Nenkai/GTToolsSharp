@@ -5,18 +5,12 @@ using System.Text;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.IO;
-using System.Buffers;
-using System.Security.Cryptography;
-using System.Buffers.Binary;
-using Syroot.BinaryData.Core;
+using System.Threading.Tasks;
+using System.Threading;
 
-using GTToolsSharp.BTree;
-using GTToolsSharp.Utils;
-using GTToolsSharp.Encryption;
+using GTToolsSharp.Entities;
 using GTToolsSharp.Headers;
 
-using PDTools.Utils;
-using PDTools.Compression;
 using PDTools.Crypto;
 
 namespace GTToolsSharp.Volumes
@@ -26,7 +20,11 @@ namespace GTToolsSharp.Volumes
     /// </summary>
     public class GTVolumeMPH
     {
+        private static List<string> _dmsEntryList { get; set; } = new List<string>();
+
         public string InputPath { get; set; }
+        public string OutputDirectory { get; set; }
+
         public bool NoCompress { get; set; }
 
         public byte[] VolumeHeaderData { get; private set; }
@@ -35,6 +33,22 @@ namespace GTToolsSharp.Volumes
         public FileStream MainStream { get; }
 
         public MPHVolumeHeaderBase VolumeHeader { get; set; }
+
+        static GTVolumeMPH()
+        {
+            if (File.Exists("dmsdata.txt"))
+            {
+                var lines = File.ReadAllLines("FileLists/dmsdata.txt");
+                foreach (var line in lines)
+                {
+                    if (string.IsNullOrEmpty(line) || line.Trim().StartsWith("//"))
+                        continue;
+
+                    _dmsEntryList.Add(line);
+                }
+            }
+
+        }
 
         public GTVolumeMPH(FileStream sourceStream)
         {
@@ -72,6 +86,7 @@ namespace GTToolsSharp.Volumes
 
             if (headerType == MPHVolumeHeaderType.Unknown)
             {
+                Program.Log("[X] Failed to decrypt volume or volume is not a GT7 MPH volume.");
                 fs?.Dispose();
                 return null;
             }
@@ -82,7 +97,10 @@ namespace GTToolsSharp.Volumes
             vol.VolumeHeaderData = headerBytes;
 
             if (Program.SaveHeader)
+            {
                 File.WriteAllBytes("VolumeHeader.bin", vol.VolumeHeaderData);
+                Program.Log("Saved decrypted header as VolumeHeader.bin", forceConsolePrint: true);
+            }
 
             vol.VolumeHeader.PrintInfo();
             vol.LoadSplitVolumesIfNeeded();
@@ -90,244 +108,119 @@ namespace GTToolsSharp.Volumes
             return vol;
         }
 
-        public void Unpack(IEnumerable<string> files)
+        // vol01: piece, 
+        // vol04: common/
+        // vol07: carparts
+        // vol08: livery/style or decal
+        // vol10: unknown
+        // vol11: sky stuff?
+        // vol31: Museum
+
+        public async Task UnpackAllFiles(string outputDirectory)
         {
-            var gtsFiles = File.ReadAllLines(@"volume_entries.txt");
+            Program.Log("[-] Unpacking all files from volume.");
+
             var h = VolumeHeader as FileDeviceMPHSuperintendentHeader;
 
-            SortedDictionary<string, MPHNodeInfo> gameFiles = BruteforceFind();
+            SortedDictionary<string, MPHNodeInfo> gameFiles = RegisterFiles();
+            OutputDirectory = outputDirectory;
 
+            Program.Log($"[!] Mapped {gameFiles.Count}/{h.Nodes.Length} files from hashed volume.");
 
-            int i = 0;
-            for (int i1 = 0; i1 < h.Nodes.Length; i1++)
+            // await ParallelExtractFiles(outputDirectory, h, gameFiles);
+            for (int i = 0; i < h.Nodes.Length; i++)
             {
-                MPHNodeInfo file = h.Nodes[i1];
+                MPHNodeInfo file = h.Nodes[i];
                 var vol = SplitVolumes[file.VolumeIndex];
+
                 if (vol is null)
                 {
-                    Program.Log($"Volume index {i1} is not loaded, skipping node");
+                    Program.Log($"Volume index {file.VolumeIndex} is not loaded, skipping node");
                     continue;
                 }
 
                 if (gameFiles.ContainsValue(file))
                 {
-                    var name = gameFiles.FirstOrDefault(e => e.Value == file).Key;
-                    vol.UnpackFile(file, $@"Unpack\{name}", -1);
+                    var volPath = gameFiles.FirstOrDefault(e => e.Value == file).Key;
+                    vol.UnpackFile(file, Path.Combine(outputDirectory, volPath), volPath, -1);
                 }
                 else
                 {
-                    vol.UnpackFile(file, $@"Unpack\output\vol{file.VolumeIndex}\tmp", i1);
+                    vol.UnpackFile(file, Path.Combine(outputDirectory, ".undiscovered", $"vol{file.VolumeIndex}", $"tmp{i}"), string.Empty, i);
                 }
-
-                i++;
-
             }
         }
 
-
-        public SortedDictionary<string, MPHNodeInfo> BruteforceFind()
+        public bool UnpackFile(string path, string outputDirectory = "")
         {
-            var gtsFiles = File.ReadAllLines(@"volume_entries.txt");
+            path = path.Replace('\\', '/').TrimStart('/').ToLower();
 
-            SortedDictionary<string, MPHNodeInfo> validFiles = new SortedDictionary<string, MPHNodeInfo>();
-
-            foreach (var p in gtsFiles)
-            {
-                var lower = p.ToLower();
-
-                bool found = CheckFile(validFiles, lower);
-
-                if (lower.Contains("gt7sp"))
-                    lower = lower.Replace("gt7sp", "gt7");
-
-                CheckFile(validFiles, lower);
-
-                if (lower.Contains(".adc"))
-                   lower = lower.Replace(".adc", ".mpackage");
-
-                 CheckFile(validFiles, lower);
-            }
-
-            // Check game parameters
-            for (var i = 1000000; i < 1010000; i++)
-                CheckFile(validFiles, $"game_parameter/gp/{i}.json");
-            
-            // Car Models
-            for (var make = 0; make < 400; make++)
-            {
-                for (var id = 0; id < 400; id++)
-                {
-                    string carPath = $"car/{make.ToString().PadLeft(4, '0')}/{id.ToString().PadLeft(4, '0')}";
-                    CheckFile(validFiles, carPath + "/meter");
-                    CheckFile(validFiles, carPath + "/interior");
-                    CheckFile(validFiles, carPath + "/meter.sepdat");
-                    CheckFile(validFiles, carPath + "/interior.sepdat");
-                    CheckFile(validFiles, carPath + "/race/body");
-                    CheckFile(validFiles, carPath + "/hq/body");
-                    CheckFile(validFiles, carPath + "/race/body.sepdat");
-                    CheckFile(validFiles, carPath + "/hq/body.sepdat");
-                    CheckFile(validFiles, carPath + "/race/wheel");
-                    CheckFile(validFiles, carPath + "/hq/wheel");
-                    CheckFile(validFiles, carPath + "/race/brakedisk");
-                    CheckFile(validFiles, carPath + "/hq/brakedisk");
-                    CheckFile(validFiles, carPath + "/race/caliper");
-                    CheckFile(validFiles, carPath + "/hq/caliper");
-                    CheckFile(validFiles, carPath + "/info");
-                    CheckFile(validFiles, carPath + "/tirehouse_sdf_normal");
-                    CheckFile(validFiles, carPath + "/tirehouse_sdf_wide");
-
-                }
-            }
-
-            // Tracks
-            CheckFile(validFiles, "crs/gadgets");
-
-            for (var course_id = 0; course_id < 500; course_id++)
-            {
-                for (var level = 0; level < 10; level++)
-                {
-                    string crsPath = $"crs/c{course_id.ToString().PadLeft(3, '0')}";
-                    CheckFile(validFiles, crsPath + "/pack");
-                    CheckFile(validFiles, crsPath + "/pack_s");
-                    CheckFile(validFiles, crsPath + "/maxsizes");
-                    CheckFile(validFiles, crsPath + "/pack");
-                    CheckFile(validFiles, crsPath + "/probe_gbuffers_common.img");
-
-                    CheckFile(validFiles, $"crs/c{course_id.ToString().PadLeft(3, '0')}.shapestream");
-                    CheckFile(validFiles, $"crs/c{course_id.ToString().PadLeft(3, '0')}.texstream");
-
-                    //CheckFile(txt, validFiles, crsPath + "/probe_gbuffers_common.img");
-
-                    string levelPath = crsPath += $"/l{level.ToString().PadLeft(2, '0')}";
-
-                    CheckFile(validFiles, levelPath + "/course_map");
-                    CheckFile(validFiles, levelPath + "/course_offset");
-                    CheckFile(validFiles, levelPath + "/parking");
-                    CheckFile(validFiles, levelPath + "/replay_offset");
-                    CheckFile(validFiles, levelPath + "/spots.json");
-                    CheckFile(validFiles, levelPath + "/road_condition_map");
-
-                    CheckFile(validFiles, levelPath + "/auto_drive");
-                    CheckFile(validFiles, levelPath + "/course_line");
-                    CheckFile(validFiles, levelPath + "/driving_marker");
-                    CheckFile(validFiles, levelPath + "/enemy_spline");
-                    CheckFile(validFiles, levelPath + "/expert_line");
-                    CheckFile(validFiles, levelPath + "/gadget_layout");
-                    CheckFile(validFiles, levelPath + "/pack");
-                    CheckFile(validFiles, levelPath + "/penalty_line");
-                    CheckFile(validFiles, levelPath + "/replay");
-                    CheckFile(validFiles, levelPath + "/runway");
-                }
-
-                for (var level = 0; level < 10; level++)
-                {
-                    string crsPath = $"crs/p{course_id.ToString().PadLeft(3, '0')}";
-                    CheckFile(validFiles, crsPath + "/pack");
-                    CheckFile(validFiles, crsPath + "/pack_s");
-                    CheckFile(validFiles, crsPath + "/maxsizes");
-                    CheckFile(validFiles, crsPath + "/pack");
-                    CheckFile(validFiles, crsPath + "/probe_gbuffers_common.img");
-
-                    CheckFile(validFiles, $"crs/c{course_id.ToString().PadLeft(3, '0')}.shapestream");
-                    CheckFile(validFiles, $"crs/c{course_id.ToString().PadLeft(3, '0')}.texstream");
-
-                    //CheckFile(txt, validFiles, crsPath + "/probe_gbuffers_common.img");
-
-                    string levelPath = crsPath += $"/l{level.ToString().PadLeft(2, '0')}";
-
-                    CheckFile(validFiles, levelPath + "/course_map");
-                    CheckFile(validFiles, levelPath + "/course_offset");
-                    CheckFile(validFiles, levelPath + "/parking");
-                    CheckFile(validFiles, levelPath + "/replay_offset");
-                    CheckFile(validFiles, levelPath + "/spots.json");
-                    CheckFile(validFiles, levelPath + "/road_condition_map");
-                    CheckFile(validFiles, levelPath + "/road_condition_map");
-
-                    CheckFile(validFiles, levelPath + "/auto_drive");
-                    CheckFile(validFiles, levelPath + "/course_line");
-                    CheckFile(validFiles, levelPath + "/driving_marker");
-                    CheckFile(validFiles, levelPath + "/enemy_spline");
-                    CheckFile(validFiles, levelPath + "/expert_line");
-                    CheckFile(validFiles, levelPath + "/gadget_layout");
-                    CheckFile(validFiles, levelPath + "/pack");
-                    CheckFile(validFiles, levelPath + "/penalty_line");
-                    CheckFile(validFiles, levelPath + "/replay");
-                    CheckFile(validFiles, levelPath + "/runway");
-                }
-            }
-
-            // Decals
-            for (var i = 0; i < 10000; i++)
-            {
-                string p = $"livery/decal";
-
-                CheckFile(validFiles, p + $"/img/{i}.jpg");
-                CheckFile(validFiles, p + $"/img/{i}.svg");
-
-                CheckFile(validFiles, p + $"/txs/{i}.jpg");
-            }
-
-            // Scapes
-            for (var i = 0; i < 500; i++)
-            {
-                string p = $"scapes/{i}";
-
-                CheckFile(validFiles, p + $"/script_ext.txt");
-                CheckFile(validFiles, p + $"/diffuse_env.txs");
-
-                CheckFile(validFiles, p + $"/serialize.ssb");
-
-                for (var j = 0; j < 100; j++)
-                {
-                    CheckFile(validFiles, p + $"/{j}.jpg");
-                    CheckFile(validFiles, p + $"/menu_{j}.jpg");
-                }
-            }
-
-            // Sndz
-            for (var i = 40000; i < 80000; i++)
-            {
-                CheckFile(validFiles, $"carsound/aes/{i}");
-
-            }
-
-            for (var i = 40000; i < 80000; i++)
-            {
-                CheckFile(validFiles, $"carsound/aes/{i}");
-                CheckFile(validFiles, $"carsound/gtes2/{i}/{i}.gtesd1");
-            }
-
-            // Rtext
-            string[] countries = new[] { "BP", "CN", "CZ", "DK", "DE", "EL", "ES", "FI", "FR", "GB", "HU", "IT", "JP", "KR", "MS", "NO", "NL", "PL", "PT", "RU", "SE", "TR", "TW", "US" };
-            foreach (var c in countries)
-            {
-                
-            }
-
-            CheckFile(validFiles, "sound_gt/etc/files.json");
-            CheckFile(validFiles, "sound_gt/etc/gt7sys.json");
-            CheckFile(validFiles, "sound_gt/se/gt7_carsfx.szd");
-            CheckFile(validFiles, "sound_gt/se/gt7_race.szd");
-            CheckFile(validFiles, "sound_gt/se/gt7_tire.szd");
-            CheckFile(validFiles, "sound_gt/se/gt7_collision.szd");
-
-            CheckFile(validFiles, "sound_gt/etc/gt7_buss.szd");
-            CheckFile(validFiles, "sound_gt/library/music.dat");
-
-            return validFiles;
-        }
-
-        private bool CheckFile(SortedDictionary<string, MPHNodeInfo> validFiles, string path)
-        {
             var node = (VolumeHeader as FileDeviceMPHSuperintendentHeader).GetNodeByPath(path);
+            if (node is null)
+                return false;
+
+            ClusterVolume vol = SplitVolumes[node.VolumeIndex];
+            vol.UnpackFile(node, Path.Combine(path, outputDirectory), path, -1);
+
+            return true;
+        }
+
+        private async Task ParallelExtractFiles(string outputDirectory, FileDeviceMPHSuperintendentHeader h, SortedDictionary<string, MPHNodeInfo> gameFiles)
+        {
+            // Group files to unpack by volume
+            var groups = h.Nodes.GroupBy(e => e.VolumeIndex).ToList();
+            var tasks = new List<Task>();
+
+            const int maxThreads = 16;
+            SemaphoreSlim semaphore = new SemaphoreSlim(maxThreads, maxThreads);
+            foreach (var group in groups)
+            {
+                await semaphore.WaitAsync();
+
+                tasks.Add(Task.Run(() =>
+                { 
+                    foreach (var file in group)
+                    {
+                        var vol = SplitVolumes[file.VolumeIndex];
+
+                        if (vol is null)
+                        {
+                            Program.Log($"Volume index {file.VolumeIndex} is not loaded, skipping node");
+                            continue;
+                        }
+
+                        if (gameFiles.ContainsValue(file))
+                        {
+                            var volPath = gameFiles.FirstOrDefault(e => e.Value == file).Key;
+                            vol.UnpackFile(file, Path.Combine(outputDirectory, volPath), volPath, -1);
+                        }
+                        else
+                        {
+                            vol.UnpackFile(file, Path.Combine(outputDirectory, ".undiscovered", $"vol{file.VolumeIndex}", $"tmp{file.NodeIndex}"), string.Empty, file.NodeIndex);
+                        }
+                    }
+
+                    semaphore.Release();
+                }));
+            }
+
+            await Task.WhenAll(tasks);
+        }
+
+        public MPHNodeInfo CheckFile(SortedDictionary<string, MPHNodeInfo> validFiles, string path)
+        {
+            if (path.StartsWith("/"))
+                path.Substring(1);
+
+            var node = (VolumeHeader as FileDeviceMPHSuperintendentHeader).GetNodeByPath(path.ToLower());
             if (node != null)
             {
-                Program.Log($"OK: {path} (0x{node.EntryHash:X8})");
+                Program.Log($"[/] Valid Volume File: {path} (0x{node.EntryHash:X8})");
                 validFiles.TryAdd(path, node);
-                return true;
+                return node;
             }
 
-            return false;
+            return null;
         }
 
         public void LoadSplitVolumesIfNeeded()
@@ -341,14 +234,14 @@ namespace GTToolsSharp.Volumes
                 string localPath = Path.Combine(inputDir, volEntry.FileName);
                 if (!File.Exists(localPath))
                 {
-                    Console.WriteLine($"[!] Linked volume file '{volEntry.FileName}' not found, will be skipped");
+                    Program.Log($"[!] Linked volume file '{volEntry.FileName}' not found, will be skipped");
                     continue;
                 }
 
                 var vol = ClusterVolume.Read(localPath);
                 if (vol is null)
                 {
-                    Console.WriteLine($"[!] Unable to read vol file '{localPath}'.");
+                    Program.Log($"[!] Unable to read vol file '{localPath}'.");
                     continue;
                 }
 
@@ -383,16 +276,112 @@ namespace GTToolsSharp.Volumes
 
                 crc = value;
 
-                value = PDTools.Crypto.CRC32.checksum_0x04C11DB7[a];
-                value = value << 8 ^ PDTools.Crypto.CRC32.checksum_0x04C11DB7[b ^ (value >> 24)];
-                value = value << 8 ^ PDTools.Crypto.CRC32.checksum_0x04C11DB7[c ^ (value >> 24)];
-                value = value << 8 ^ PDTools.Crypto.CRC32.checksum_0x04C11DB7[d ^ (value >> 24)];
+                value = CRC32.checksum_0x04C11DB7[a];
+                value = value << 8 ^ CRC32.checksum_0x04C11DB7[b ^ (value >> 24)];
+                value = value << 8 ^ CRC32.checksum_0x04C11DB7[c ^ (value >> 24)];
+                value = value << 8 ^ CRC32.checksum_0x04C11DB7[d ^ (value >> 24)];
                 value = ~(value ^ crc);
 
                 ints[i] = value;
             }
 
             return true;
+        }
+
+        public SortedDictionary<string, MPHNodeInfo> RegisterFiles()
+        {
+            SortedDictionary<string, MPHNodeInfo> validFiles = new SortedDictionary<string, MPHNodeInfo>();
+
+            if (File.Exists(Path.Combine("FileLists", "gt7_files.txt")))
+            {
+                Program.Log("[-] Mapping out files manually from GT7 files (gt7_files.txt)", forceConsolePrint: true);
+                RegisterFromGT7Files(validFiles);
+            }
+            else
+            {
+                Program.Log("[!] gt7_files.txt not found, not using manual file list to map volume entries.", forceConsolePrint: true);
+            }
+
+            if (File.Exists(Path.Combine("FileLists", "gts_files.txt")))
+            {
+                Program.Log("[-] Mapping out files from GTS 1.68 files..", forceConsolePrint: true);
+                RegisterFromGTSFiles(validFiles);
+            }
+            else
+            {
+                Program.Log("[!] gts_files.txt not found, not using GTS file list to map entries.", forceConsolePrint: true);
+            }
+
+            Program.Log("[-] Bruteforcing files...");
+            MPHFileListBruteforcer bruteforcer = new MPHFileListBruteforcer(this);
+            bruteforcer.BruteforceFindFiles(validFiles);
+
+            return validFiles;
+        }
+
+        private SortedDictionary<string, MPHNodeInfo> RegisterFromGT7Files(SortedDictionary<string, MPHNodeInfo> validFiles)
+        {
+            var gt7Files = File.ReadAllLines(Path.Combine("FileLists", "gt7_files.txt"));
+
+            foreach (var p in gt7Files)
+            {
+                if (string.IsNullOrEmpty(p) || p.StartsWith("//"))
+                    continue;
+
+                if (p.StartsWith("dmsdata", StringComparison.OrdinalIgnoreCase))
+                {
+                    CheckFile(validFiles, p + ".gpb");
+
+                    foreach (var entryName in _dmsEntryList)
+                        CheckFile(validFiles, p + "/" + entryName);
+                }
+                else if (p.StartsWith("piece/4k/face/") || p.StartsWith("piece/2k/face/"))
+                {
+                    // For MsgFaces
+                    for (var i = 0; i < 20; i++)
+                    {
+                        CheckFile(validFiles, string.Format(p, "", i.ToString().PadLeft(2, '0')));
+                        CheckFile(validFiles, string.Format(p, "Notify_", i.ToString().PadLeft(2, '0')));
+                        CheckFile(validFiles, string.Format(p, "Caution_", i.ToString().PadLeft(2, '0')));
+                        CheckFile(validFiles, string.Format(p, "Message_", i.ToString().PadLeft(2, '0')));
+                        CheckFile(validFiles, string.Format(p, "Narration_", i.ToString().PadLeft(2, '0')));
+                        CheckFile(validFiles, string.Format(p, "MessageL_", i.ToString().PadLeft(2, '0')));
+                        CheckFile(validFiles, string.Format(p, "CenterNotify_", i.ToString().PadLeft(2, '0')));
+                        CheckFile(validFiles, string.Format(p, "MenuBookStart", i.ToString().PadLeft(2, '0')));
+                        CheckFile(validFiles, string.Format(p, "MessageNoTint", i.ToString().PadLeft(2, '0')));
+                    }
+
+                    continue;
+                }
+
+                CheckFile(validFiles, p);
+            }
+
+            return validFiles;
+        }
+
+        private SortedDictionary<string, MPHNodeInfo> RegisterFromGTSFiles(SortedDictionary<string, MPHNodeInfo> validFiles)
+        {
+            var gtsFiles = File.ReadAllLines(Path.Combine("FileLists", "gts_files.txt"));
+
+            foreach (var p in gtsFiles)
+            {
+                var lower = p.ToLower();
+
+                CheckFile(validFiles, lower);
+
+                if (lower.Contains("gt7sp"))
+                    lower = lower.Replace("gt7sp", "gt7");
+
+                CheckFile(validFiles, lower);
+
+                if (lower.Contains(".adc"))
+                    lower = lower.Replace(".adc", ".mpackage");
+
+                CheckFile(validFiles, lower);
+            }
+
+            return validFiles;
         }
     }
 }
