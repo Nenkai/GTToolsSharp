@@ -36,7 +36,7 @@ namespace GTToolsSharp.Volumes
 
         static GTVolumeMPH()
         {
-            if (File.Exists("dmsdata.txt"))
+            if (File.Exists("FileLists/dmsdata.txt"))
             {
                 var lines = File.ReadAllLines("FileLists/dmsdata.txt");
                 foreach (var line in lines)
@@ -160,7 +160,7 @@ namespace GTToolsSharp.Volumes
                 return false;
 
             ClusterVolume vol = SplitVolumes[node.VolumeIndex];
-            vol.UnpackFile(node, Path.Combine(path, outputDirectory), path, -1);
+            vol.UnpackFile(node, Path.Combine(outputDirectory, path), path, -1);
 
             return true;
         }
@@ -217,10 +217,20 @@ namespace GTToolsSharp.Volumes
             {
                 Program.Log($"[/] Valid Volume File: {path} (0x{node.EntryHash:X8})");
                 validFiles.TryAdd(path, node);
-                return node;
             }
 
-            return null;
+            if (path.Contains("4k", StringComparison.OrdinalIgnoreCase))
+            {
+                string _2kPath = path.Replace("4k", "2k");
+                node = (VolumeHeader as FileDeviceMPHSuperintendentHeader).GetNodeByPath(_2kPath.ToLower());
+                if (node != null)
+                {
+                    Program.Log($"[/] Valid Volume File: {_2kPath} (0x{node.EntryHash:X8})");
+                    validFiles.TryAdd(_2kPath, node);
+                }
+            }
+
+            return node;
         }
 
         public void LoadSplitVolumesIfNeeded()
@@ -335,7 +345,7 @@ namespace GTToolsSharp.Volumes
                     foreach (var entryName in _dmsEntryList)
                         CheckFile(validFiles, p + "/" + entryName);
                 }
-                else if (p.StartsWith("piece/4k/face/") || p.StartsWith("piece/2k/face/"))
+                else if (p.StartsWith("piece/4k/face/"))
                 {
                     // For MsgFaces
                     for (var i = 0; i < 20; i++)

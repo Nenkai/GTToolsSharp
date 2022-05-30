@@ -29,43 +29,29 @@ namespace GTToolsSharp
             for (var i = 0; i < 100; i++)
             {
                 _vol.CheckFile(validFiles, $"piece/4k/championship_logo/championship_{i.ToString().PadLeft(2, '0')}.img");
-                _vol.CheckFile(validFiles, $"piece/2k/championship_logo/championship_{i.ToString().PadLeft(2, '0')}.img");
                 _vol.CheckFile(validFiles, $"piece/4k/championship_logo_L/championship_{i.ToString().PadLeft(2, '0')}.img");
-                _vol.CheckFile(validFiles, $"piece/2k/championship_logo_L/championship_{i.ToString().PadLeft(2, '0')}.img");
 
                 string idPad = i.ToString().PadLeft(2, '0');
                 _vol.CheckFile(validFiles, $"common/avatar/4k/met/mf{idPad}.img");
                 _vol.CheckFile(validFiles, $"piece/4k/avatar/storemet/mf{idPad}.img");
-                _vol.CheckFile(validFiles, $"piece/2k/avatar/storemet/mf{idPad}.img");
                 _vol.CheckFile(validFiles, $"piece/4k/avatar/sidemet/mf{idPad}.img");
-                _vol.CheckFile(validFiles, $"piece/2k/avatar/sidemet/mf{idPad}.img");
                 _vol.CheckFile(validFiles, $"piece/4k/avatar/suit/ma{idPad}.img");
-                _vol.CheckFile(validFiles, $"piece/2k/avatar/suit/ma{idPad}.img");
 
                 _vol.CheckFile(validFiles, $"common/avatar/4k/met/mf{idPad}.img");
                 _vol.CheckFile(validFiles, $"piece/4k/storemet/mf{idPad}.img");
-                _vol.CheckFile(validFiles, $"piece/2k/storemet/mf{idPad}.img");
                 _vol.CheckFile(validFiles, $"piece/4k/sidemet/mf{idPad}.img");
-                _vol.CheckFile(validFiles, $"piece/2k/sidemet/mf{idPad}.img");
                 _vol.CheckFile(validFiles, $"piece/4k/suit/ma{idPad}.img");
-                _vol.CheckFile(validFiles, $"piece/2k/suit/ma{idPad}.img");
 
                 for (var variation = 0; variation < 100; variation++)
                 {
                     string varPad = variation.ToString().PadLeft(2, '0');
                     _vol.CheckFile(validFiles, $"common/avatar/4k/met/mf{idPad}_{varPad}.img");
                     _vol.CheckFile(validFiles, $"piece/4k/avatar/storemet/mf{idPad}_{varPad}.img");
-                    _vol.CheckFile(validFiles, $"piece/2k/avatar/storemet/mf{idPad}_{varPad}.img");
                     _vol.CheckFile(validFiles, $"piece/4k/avatar/sidemet/mf{idPad}_{varPad}.img");
-                    _vol.CheckFile(validFiles, $"piece/2k/avatar/sidemet/mf{idPad}_{varPad}.img");
                     _vol.CheckFile(validFiles, $"piece/4k/avatar/suit/ma{idPad}_{varPad}.img");
-                    _vol.CheckFile(validFiles, $"piece/2k/avatar/suit/ma{idPad}_{varPad}.img");
                     _vol.CheckFile(validFiles, $"piece/4k/storemet/mf{idPad}_{varPad}.img");
-                    _vol.CheckFile(validFiles, $"piece/2k/storemet/mf{idPad}_{varPad}.img");
                     _vol.CheckFile(validFiles, $"piece/4k/sidemet/mf{idPad}_{varPad}.img");
-                    _vol.CheckFile(validFiles, $"piece/2k/sidemet/mf{idPad}_{varPad}.img");
                     _vol.CheckFile(validFiles, $"piece/4k/suit/ma{idPad}_{varPad}.img");
-                    _vol.CheckFile(validFiles, $"piece/2k/suit/ma{idPad}_{varPad}.img");
                 }
             }
 
@@ -78,7 +64,6 @@ namespace GTToolsSharp
             {
                 // frame_id
                 _vol.CheckFile(validFiles, $"piece/raw/4k/event_img/{id}.img");
-                _vol.CheckFile(validFiles, $"piece/raw/2k/event_img/{id}.img");
 
                 string p = $"livery/decal";
 
@@ -174,6 +159,12 @@ namespace GTToolsSharp
                 }
             }
 
+            for (var y = 0; y < 1000; y++)
+            {
+                _vol.CheckFile(validFiles, $"carshop/used_car_dealer/CC_{y}.json".ToLower());
+            }
+
+            var l = validFiles.Where(e => e.Key.StartsWith("carshop")).ToList();
 
             if (File.Exists("bruteforced_files.txt"))
             {
@@ -189,15 +180,26 @@ namespace GTToolsSharp
 
         private void BruteforceLiveries(SortedDictionary<string, MPHNodeInfo> validFiles)
         {
+            // 1.00 matches for int.MaxValue
+            CheckStyleIdSpecial(validFiles, 954314528);
+            CheckStyleIdSpecial(validFiles, 84496325);
+            CheckStyleIdSpecial(validFiles, 1260526334);
+
+            // 1.13 - matches for uint.maxvalue
+            CheckStyleIdSpecial(validFiles, 169923064);
+
             ulong styleIdStart = 1152921504606846991 - 10000; // First from StyleList minus 10000
-            for (var id = styleIdStart; id < styleIdStart + 60000; id++)
+            for (var id = styleIdStart; id < styleIdStart + 40000; id++)
             {
                 _vol.CheckFile(validFiles, $"livery/style/{id}/cp.json");
                 _vol.CheckFile(validFiles, $"livery/style/{id}/style_0.json");
                 _vol.CheckFile(validFiles, $"livery/style/{id}/style_edit_9.json");
+                _vol.CheckFile(validFiles, $"livery/style/{id}/4k_r.dat");
                 _vol.CheckFile(validFiles, $"livery/style/{id}/4k_4.dat");
                 _vol.CheckFile(validFiles, $"livery/style/{id}/2k_5.dat");
                 _vol.CheckFile(validFiles, $"livery/style/{id}/1k_6.dat");
+                _vol.CheckFile(validFiles, $"livery/style/{id}/256_7.dat");
+                _vol.CheckFile(validFiles, $"livery/style/{id}/128_8.dat");
                 _vol.CheckFile(validFiles, $"livery/style/{id}/odeko.dat");
                 _vol.CheckFile(validFiles, $"livery/style/{id}/11.jpg");
                 _vol.CheckFile(validFiles, $"livery/style/{id}/12.jpg");
@@ -228,6 +230,50 @@ namespace GTToolsSharp
                 // _vol.CheckFile(validFiles, $"livery/livery_set/{id}/4.dat");
                 // 5 6 and 7.. maybe?
             }
+
+            styleIdStart = 0x1000000000000000;
+            for (var id = styleIdStart - 0x1000000000000000; id < 20000; id++)
+            {
+                CheckStyleIdSpecial(validFiles, id);
+            }
+        }
+
+        private void CheckStyleIdSpecial(SortedDictionary<string, MPHNodeInfo> validFiles, ulong actualFileId)
+        {
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/cp.json");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/style_0.json");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/style_edit_9.json");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/4k_r.dat");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/4k_4.dat");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/2k_5.dat");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/1k_6.dat");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/256_7.dat");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/128_8.dat");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/odeko.dat");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/11.jpg");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/12.jpg");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/23.jpg");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/24.png");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/25.png");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/origin.svg");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/thumb_side_3.png");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/filemapping.json");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/edit.json");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/set_0.json");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/thumb_2.png");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/2k_3.dat");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/1k_4.dat");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/livery_edit_5.json");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/7.jpg");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/8.jpg");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/thumb_side.png");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/6.jpg");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/set.json");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/2k.dat");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/1k.dat");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/thumbnail.png");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/progress.json");
+            _vol.CheckFile(validFiles, $"livery/style/10000000/{actualFileId}/used.jpg");
         }
 
         private void BruteforceGameParameters(SortedDictionary<string, MPHNodeInfo> validFiles)
@@ -237,6 +283,27 @@ namespace GTToolsSharp
             {
                 _vol.CheckFile(validFiles, $"game_parameter/gp/{event_id}.json");
                 _vol.CheckFile(validFiles, $"replay/license/{event_id}.dat");
+                _vol.CheckFile(validFiles, $"replay/demo/{event_id}.dat");
+            }
+
+            for (var preset_weather_id = 0; preset_weather_id < 30; preset_weather_id++)
+            {
+                string idPad = preset_weather_id.ToString().PadLeft(2, '0');
+                _vol.CheckFile(validFiles, $"game_parameter/S{idPad}.json");
+                _vol.CheckFile(validFiles, $"game_parameter/C{idPad}.json");
+                _vol.CheckFile(validFiles, $"game_parameter/R{idPad}.json");
+
+                _vol.CheckFile(validFiles, $"piece/4k/weather_image/S{idPad}.img");
+                _vol.CheckFile(validFiles, $"piece/4k/weather_image/C{idPad}.img");
+                _vol.CheckFile(validFiles, $"piece/4k/weather_image/R{idPad}.img");
+
+                _vol.CheckFile(validFiles, $"piece/4k/weather_thumbnail/S{idPad}.img");
+                _vol.CheckFile(validFiles, $"piece/4k/weather_thumbnail/C{idPad}.img");
+                _vol.CheckFile(validFiles, $"piece/4k/weather_thumbnail/R{idPad}.img");
+
+                _vol.CheckFile(validFiles, $"piece/4k/icon/weather/S{idPad}.img");
+                _vol.CheckFile(validFiles, $"piece/4k/icon/weather/C{idPad}.img");
+                _vol.CheckFile(validFiles, $"piece/4k/icon/weather/R{idPad}.img");
             }
         }
 
@@ -298,6 +365,20 @@ namespace GTToolsSharp
                     }
                 }
             }
+
+            for (var id = 0; id < 10; id++)
+            {
+                // This is a flag list but just bruteforce it that way, lazy
+                for (var char1 = 0; char1 < 255; char1++)
+                {
+                    for (var char2 = 0; char2 < 255; char2++)
+                    {
+                        _vol.CheckFile(validFiles, $"car/hq/{id}/{(char)char1}{(char)char2}.img");
+                    }
+                    
+                }
+                
+            }
         }
 
         private void BruteforceCarPartFiles(SortedDictionary<string, MPHNodeInfo> validFiles)
@@ -339,7 +420,6 @@ namespace GTToolsSharp
                 {
                     string variationPad = variation.ToString().PadLeft(2, '0');
                     _vol.CheckFile(validFiles, $"carparts/thumbnail/4k/he{idPad}_{variationPad}.img");
-                    _vol.CheckFile(validFiles, $"carparts/thumbnail/2k/he{idPad}_{variationPad}.img");
                 }
             }
 
@@ -515,12 +595,12 @@ namespace GTToolsSharp
             _vol.CheckFile(validFiles, crsPath + "/grass_mat.mdl");
             _vol.CheckFile(validFiles, crsPath + "/grass_tex.img");
 
-
             _vol.CheckFile(validFiles, crsPath + "/synthetic_sky_envptr");
             _vol.CheckFile(validFiles, crsPath + "/shape_stream");
             _vol.CheckFile(validFiles, crsPath + "/tex_stream");
+            _vol.CheckFile(validFiles, crsPath + "/build_info");
 
-            for (var layout_no = 0; layout_no < 13; layout_no++)
+            for (var layout_no = 0; layout_no < 20; layout_no++)
             {
 
                 string crslayoutPath = crsPath + $"/L{layout_no.ToString().PadLeft(2, '0')}";

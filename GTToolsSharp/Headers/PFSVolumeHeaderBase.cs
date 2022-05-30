@@ -81,11 +81,13 @@ namespace GTToolsSharp.Headers
             if (volHeaderType == PFSVolumeHeaderType.PFS)
             {
                 headerBytes = new byte[header.HeaderSize];
+                input.Read(headerBytes);
                 parentVolume.DecryptHeaderGT5PDemo(headerBytes);
             }
             else
             {
                 headerBytes = new byte[header.HeaderSize];
+                input.Read(headerBytes);
                 parentVolume.DecryptHeader(headerBytes, GTVolumePFS.BASE_VOLUME_ENTRY_INDEX);
             }
 

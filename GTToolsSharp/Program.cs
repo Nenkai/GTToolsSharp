@@ -192,7 +192,10 @@ namespace GTToolsSharp
 
 
             if (!string.IsNullOrEmpty(options.LogPath))
+            {
+                sw.Dispose();
                 sw = new StreamWriter(options.LogPath);
+            }
 
             SaveTOC = options.SaveTOC;
             SaveHeader = options.SaveVolumeHeader;

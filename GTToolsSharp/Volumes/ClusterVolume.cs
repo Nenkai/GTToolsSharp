@@ -14,6 +14,8 @@ using GTToolsSharp.Headers;
 using GTToolsSharp.Encryption;
 using GTToolsSharp.Entities;
 
+using PDTools.Compression;
+
 using ImpromptuNinjas.ZStd;
 
 namespace GTToolsSharp.Volumes
@@ -78,32 +80,40 @@ namespace GTToolsSharp.Volumes
             using FileStream outputStream = new FileStream(filePath, FileMode.Create);
 
             // Also compressed
-            if (nodeKey.Format != MPHNodeFormat.PLAIN)
+            uint magic = fileStream.ReadUInt32();
+
+            bool fragmented = nodeKey.Kind == MPHNodeKind.FRAG;
+
+            switch (magic)
             {
-                uint magic = fileStream.ReadUInt32();
+                case ZStdZIP.ZSTDTiny_Magic:
+                    if (fragmented)
+                        throw new InvalidDataException("Got fragmented as ZStd Tiny");
 
-                bool fragmented = nodeKey.Kind == MPHNodeKind.FRAG;
+                    ZStdZIP.DecompressZStd_Tiny(fileStream, outputStream, fragmented);
+                    break;
 
-                switch (magic)
-                {
-                    case 0xFFF7ED85:
-                        if (fragmented)
-                            throw new InvalidDataException("Got fragmented as ZStd Tiny");
+                case ZStdZIP.ZSTDStandard_Magic:
+                    ZStdZIP.DecompressZStd_Standard(fileStream, outputStream, fragmented);
+                    break;
 
-                        HandleZStdTiny(fileStream, outputStream, fragmented);
-                        break;
+                case PDIZIP.PDIZIP_MAGIC:
+                    PDIZIP.Inflate(fileStream, outputStream, skipMagic: true);
+                    break;
 
-                    case 0xFFF7972F: // ZSTD_REGULAR
-                        HandleZStdStandard(fileStream, outputStream, fragmented);
-                        break;
+                case PS2ZIP.PS2ZIP_MAGIC: // ZLIB
+                    PS2ZIP.TryInflate(fileStream, outputStream, skipMagic: true);
+                    break;
 
-                    case 0xFFF7EEC5: // ZLIB
-                        throw new NotImplementedException("ZLib decompression not implemented yet");
-                }
-            }
-            else
-            {
-                HandlePlain(fileStream, outputStream, nodeKey.UncompressedSize);
+                case 0xFEFE65FA:
+                case 0xFEFDDB45:
+                case 0xFEFDB345:
+                    throw new NotImplementedException($"Unhandled compression type with magic: 0x{magic}");
+
+                default:
+                    fileStream.Position -= 4;
+                    HandlePlain(fileStream, outputStream, nodeKey.UncompressedSize);
+                    break;
             }
 
 
@@ -221,135 +231,6 @@ namespace GTToolsSharp.Volumes
             }
 
             ArrayPool<byte>.Shared.Return(buffer);
-        }
-
-        public void HandleZStdTiny(Stream stream, Stream outputStream, bool isFragmented)
-        {
-            int uncompressed_size = -stream.ReadInt32();
-
-            if (!isFragmented)
-            {
-                const int bufferSize = 0x20000;
-                using (var decompressor = new ZStdDecompressStream(stream, bufferSize))
-                {
-                    var rem = uncompressed_size;
-                    byte[] buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
-                    while (rem > 0)
-                    {
-                        int len = (int)Math.Min((long)rem, buffer.Length);
-                        var read = decompressor.Read(buffer, 0, len);
-                        outputStream.Write(buffer, 0, read);
-
-                        rem -= read;
-                    }
-
-                    ArrayPool<byte>.Shared.Return(buffer);
-                }
-            }
-            else
-            {
-                using (var decompressor = new ZStdDecompressor())
-                {
-                    while (true)
-                    {
-                        uint magic = stream.ReadUInt32();
-                        if (magic != 0xFFF7F32E)
-                            break;
-
-                        int chunk_uncompressed_size = stream.ReadInt32();
-                        int chunk_compressed_size = stream.ReadInt32();
-                        uint crc_checksum = stream.ReadUInt32();
-
-                        byte[] chunkBuffer = ArrayPool<byte>.Shared.Rent(chunk_uncompressed_size);
-                        byte[] inputBuffer = ArrayPool<byte>.Shared.Rent(chunk_compressed_size);
-                        stream.Read(inputBuffer.AsSpan(0, chunk_compressed_size));
-
-                        decompressor.Decompress(
-                             chunkBuffer.AsSpan(0, chunk_uncompressed_size),
-                             inputBuffer.AsSpan(0, chunk_compressed_size)
-                             );
-
-                        outputStream.Write(chunkBuffer.AsSpan(0, chunk_uncompressed_size));
-
-                        stream.Align(0x10000);
-
-                        ArrayPool<byte>.Shared.Return(chunkBuffer);
-                        ArrayPool<byte>.Shared.Return(inputBuffer);
-                    }
-                }
-            }
-        }
-
-        public void HandleZStdStandard(Stream stream, Stream outputStream, bool isFragmented)
-        {
-            long startPos = stream.Position;
-
-            uint uncompressed_size_lo = stream.ReadUInt32();
-            uint uncompressed_size_hi = stream.ReadUInt16();
-            ulong uncompressed_size = (ulong)uncompressed_size_hi << 32 | uncompressed_size_lo;
-
-            uint compressed_size_lo = stream.ReadUInt32();
-            uint compressed_size_hi = stream.ReadUInt16();
-            ulong compressed_size = (ulong)compressed_size_hi << 32 | compressed_size_lo;
-
-            stream.Position += 0x0C;
-
-            int flags = stream.ReadInt32();
-            
-            if (!isFragmented)
-            {
-                const int bufferSize = 0x20000;
-                using (var decompressor = new ZStdDecompressStream(stream, bufferSize))
-                {
-                    var rem = uncompressed_size;
-                    byte[] buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
-
-                    while (rem > 0)
-                    {
-                        int len = (int)Math.Min((long)rem, buffer.Length);
-
-                        var read = decompressor.Read(buffer, 0, len);
-                        outputStream.Write(buffer, 0, read);
-
-                        rem -= (uint)read;
-                    }
-
-                    ArrayPool<byte>.Shared.Return(buffer);
-                }
-            }
-            else
-            {
-                using (var decompressor = new ZStdDecompressor())
-                {
-                    while (true)
-                    {
-                        uint magic = stream.ReadUInt32();
-                        if (magic != 0xFFF7F32E)
-                            break;
-
-                        int chunk_uncompressed_size = stream.ReadInt32();
-                        int chunk_compressed_size = stream.ReadInt32();
-                        uint crc_checksum = stream.ReadUInt32();
-
-                        byte[] chunkBuffer = ArrayPool<byte>.Shared.Rent(chunk_uncompressed_size);
-                        byte[] inputBuffer = ArrayPool<byte>.Shared.Rent(chunk_compressed_size);
-
-                        stream.Read(inputBuffer.AsSpan(0, chunk_compressed_size));
-
-                        decompressor.Decompress(
-                            chunkBuffer.AsSpan(0, chunk_uncompressed_size),
-                            inputBuffer.AsSpan(0, chunk_compressed_size)
-                            );
-
-                        outputStream.Write(chunkBuffer.AsSpan(0, chunk_uncompressed_size));
-
-                        stream.Align(0x10000);
-
-                        ArrayPool<byte>.Shared.Return(chunkBuffer);
-                        ArrayPool<byte>.Shared.Return(inputBuffer);
-                    }
-                }
-            }
         }
 
         public byte[] GetStreamCryptorIVByNonce(uint nonce)
