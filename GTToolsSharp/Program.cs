@@ -81,7 +81,10 @@ namespace GTToolsSharp
                 return;
 
             if (!string.IsNullOrEmpty(options.LogPath))
+            {
+                sw?.Dispose();
                 sw = new StreamWriter(options.LogPath);
+            }
 
             if (!string.IsNullOrEmpty(options.CustomGameID) && options.CustomGameID.Length > 128)
             {
@@ -190,10 +193,9 @@ namespace GTToolsSharp
             if (keyset is null)
                 return;
 
-
             if (!string.IsNullOrEmpty(options.LogPath))
             {
-                sw.Dispose();
+                sw?.Dispose();
                 sw = new StreamWriter(options.LogPath);
             }
 
@@ -291,7 +293,10 @@ namespace GTToolsSharp
                 return;
 
             if (!string.IsNullOrEmpty(options.LogPath))
+            {
+                sw?.Dispose();
                 sw = new StreamWriter(options.LogPath);
+            }
 
             bool found = false;
             InstallerUnpacker unp = null;

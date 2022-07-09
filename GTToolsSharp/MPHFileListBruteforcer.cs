@@ -355,6 +355,7 @@ namespace GTToolsSharp
                     _vol.CheckFile(validFiles, carPath + "/info");
                     _vol.CheckFile(validFiles, carPath + "/tirehouse_sdf_normal");
                     _vol.CheckFile(validFiles, carPath + "/tirehouse_sdf_wide");
+                    _vol.CheckFile(validFiles, carPath + "/window_stencil");
 
                     // Thumbnails
                     for (var variation = 0; variation < 30; variation++)
