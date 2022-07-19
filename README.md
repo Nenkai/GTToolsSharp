@@ -1,3 +1,5 @@
+# ⚠️ Repository archived - No support to be provided for any games including GT7.
+
 # GTToolsSharp
 A port of gttool from flatz for Gran Turismo 5/6/Sport/7 to C# which allows for endless modding possibilities.
 
