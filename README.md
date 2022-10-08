@@ -4,7 +4,7 @@ A port of gttool from flatz for Gran Turismo 5/6/Sport/7 to C# which allows for 
 The main motivation for writing this tool was to allow modding GT5/6 through repacking volumes.
 
 ### Features
-* Unpacking volumes from GT5P/GT5/6/Sport/7 (You'll need the keys to decrypt the GT5/6 volumes).
+* Unpacking volumes from GT5P/GT5/6/Sport/7
 * **Packing files for modding** (PDIPFS only) (Read packing sections)
 * Unpacking **Patch File Systems** (PDIPFS) from game updates.
 * Creating online update patches for GT6
