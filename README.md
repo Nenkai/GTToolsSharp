@@ -1,5 +1,3 @@
-# ⚠️ Repository archived - No support to be provided for any games including GT7.
-
 # GTToolsSharp
 A port of gttool from flatz for Gran Turismo 5/6/Sport/7 to C# which allows for endless modding possibilities.
 
@@ -10,11 +8,17 @@ The main motivation for writing this tool was to allow modding GT5/6 through rep
 * **Packing files for modding** (PDIPFS only) (Read packing sections)
 * Unpacking **Patch File Systems** (PDIPFS) from game updates.
 * Creating online update patches for GT6
+* Decrypting files - movies, databases, etc.
 
 Files can be extracted for GT.VOL (main build volume) and PDIPFS (update patches).
-To unpack/pack certain builds you will need the keys for each one of them. Only the keys for GT5P, GT5 (EU/US) and GT6 are provided.
+To unpack/pack certain builds you will need the keys for each one of them. [While most of them are provided](https://github.com/Nenkai/GTToolsSharp/blob/master/GTToolsSharp/Encryption/KeysetStore.cs), it may not have all of them.
 
-# [DOWNLOAD LINK](https://github.com/Nenkai/GTToolsSharp/releases)
+## ⚠️ Notice regarding GT7
+While this tool supports unpacking volumes from GT7, Absolutely NO support and help will be provided in regards to extracting files from the base version or later patches.
+
+It has only been tested against the PS4 Version of the game, 1.00.
+
+# [Download Link](https://github.com/Nenkai/GTToolsSharp/releases)
 
 # Usage
 ## Unpacking
