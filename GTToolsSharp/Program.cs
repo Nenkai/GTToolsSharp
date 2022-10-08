@@ -195,11 +195,6 @@ namespace GTToolsSharp
             if (keyset is null)
                 return;
 
-            foreach (var t in keyset)
-            {
-                Console.WriteLine($"public static readonly Keyset Keyset_{t.GameCode} = new Keyset(\"{t.GameCode}\", \"{t.Magic}\", new Key({string.Join(", ", t.Key.Data.Select(e => $"0x{e:X8}"))}));");
-            }
-
             if (!string.IsNullOrEmpty(options.LogPath))
             {
                 sw?.Dispose();
