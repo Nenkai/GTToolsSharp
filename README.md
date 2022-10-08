@@ -11,7 +11,7 @@ The main motivation for writing this tool was to allow modding GT5/6 through rep
 * Decrypting files - movies, databases, etc.
 
 Files can be extracted for GT.VOL (main build volume) and PDIPFS (update patches).
-To unpack/pack certain builds you will need the keys for each one of them.
+To unpack/pack certain builds you will need the keys for each one of them. [While most of them are provided](https://github.com/Nenkai/GTToolsSharp/blob/master/GTToolsSharp/Encryption/KeysetStore.cs), it may not have all of them.
 
 ## ⚠️ Notice regarding GT7
 While this tool supports unpacking volumes from GT7, Absolutely NO support and help will be provided in regards to extracting files from the base version or later patches.
