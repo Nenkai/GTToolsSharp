@@ -35,13 +35,15 @@ namespace GTToolsSharp
             Console.WriteLine($"-- GTToolsSharp {Version} - (c) Nenkai#9075, ported from flatz's gttool --");
             Console.WriteLine();
 
-            var p = Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, UnpackInstallerVerbs, CryptVerbs, ListVerbs, CompressVerbs, GT7UnpackVerbs>(args);
+            var p = Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, UnpackInstallerVerbs, CryptVerbs, CryptSalsaVerbs, CryptMovieVerbs, ListVerbs, CompressVerbs, GT7UnpackVerbs>(args);
             p = await p.WithParsedAsync<GT7UnpackVerbs>(UnpackGT7);
              
             p.WithParsed<PackVerbs>(Pack)
              .WithParsed<UnpackVerbs>(Unpack)
              .WithParsed<UnpackInstallerVerbs>(UnpackInstaller)
              .WithParsed<CryptVerbs>(Crypt)
+             .WithParsed<CryptSalsaVerbs>(CryptSalsa)
+             .WithParsed<CryptMovieVerbs>(CryptMovie)
              .WithParsed<ListVerbs>(List)
              .WithParsed<CompressVerbs>(Compress)
              .WithNotParsed(HandleNotParsedArgs);
@@ -193,6 +195,11 @@ namespace GTToolsSharp
             if (keyset is null)
                 return;
 
+            foreach (var t in keyset)
+            {
+                Console.WriteLine($"public static readonly Keyset Keyset_{t.GameCode} = new Keyset(\"{t.GameCode}\", \"{t.Magic}\", new Key({string.Join(", ", t.Key.Data.Select(e => $"0x{e:X8}"))}));");
+            }
+
             if (!string.IsNullOrEmpty(options.LogPath))
             {
                 sw?.Dispose();
@@ -323,19 +330,18 @@ namespace GTToolsSharp
         public static void Crypt(CryptVerbs options)
         {
             Keyset keys = null;
-            if (string.IsNullOrEmpty(options.Salsa20KeyEncrypt))
-            {
-                Keyset[] keysets = CheckKeys();
-                if (keysets is null)
-                    return;
+            
+            Keyset[] keysets = CheckKeys();
+            if (keysets is null)
+                return;
 
-                keys = keysets.Where(e => e.GameCode.Equals(options.GameCode, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-                if (keys is null)
-                {
-                    Console.WriteLine($"Keyset with GameCode '{options.GameCode}' does not exist in the keyset file.");
-                    return;
-                }
+            keys = keysets.Where(e => e.GameCode.Equals(options.GameCode, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+            if (keys is null)
+            {
+                Console.WriteLine($"Keyset with GameCode '{options.GameCode}' does not exist in the keyset file.");
+                return;
             }
+            
 
             foreach (var file in options.InputPath)
             {
@@ -363,56 +369,50 @@ namespace GTToolsSharp
                     DecryptFile(options, keys, file);
                 }
             }
+
             Console.WriteLine("[/] Done.");
         }
 
-        private static void DecryptFile(CryptVerbs options, Keyset keys, string file)
+        public static void CryptSalsa(CryptSalsaVerbs options)
         {
-            
-            if (!string.IsNullOrEmpty(options.Salsa20KeyEncrypt))
+            foreach (var file in options.InputPath)
             {
-                byte[] keyBytes = MiscUtils.StringToByteArray(options.Salsa20KeyEncrypt);
-
-                Console.WriteLine($"[:] Salsa Encrypting '{file}'..");
-
-                using (FileStream fs = new FileStream(file, FileMode.Open))
-                using (FileStream fsOut = new FileStream(file + ".out", FileMode.Create))
+                if (!File.Exists(file))
                 {
-                    byte[] dataKey = new byte[8];
-                    using SymmetricAlgorithm salsa20 = new Salsa20SymmetricAlgorithm();
-                    using var decrypt = salsa20.CreateEncryptor(keyBytes, dataKey);
+                    Console.WriteLine($"[X] File or folder '{file}' to decrypt/encrypt does not exist.");
+                    continue;
+                }
 
-                    byte[] buffer = new byte[0x8000];
-                    int read;
-                    while ((read = fs.Read(buffer, 0, buffer.Length)) > 0)
+                DecryptFile_Salsa(file, options.Key);
+            }
+
+            Console.WriteLine("[/] Done.");
+        }
+
+        public static void CryptMovie(CryptMovieVerbs options)
+        {
+            foreach (var file in options.InputPath)
+            {
+                if (!File.Exists(file))
+                {
+                    Console.WriteLine($"[X] File or folder '{file}' to decrypt/encrypt does not exist.");
+                    continue;
+                }
+
+                using (var fs = new FileStream(file, FileMode.Open))
+                using (var br = new BinaryReader(fs))
+                {
+                    if (br.ReadUInt32() == 0x464D4150)
                     {
-                        decrypt.TransformBlock(buffer, 0, read, buffer, 0);
-                        fsOut.Write(buffer, 0, read);
+                        Console.WriteLine("[!] Movie file '{file}' is already decrypted.");
+                        continue;
                     }
                 }
 
-                // Make backup while replacing
-                if (File.Exists(file))
-                    File.Move(file, file + ".bak");
-                
-                File.Move(file + ".out", file);
-
-                // If replace was done correctly and backup exists, delete it
-                if (File.Exists(file) && File.Exists(file + ".bak"))
-                    File.Delete(file + ".bak");
+                DecryptFile_Salsa(file, options.Key, decryptKeyWithBaseKey: true);
             }
-            else
-            {
-                Console.WriteLine($"[:] Crypting '{file}'..");
 
-                byte[] input = File.ReadAllBytes(file);
-                if (!options.UseAlternative)
-                    CryptoUtils.CryptBuffer(keys, input, input, options.Seed);
-                else
-                    CryptoUtils.CryptBufferAlternative(keys, input, input);
-
-                File.WriteAllBytes(file, input);
-            }
+            Console.WriteLine("[/] Done.");
         }
 
         public static void List(ListVerbs options)
@@ -510,7 +510,73 @@ namespace GTToolsSharp
                 File.WriteAllBytes(outpath, compressed);
                 Console.WriteLine($"[/] Done compressing to {options.OutputPath}.");
             }
-           
+
+        }
+
+        private static void DecryptFile(CryptVerbs options, Keyset keys, string file)
+        {
+            Console.WriteLine($"[:] Crypting '{file}'..");
+
+            byte[] input = File.ReadAllBytes(file);
+            if (!options.UseAlternative)
+                CryptoUtils.CryptBuffer(keys, input, input, options.Seed);
+            else
+                CryptoUtils.CryptBufferAlternative(keys, input, input);
+
+            File.WriteAllBytes(file, input);
+        }
+
+        private static void DecryptFile_Salsa(string file, string salsaKey, bool decryptKeyWithBaseKey = false)
+        {
+            byte[] baseKey = Convert.FromBase64String(KeysetStore.GT5P_TVBASEKEY);
+            byte[] keyBytes = new byte[0x20];
+
+            if (Convert.TryFromBase64String(salsaKey, keyBytes, out int bytesWritten))
+            {
+                Console.WriteLine("[/] Detected key input as Base64.");
+            }
+            else
+            {
+                keyBytes = MiscUtils.StringToByteArray(salsaKey);
+            }
+
+            if (decryptKeyWithBaseKey)
+            {
+                Console.WriteLine("[:] Decrypting input key using GT5P_TVBASEKEY...");
+
+                // Decrypt our movie key
+                var salsa = new PDTools.Crypto.Salsa20(baseKey, 0x20);
+                salsa.SetIV(new byte[8]);
+                salsa.Decrypt(keyBytes, keyBytes.Length);
+            }
+            
+            Console.WriteLine($"[:] Salsa crypting '{file}'..");
+
+            using (FileStream fs = new FileStream(file, FileMode.Open))
+            using (FileStream fsOut = new FileStream(file + ".out", FileMode.Create))
+            {
+                byte[] dataKey = new byte[8];
+                using SymmetricAlgorithm salsa20 = new Salsa20SymmetricAlgorithm();
+                using var decrypt = salsa20.CreateEncryptor(keyBytes, dataKey);
+
+                byte[] buffer = new byte[0x8000];
+                int read;
+                while ((read = fs.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    decrypt.TransformBlock(buffer, 0, read, buffer, 0);
+                    fsOut.Write(buffer, 0, read);
+                }
+            }
+
+            // Make backup while replacing
+            if (File.Exists(file))
+                File.Move(file, file + ".bak");
+
+            File.Move(file + ".out", file);
+
+            // If replace was done correctly and backup exists, delete it
+            if (File.Exists(file) && File.Exists(file + ".bak"))
+                File.Delete(file + ".bak");
         }
 
         public static void Log(string message, bool forceConsolePrint = false)
@@ -524,13 +590,26 @@ namespace GTToolsSharp
         public static void CreateDefaultKeysFile()
         {
             string json = JsonSerializer.Serialize(new[] 
-            { 
-                KeysetStore.Keyset_GT5P_JP_DEMO,
-                KeysetStore.Keyset_GT5P_EU_SPEC3,
+            {
+                KeysetStore.Keyset_DEFAULT,
+
+                KeysetStore.Keyset_GT5P_SPEC2_US_PSN,
                 KeysetStore.Keyset_GT5P_US_SPEC3,
+                KeysetStore.Keyset_GT5P_EU_SPEC3,
+                KeysetStore.Keyset_GT5P_CITROEN,
+                KeysetStore.Keyset_GT5_TT_HK,
+                KeysetStore.Keyset_GT5_TT_US,
+                KeysetStore.Keyset_GT5_TT_EU,
+                KeysetStore.Keyset_GT5_KIOSK_DEMO,
                 KeysetStore.Keyset_GT5_EU,
                 KeysetStore.Keyset_GT5_US,
-                KeysetStore.Keyset_GT6 
+                KeysetStore.Keyset_GT5_JP,
+                KeysetStore.Keyset_GTAC_2012_EU,
+                KeysetStore.Keyset_GTAC_2012_US,
+                KeysetStore.Keyset_GTAC_2012_ASIA,
+                KeysetStore.Keyset_GT5_ASIA,
+                KeysetStore.Keyset_GTA2013,
+                KeysetStore.Keyset_GT6,
             }, new JsonSerializerOptions() { WriteIndented = true });
 
             File.WriteAllText("key.json", json);
@@ -544,13 +623,10 @@ namespace GTToolsSharp
                 {
                     CreateDefaultKeysFile();
                     Console.WriteLine("[X] Error: Volume Encryption Key file is missing (key.json).");
-                    Console.WriteLine(" A default one was created with the keys for the following games:");
-                    Console.WriteLine("  - GT5P Demo (Japan)");
-                    Console.WriteLine("  - GT5P (US, Spec III)");
-                    Console.WriteLine("  - GT5P (Europe, Spec III)");
-                    Console.WriteLine("  - GT5 (Europe)");
-                    Console.WriteLine("  - GT5 (US)");
-                    Console.WriteLine("  - GT6 (Universal/All Regions)");
+                    Console.WriteLine(" A default one was created with the keys for the following game codes:");
+                    foreach (var k in KeysetStore.Default_Keysets)
+                        Console.WriteLine($"  - {k.GameCode}");
+
                     Console.WriteLine(" Just run the program again if the game you are trying to extract/pack matches one of the above.");
                     Console.WriteLine(" If not, change the file accordingly and provide keys for the game build/region you are trying to unpack.");
                     

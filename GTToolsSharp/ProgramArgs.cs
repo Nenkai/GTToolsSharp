@@ -100,7 +100,7 @@ namespace GTToolsSharp
         public bool SaveHeaderTOC { get; set; }
     }
 
-    [Verb("crypt", HelpText = "Decrypts/Encrypts a file.")]
+    [Verb("crypt", HelpText = "Decrypts/Encrypts a general game file (mostly from the user data folder on the console).")]
     public class CryptVerbs
     {
         [Option('g', "gamecode", Required = true, HelpText = "GameCode - Key to use within your key file.")]
@@ -119,9 +119,26 @@ namespace GTToolsSharp
 
         [Option("alternative", HelpText = "Use alternative method. Only use if you absolutely know what you are doing.")]
         public bool UseAlternative { get; set; }
+    }
 
-        [Option("salsacrypt", HelpText = "Advanced users. Salsa key (hex string) to use to encrypt. Do not provide to use default file volume encryption.")]
-        public string Salsa20KeyEncrypt { get; set; }
+    [Verb("cryptsalsa", HelpText = "Decrypts/Encrypts a file using a specified Salsa20 key. Normally used for the database files (specdb, menudb, caption.dat)")]
+    public class CryptSalsaVerbs
+    {
+        [Option('i', "input", Required = true, HelpText = "Input files or folder to encrypt or decrypt.")]
+        public IEnumerable<string> InputPath { get; set; }
+
+        [Option('k', "key", Required = true, HelpText = "Key as hex string, or base64 string.")]
+        public string Key { get; set; }
+    }
+
+    [Verb("cryptmovie", HelpText = "Decrypt the specified Salsa20 key, then decrypts the provided movie file. Keys for each movie file are within menudb.")]
+    public class CryptMovieVerbs
+    {
+        [Option('i', "input", Required = true, HelpText = "Input files or folder to encrypt or decrypt.")]
+        public IEnumerable<string> InputPath { get; set; }
+
+        [Option('k', "key", Required = true, HelpText = "Key as base64 string, or hex string.")]
+        public string Key { get; set; }
     }
 
     [Verb("pack", HelpText = "Packs a volume file.")]
