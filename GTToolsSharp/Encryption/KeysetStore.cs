@@ -55,6 +55,7 @@ namespace GTToolsSharp
 
         public static readonly Keyset Keyset_GT5P_JP = new Keyset("GT5P_JP", "PDIPFS-071201-11", new Key(0x04C11DB7, 0x04C11DB7, 0x04C11DB7, 0x04C11DB7));
         public static readonly Keyset Keyset_GT5P_SPEC2_US_PSN = new Keyset("GT5P_SPEC2_US_PSN", "SONORA-550937027", new Key(0xFD7F0A4B, 0x6DE31FCD, 0xB5B14A50, 0x2F174A36));
+        public static readonly Keyset Keyset_GT5P_KR = new Keyset("GT5P_KR", "CHONSANDO-565545051", new Key(0xD72B2A83, 0xD4C8FDDD, 0x397FE7D, 0x17A02DE7));
         public static readonly Keyset Keyset_GT5P_US_SPEC3 = new Keyset("GT5P_US_SPEC_III", "SONORA-550937027", new Key(0x4B0A7FFD, 0xCD1FE36D, 0x504AB1B5, 0x364A172F));
         public static readonly Keyset Keyset_GT5P_EU_SPEC3 = new Keyset("GT5P_EU_SPEC_III", "TOTTORI-562314254", new Key(0x5F29A71B, 0xA80945CF, 0xBECCA74F, 0x07C9800F));
         public static readonly Keyset Keyset_GT5P_CITROEN = new Keyset("GT5P_CITROEN", "KARAKUM-176730298", new Key(0x995515F1, 0xC7BA38EF, 0xA9837BE5, 0x60C4925F));
@@ -84,7 +85,7 @@ namespace GTToolsSharp
             KeysetStore.Keyset_GT5P_SPEC2_US_PSN,
             KeysetStore.Keyset_GT5P_US_SPEC3,
             KeysetStore.Keyset_GT5P_EU_SPEC3,
-
+            KeysetStore.Keyset_GT5P_KR,
             KeysetStore.Keyset_GT5P_CITROEN,
 
             KeysetStore.Keyset_GT5_TT_HK,
