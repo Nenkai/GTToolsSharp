@@ -35,7 +35,7 @@ namespace GTToolsSharp
             Console.WriteLine($"-- GTToolsSharp {Version} - (c) Nenkai#9075, ported from flatz's gttool --");
             Console.WriteLine();
 
-            var p = Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, UnpackInstallerVerbs, CryptVerbs, CryptSalsaVerbs, CryptMovieVerbs, ListVerbs, CompressVerbs, GT7UnpackVerbs>(args);
+            var p = Parser.Default.ParseArguments<PackVerbs, UnpackVerbs, UnpackInstallerVerbs, CryptVerbs, CryptSalsaVerbs, CryptMovieVerbs, ListVerbs, CompressVerbs, DecompressVerbs, GT7UnpackVerbs>(args);
             p = await p.WithParsedAsync<GT7UnpackVerbs>(UnpackGT7);
              
             p.WithParsed<PackVerbs>(Pack)
@@ -46,6 +46,7 @@ namespace GTToolsSharp
              .WithParsed<CryptMovieVerbs>(CryptMovie)
              .WithParsed<ListVerbs>(List)
              .WithParsed<CompressVerbs>(Compress)
+             .WithParsed<DecompressVerbs>(Decompress)
              .WithNotParsed(HandleNotParsedArgs);
 
             Program.Log("Exiting.");
@@ -399,8 +400,12 @@ namespace GTToolsSharp
                 {
                     if (br.ReadUInt32() == 0x464D4150)
                     {
-                        Console.WriteLine("[!] Movie file '{file}' is already decrypted.");
-                        continue;
+                        Console.WriteLine($"[!] Movie file '{file}' is decrypted. Encrypt? [y/n]");
+                        if (Console.ReadKey().Key != ConsoleKey.Y)
+                        {
+                            Console.WriteLine($"[!] Skipped {file}");
+                            continue;
+                        }
                     }
                 }
 
@@ -506,6 +511,70 @@ namespace GTToolsSharp
                 Console.WriteLine($"[/] Done compressing to {options.OutputPath}.");
             }
 
+        }
+
+        public static void Decompress(DecompressVerbs options)
+        {
+            if (Directory.Exists(options.InputPath))
+            {
+                var files = Directory.GetFiles(options.InputPath);
+                foreach (var compFile in files)
+                {
+                    using (var fs = new FileStream(compFile, FileMode.Open))
+                    using (var br = new BinaryReader(fs))
+                    using (var outputStream = new FileStream(compFile + ".out", FileMode.Create))
+                    {
+                        if (fs.Length < 4)
+                        {
+                            Console.WriteLine($"[!] Skipping {compFile} - too small length");
+                            continue;
+                        }
+
+                        if (br.ReadUInt32() != 0xFFF7EEC5)
+                        {
+                            Console.WriteLine($"[!] Skipping {compFile} - Not a PS2ZIP compressed file");
+                            continue;
+                        }
+                        fs.Position = 0;
+
+                        if (!PS2ZIP.TryInflate(fs, outputStream))
+                        {
+                            Console.WriteLine($"[/] Failed to decompress {compFile}.");
+                            continue;
+                        }
+                    }
+
+                    File.Move(compFile + ".out", compFile, overwrite: true);
+                    Console.WriteLine($"[/] Decompressed {compFile}.");
+                }
+            }
+            else if (File.Exists(options.InputPath))
+            {
+                if (string.IsNullOrEmpty(options.OutputPath))
+                    options.OutputPath = options.InputPath;
+
+                Console.WriteLine("[:] Compressing..");
+                using (var fs = new FileStream(options.InputPath, FileMode.Create))
+                using (var br = new BinaryReader(fs))
+                using (var outputStream = new FileStream(options.OutputPath + ".out", FileMode.Open))
+                {
+                    if (br.ReadUInt32() != 0xFFF7EEC5)
+                    {
+                        Console.WriteLine($"[!] Skipping {options.InputPath} - Not a PS2ZIP compressed file");
+                        return;
+                    }
+                    fs.Position = 0;
+
+                    if (!PS2ZIP.TryInflate(fs, outputStream))
+                    {
+                        Console.WriteLine($"[/] Failed to decompress {options.InputPath}.");
+                        return;
+                    }
+                }
+
+                File.Move(options.OutputPath + ".out", options.OutputPath, overwrite: true);
+                Console.WriteLine($"[/] Decompressed {options.InputPath}.");
+            }
         }
 
         private static void DecryptFile(CryptVerbs options, Keyset keys, string file)
