@@ -26,7 +26,7 @@ namespace GTToolsSharp.Headers
         public ClusterVolumeInfoMPH[] VolumeInfo { get; set; }
 
         /// <summary>
-        /// Also Patch Sequence
+        /// Also Patch Sequence. Shared across versions for each platforms in GT7
         /// </summary>
         public ulong SerialNumber { get; set; }
 

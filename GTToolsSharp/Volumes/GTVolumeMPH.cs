@@ -131,22 +131,40 @@ namespace GTToolsSharp.Volumes
             for (int i = 0; i < h.Nodes.Length; i++)
             {
                 MPHNodeInfo file = h.Nodes[i];
-                var vol = SplitVolumes[file.VolumeIndex];
+                ClusterVolume clusterVolume = file.IsFromClusterVolume() ? SplitVolumes[file.GetVolumeIndex()] : null;
 
-                if (vol is null)
-                {
-                    Program.Log($"Volume index {file.VolumeIndex} is not loaded, skipping node");
-                    continue;
-                }
-
+                string outPath;
+                string volPath;
                 if (gameFiles.ContainsValue(file))
                 {
-                    var volPath = gameFiles.FirstOrDefault(e => e.Value == file).Key;
-                    vol.UnpackFile(file, Path.Combine(outputDirectory, volPath), volPath, -1);
+                    volPath = gameFiles.FirstOrDefault(e => e.Value == file).Key;
+                    outPath = Path.Combine(outputDirectory, volPath);
                 }
                 else
                 {
-                    vol.UnpackFile(file, Path.Combine(outputDirectory, ".undiscovered", $"vol{file.VolumeIndex}", $"tmp{i}"), string.Empty, i);
+                    volPath = string.Empty;
+                    if (file.IsFromClusterVolume())
+                        outPath = Path.Combine(outputDirectory, ".undiscovered", $"vol{file.GetVolumeIndex()}", $"tmp{i}"); // Will be renamed by extension detect
+                    else
+                        outPath = Path.Combine(".undiscovered", file.NodeIndex.ToString());
+                }
+
+
+                if (file.IsFromClusterVolume())
+                {
+                    if (clusterVolume is not null)
+                    {
+                        clusterVolume.UnpackFile(file, outPath, volPath, -1);
+                    }
+                    else
+                    {
+                        Program.Log($"Volume index {file.GetVolumeIndex()} is not loaded, skipping node");
+                        continue;
+                    }
+                }
+                else if (file.IsFromPFSStyleFile())
+                {
+                    throw new NotImplementedException("PFS Style file not implemented (PS5 volume?)");
                 }
             }
         }
@@ -159,55 +177,20 @@ namespace GTToolsSharp.Volumes
             if (node is null)
                 return false;
 
-            ClusterVolume vol = SplitVolumes[node.VolumeIndex];
-            vol.UnpackFile(node, Path.Combine(outputDirectory, path), path, -1);
+            if (node.IsFromClusterVolume())
+            {
+                ClusterVolume vol = SplitVolumes[node.GetVolumeIndex()];
+                vol.UnpackFile(node, Path.Combine(outputDirectory, path), path, -1);
+            }
+            else if (node.IsFromPFSStyleFile())
+            {
+                throw new NotImplementedException("PFS not implemented (PS5 volume?)");
+            }
 
             return true;
         }
 
-        private async Task ParallelExtractFiles(string outputDirectory, FileDeviceMPHSuperintendentHeader h, SortedDictionary<string, MPHNodeInfo> gameFiles)
-        {
-            // Group files to unpack by volume
-            var groups = h.Nodes.GroupBy(e => e.VolumeIndex).ToList();
-            var tasks = new List<Task>();
-
-            const int maxThreads = 16;
-            SemaphoreSlim semaphore = new SemaphoreSlim(maxThreads, maxThreads);
-            foreach (var group in groups)
-            {
-                await semaphore.WaitAsync();
-
-                tasks.Add(Task.Run(() =>
-                { 
-                    foreach (var file in group)
-                    {
-                        var vol = SplitVolumes[file.VolumeIndex];
-
-                        if (vol is null)
-                        {
-                            Program.Log($"Volume index {file.VolumeIndex} is not loaded, skipping node");
-                            continue;
-                        }
-
-                        if (gameFiles.ContainsValue(file))
-                        {
-                            var volPath = gameFiles.FirstOrDefault(e => e.Value == file).Key;
-                            vol.UnpackFile(file, Path.Combine(outputDirectory, volPath), volPath, -1);
-                        }
-                        else
-                        {
-                            vol.UnpackFile(file, Path.Combine(outputDirectory, ".undiscovered", $"vol{file.VolumeIndex}", $"tmp{file.NodeIndex}"), string.Empty, file.NodeIndex);
-                        }
-                    }
-
-                    semaphore.Release();
-                }));
-            }
-
-            await Task.WhenAll(tasks);
-        }
-
-        public MPHNodeInfo CheckFile(SortedDictionary<string, MPHNodeInfo> validFiles, string path)
+        private MPHNodeInfo CheckFile(SortedDictionary<string, MPHNodeInfo> validFiles, string path)
         {
             if (path.StartsWith("/"))
                 path.Substring(1);
@@ -233,7 +216,7 @@ namespace GTToolsSharp.Volumes
             return node;
         }
 
-        public void LoadSplitVolumesIfNeeded()
+        private void LoadSplitVolumesIfNeeded()
         {
             string inputDir = Path.GetDirectoryName(InputPath);
             SplitVolumes = new ClusterVolume[VolumeHeader.VolumeInfo.Length];
@@ -260,7 +243,7 @@ namespace GTToolsSharp.Volumes
             }
         }
 
-        public bool DecryptHeader(Span<byte> data)
+        private bool DecryptHeader(Span<byte> data)
         {
             // Decrypt whole file
             ChaCha20 chacha20 = new ChaCha20(KeysetStore.GT7_Index_Key, KeysetStore.GT7_Index_IV, 0);
@@ -298,7 +281,7 @@ namespace GTToolsSharp.Volumes
             return true;
         }
 
-        public SortedDictionary<string, MPHNodeInfo> RegisterFiles()
+        private SortedDictionary<string, MPHNodeInfo> RegisterFiles()
         {
             SortedDictionary<string, MPHNodeInfo> validFiles = new SortedDictionary<string, MPHNodeInfo>();
 
@@ -392,6 +375,28 @@ namespace GTToolsSharp.Volumes
             }
 
             return validFiles;
+        }
+
+        /// <summary>
+        /// Used for PS5/PFS style volumes
+        /// </summary>
+        /// <param name="seed"></param>
+        /// <returns></returns>
+        public static string GetCacheKey(uint seed)
+        {
+            const string Alphabet = "P6MH85C24L91ZTIYURQ7NKJ0OSBWDAVGX3FE";
+            char[] str = new char[9];
+            str[0] = Alphabet[(int)(seed % 36)];
+            str[1] = '/';
+            str[2] = Alphabet[(int)(seed / 36 % 36)];
+            str[3] = '/';
+            str[4] = Alphabet[seed > 0x81BF0FFF ? 1 : 0];
+            str[5] = Alphabet[(int)(seed / 0x39AA400 - 36 * ((57 * (seed / 0x39AA400)) >> 11))];
+            str[6] = Alphabet[(int)(seed / 0x19A100 % 36)];
+            str[7] = Alphabet[(int)(seed / 0xB640 % 36)];
+            str[8] = Alphabet[(int)(seed / 0x510 % 36)];
+
+            return new string(str);
         }
     }
 }

@@ -45,10 +45,10 @@ namespace GTToolsSharp.Headers
             Magic = new byte[4];
             bs.ReadIntoByteArray(4, Magic, 8);
 
-            int unk = bs.ReadInt32();
+            int unk = bs.ReadInt32(); // Random value?
             JulianTimestamp = bs.ReadUInt64();
             SerialNumber = bs.ReadUInt64();
-            int unk2 = bs.ReadInt32();
+            int unk2 = bs.ReadInt32(); // Random value 2?
             Flags = bs.ReadUInt32();
             FormatterCode = bs.ReadUInt32();
 

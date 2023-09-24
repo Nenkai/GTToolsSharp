@@ -62,22 +62,22 @@ namespace GTToolsSharp.Volumes
             return fileDevice;
         }
 
-        public bool UnpackFile(MPHNodeInfo nodeKey, string filePath, string volPath, int nodeIndex)
+        public bool UnpackFile(MPHNodeInfo nodeKey, string outputPath, string volPath, int nodeIndex)
         {
-            long offset = SectorSize * (long)nodeKey.SectorIndex;
+            long offset = SectorSize * (long)nodeKey.GetVolumeIndex();
             _fs.Position = offset;
 
             Stream fileStream = PrepareStreamCryptor(_fs, nodeKey);
 
             if (!string.IsNullOrEmpty(volPath))
-                Program.Log($"[-] Unpacking: {volPath} [{nodeKey.Algo}-{nodeKey.Format}-{nodeKey.Kind}] - VolumeIndex:{nodeKey.VolumeIndex}");
+                Program.Log($"[-] Unpacking: {volPath} [{nodeKey.Algo}-{nodeKey.Format}-{nodeKey.Kind}] - VolumeIndex:{nodeKey.GetVolumeIndex()}");
             else
-                Program.Log($"[-] Unpacking undiscovered file: {nodeKey.EntryHash:X8} [{nodeKey.Algo}-{nodeKey.Format}-{nodeKey.Kind}] - VolumeIndex:{nodeKey.VolumeIndex}");
+                Program.Log($"[-] Unpacking undiscovered file: {nodeKey.EntryHash:X8} [{nodeKey.Algo}-{nodeKey.Format}-{nodeKey.Kind}] - VolumeIndex:{nodeKey.GetVolumeIndex()}");
 
-            string fileDir = Path.GetDirectoryName(filePath);
+            string fileDir = Path.GetDirectoryName(outputPath);
             Directory.CreateDirectory(fileDir);
 
-            using FileStream outputStream = new FileStream(filePath, FileMode.Create);
+            using FileStream outputStream = new FileStream(outputPath, FileMode.Create);
 
             // Also compressed
             uint magic = fileStream.ReadUInt32();
@@ -128,7 +128,7 @@ namespace GTToolsSharp.Volumes
 
                 if (outMagic == 0)
                 {
-                    File.Move(filePath, fileDir + $"/{nodeIndex}_{nodeKey.EntryHash:X8}.bin", overwrite: true);
+                    File.Move(outputPath, fileDir + $"/{nodeIndex}_{nodeKey.EntryHash:X8}.bin", overwrite: true);
                 }
                 else
                 {
@@ -157,7 +157,7 @@ namespace GTToolsSharp.Volumes
                         }
                     }
 
-                    File.Move(filePath, fileDir + $"/{nodeIndex}_{nodeKey.Format}-{nodeKey.Algo}_{nodeKey.EntryHash:X8}.{ext}", overwrite: true);
+                    File.Move(outputPath, fileDir + $"/{nodeIndex}_{nodeKey.Format}-{nodeKey.Algo}_{nodeKey.EntryHash:X8}.{ext}", overwrite: true);
                 }
             }
             return true;

@@ -11,13 +11,14 @@ namespace GTToolsSharp.Entities
         public uint Nonce { get; set; }
         public uint CompressedSize { get; set; }
         public uint UncompressedSize;
-        public uint SectorIndex { get; set; }
-        public byte VolumeIndex { get; set; }
         public MPHNodeFormat Format { get; set; }
         public bool ForcedEncryptionIfPlain { get; set; }
         public MPHNodeKind Kind { get; set; }
         public MPHNodeAlgo Algo { get; set; }
+
         public byte ExtraFlags { get; set; }
+
+        public uint SectorPlusVolumeIndexBits { get; set; }
 
         public void Read(ref BitStream bs)
         {
@@ -26,8 +27,7 @@ namespace GTToolsSharp.Entities
             Nonce = bs.ReadUInt32();
             uint uncompressedSizeLow = bs.ReadUInt32();
 
-            SectorIndex = (uint)bs.ReadBits(25);
-            VolumeIndex = (byte)bs.ReadBits(7);
+            SectorPlusVolumeIndexBits = bs.ReadUInt32();
 
             CompressedSize = (uint)(bs.ReadByte() << 32) | compressedSizeLow;
 
@@ -40,8 +40,32 @@ namespace GTToolsSharp.Entities
 
             UncompressedSize = (uint)(bs.ReadByte() << 32) | uncompressedSizeLow;
 
-            // 4 bits dictionary index
             ExtraFlags = (byte)bs.ReadByte();
+        }
+
+        public uint GetSectorIndex()
+        {
+            return SectorPlusVolumeIndexBits & 0b1_11111111_11111111_11111111; // 25 bits
+        }
+
+        public byte GetVolumeIndex()
+        {
+            return (byte)(SectorPlusVolumeIndexBits >> 25); // 7 bits
+        }
+
+        public byte GetDictIndex()
+        {
+            return (byte)(ExtraFlags & 0x1111); // 4 bits
+        }
+
+        public bool IsFromClusterVolume()
+        {
+            return (ExtraFlags & 0x80) != 0;
+        }
+
+        public bool IsFromPFSStyleFile()
+        {
+            return (ExtraFlags & 0x80) == 0;
         }
     }
 
