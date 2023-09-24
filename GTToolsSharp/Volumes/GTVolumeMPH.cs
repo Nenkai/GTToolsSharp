@@ -190,7 +190,7 @@ namespace GTToolsSharp.Volumes
             return true;
         }
 
-        private MPHNodeInfo CheckFile(SortedDictionary<string, MPHNodeInfo> validFiles, string path)
+        public MPHNodeInfo CheckFile(SortedDictionary<string, MPHNodeInfo> validFiles, string path)
         {
             if (path.StartsWith("/"))
                 path.Substring(1);
@@ -243,7 +243,7 @@ namespace GTToolsSharp.Volumes
             }
         }
 
-        private bool DecryptHeader(Span<byte> data)
+        public bool DecryptHeader(Span<byte> data)
         {
             // Decrypt whole file
             ChaCha20 chacha20 = new ChaCha20(KeysetStore.GT7_Index_Key, KeysetStore.GT7_Index_IV, 0);
