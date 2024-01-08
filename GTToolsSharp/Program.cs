@@ -28,7 +28,7 @@ namespace GTToolsSharp
         public static bool SaveHeader = false;
         public static bool SaveTOC = false;
 
-        public const string Version = "5.3.0";
+        public const string Version = "5.3.1";
 
         static async Task Main(string[] args)
         {
