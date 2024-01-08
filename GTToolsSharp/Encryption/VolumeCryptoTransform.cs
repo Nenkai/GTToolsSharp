@@ -9,7 +9,7 @@ using System.Numerics;
 using System.Runtime.Intrinsics.X86;
 using System.Runtime.Intrinsics;
 
-using PDTools.Crypto;
+using PDTools.Hashing;
 
 namespace GTToolsSharp.Encryption
 {

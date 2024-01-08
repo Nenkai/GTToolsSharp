@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 
-using PDTools.Crypto;
+using PDTools.Hashing;
 
 namespace GTToolsSharp.Encryption
 {

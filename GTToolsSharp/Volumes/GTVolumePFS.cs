@@ -152,11 +152,10 @@ namespace GTToolsSharp.Volumes
                 return null;
             }
 
-            vol.BTree.PrintOffsetInfo();
-
             if (Program.SaveTOC)
                 File.WriteAllBytes("VolumeTOC.bin", vol.BTree.Data);
-            
+
+            vol.BTree.PrintOffsetInfo();
 
             vol.LoadSplitVolumesIfNeeded();
 
