@@ -326,17 +326,18 @@ namespace GTToolsSharp.BTree
 
             if (segmentCount > 1)
             {
+                // Hack to check current type
                 var k = new TKey();
-                TKey lastKey = k.GetLastIndex();
+                TKey lastKey = k.GetLastEntryAsIndex(); // This should be static but w/e
 
-                if (lastKey is FileEntryKey lastEntryIndex)
+                if (k is FileEntryKey lastEntryIndex)
                 {
                     lastEntryIndex.FileExtensionIndex = (uint)(parentTOC.Extensions.Entries.Count);
                     indexWriter.Finalize(ref indexStream, baseSegmentPos - baseTreePos, parentTOC.FileNames.Entries.Count, lastKey); // Last index of file name & extension tree
                 }
-                else if (lastKey is FileInfoKey)
+                else if (k is FileInfoKey)
                     indexWriter.Finalize(ref indexStream, baseSegmentPos - baseTreePos, (int)(Entries[^1] as FileInfoKey).FileIndex + 1, lastKey); // Last index
-                else if (lastKey is StringKey)
+                else if (k is StringKey)
                     indexWriter.Finalize(ref indexStream, baseSegmentPos - baseTreePos, Entries.Count, lastKey); // Last index
 
                 stream.WriteByteData(indexStream.GetSpanToCurrentPosition());

@@ -57,7 +57,7 @@ namespace GTToolsSharp.BTree
             return keyLength;
         }
 
-        public FileEntryKey GetLastIndex()
+        public FileEntryKey GetLastEntryAsIndex()
         {
             return new FileEntryKey();
         }
