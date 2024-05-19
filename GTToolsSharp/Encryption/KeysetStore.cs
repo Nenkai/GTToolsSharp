@@ -60,8 +60,10 @@ namespace GTToolsSharp
         public static readonly Keyset Keyset_GT5P_EU_SPEC3 = new Keyset("GT5P_EU_SPEC_III", "TOTTORI-562314254", new Key(0x5F29A71B, 0xA80945CF, 0xBECCA74F, 0x07C9800F));
         public static readonly Keyset Keyset_GT5P_CITROEN = new Keyset("GT5P_CITROEN", "KARAKUM-176730298", new Key(0x995515F1, 0xC7BA38EF, 0xA9837BE5, 0x60C4925F));
         public static readonly Keyset Keyset_GT5_TT_HK = new Keyset("GT5_TIME_TRIAL_CHALLENGE_HK", "ORDOS-29082919", new Key(0x33B41763, 0xB737084B, 0xD039E95F, 0xA42AF29B));
-        public static readonly Keyset Keyset_GT5_TT_US = new Keyset("GT5_TIME_TRIAL_CHALLENG_US", "CARCROSS-85963023", new Key(0x7C90C351, 0x53D1057D, 0x358FA239, 0xF50932BF));
-        public static readonly Keyset Keyset_GT5_TT_EU = new Keyset("GT5_TIME_TRIAL_CHALLENG_EU", "PISCINAS-77828733", new Key(0xDC110915, 0xAC7D03BD, 0xA694AF0D, 0x91E83CF1));
+        public static readonly Keyset Keyset_GT5_TT_US = new Keyset("GT5_TIME_TRIAL_CHALLENGE_US", "CARCROSS-85963023", new Key(0x7C90C351, 0x53D1057D, 0x358FA239, 0xF50932BF));
+        public static readonly Keyset Keyset_GT5_TT_EU = new Keyset("GT5_TIME_TRIAL_CHALLENGE_EU", "PISCINAS-77828733", new Key(0xDC110915, 0xAC7D03BD, 0xA694AF0D, 0x91E83CF1));
+        public static readonly Keyset Keyset_GT5_SLS_DEMO = new Keyset("GT5_SLS_DEMO", "WATTENMEER-12406149", new Key(0x31F0DBC7, 0x16FB5EF1, 0xD74C48B5, 0xD0F5B51B));
+
         public static readonly Keyset Keyset_GT5_KIOSK_DEMO = new Keyset("GT5_KIOSK_DEMO", "ARABIAN-312107402", new Key(0x3036F45D, 0xD134AB3F, 0x859A665B, 0x16F82F9D));
         public static readonly Keyset Keyset_GT5_EU = new Keyset("GT5_EU", "KALAHARI-37863889", new Key(0x2DEE26A7, 0x412D99F5, 0x883C94E9, 0x0F1A7069));
         public static readonly Keyset Keyset_GT5_US = new Keyset("GT5_US", "PATAGONIAN-22798263", new Key(0x5A1A59E5, 0x4D3546AB, 0xF30AF68B, 0x89F08D0D));
@@ -82,6 +84,7 @@ namespace GTToolsSharp
 
             KeysetStore.Keyset_DEFAULT,
 
+            KeysetStore.Keyset_GT5P_JP,
             KeysetStore.Keyset_GT5P_SPEC2_US_PSN,
             KeysetStore.Keyset_GT5P_US_SPEC3,
             KeysetStore.Keyset_GT5P_EU_SPEC3,
@@ -91,6 +94,8 @@ namespace GTToolsSharp
             KeysetStore.Keyset_GT5_TT_HK,
             KeysetStore.Keyset_GT5_TT_US,
             KeysetStore.Keyset_GT5_TT_EU,
+
+            KeysetStore.Keyset_GT5_SLS_DEMO,
 
             KeysetStore.Keyset_GT5_KIOSK_DEMO,
 

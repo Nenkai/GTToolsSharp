@@ -653,28 +653,7 @@ namespace GTToolsSharp
 
         public static void CreateDefaultKeysFile()
         {
-            string json = JsonSerializer.Serialize(new[] 
-            {
-                KeysetStore.Keyset_DEFAULT,
-
-                KeysetStore.Keyset_GT5P_SPEC2_US_PSN,
-                KeysetStore.Keyset_GT5P_US_SPEC3,
-                KeysetStore.Keyset_GT5P_EU_SPEC3,
-                KeysetStore.Keyset_GT5P_CITROEN,
-                KeysetStore.Keyset_GT5_TT_HK,
-                KeysetStore.Keyset_GT5_TT_US,
-                KeysetStore.Keyset_GT5_TT_EU,
-                KeysetStore.Keyset_GT5_KIOSK_DEMO,
-                KeysetStore.Keyset_GT5_EU,
-                KeysetStore.Keyset_GT5_US,
-                KeysetStore.Keyset_GT5_JP,
-                KeysetStore.Keyset_GTAC_2012_EU,
-                KeysetStore.Keyset_GTAC_2012_US,
-                KeysetStore.Keyset_GTAC_2012_ASIA,
-                KeysetStore.Keyset_GT5_ASIA,
-                KeysetStore.Keyset_GTA2013,
-                KeysetStore.Keyset_GT6,
-            }, new JsonSerializerOptions() { WriteIndented = true });
+            string json = JsonSerializer.Serialize(KeysetStore.Default_Keysets, new JsonSerializerOptions() { WriteIndented = true });
 
             File.WriteAllText("key.json", json);
         }
