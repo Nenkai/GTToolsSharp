@@ -41,7 +41,7 @@ namespace GTToolsSharp.BTree
                 stream.WriteVarPrefixString(Value);
         }
 
-        public StringKey GetLastIndex()
+        public StringKey GetLastEntryAsIndex()
         {
             return new StringKey(((char)255).ToString()); // Max char comparison
         }

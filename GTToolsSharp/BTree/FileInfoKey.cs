@@ -102,9 +102,9 @@ namespace GTToolsSharp.BTree
             return keyLength;
         }
 
-        public FileInfoKey GetLastIndex()
+        public FileInfoKey GetLastEntryAsIndex()
         {
-            return default(FileInfoKey);
+            return new FileInfoKey();
         }
 
         public void SerializeIndex(ref BitStream stream)

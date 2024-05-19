@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.30223.230
+# Visual Studio Version 17
+VisualStudioVersion = 17.7.34221.43
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GTToolsSharp", "GTToolsSharp\GTToolsSharp.csproj", "{6A3B227A-8F0E-4252-B839-39A494F26DCA}"
 EndProject
@@ -12,6 +12,8 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PDTools.Crypto", "PDTools\PDTools.Crypto\PDTools.Crypto.csproj", "{1D810950-35E5-40D6-B3A9-46E874885F94}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PDTools.GrimPFS", "PDTools\PDTools.GrimPFS\PDTools.GrimPFS.csproj", "{F8FB3E10-3986-482D-9F77-0BADC129639E}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PDTools.Hashing", "PDTools\PDTools.Hashing\PDTools.Hashing.csproj", "{E4E4BFBB-1963-4C16-BE4D-9BADB3CC101A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -39,6 +41,10 @@ Global
 		{F8FB3E10-3986-482D-9F77-0BADC129639E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F8FB3E10-3986-482D-9F77-0BADC129639E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F8FB3E10-3986-482D-9F77-0BADC129639E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E4E4BFBB-1963-4C16-BE4D-9BADB3CC101A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E4E4BFBB-1963-4C16-BE4D-9BADB3CC101A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E4E4BFBB-1963-4C16-BE4D-9BADB3CC101A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E4E4BFBB-1963-4C16-BE4D-9BADB3CC101A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

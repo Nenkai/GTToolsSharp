@@ -10,7 +10,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 
-using GTToolsSharp.Utils;
+using PDTools.Hashing;
 using PDTools.Crypto;
 
 namespace GTToolsSharp.Encryption

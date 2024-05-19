@@ -12,6 +12,7 @@ using GTToolsSharp.Entities;
 using GTToolsSharp.Headers;
 
 using PDTools.Crypto;
+using PDTools.Hashing;
 
 namespace GTToolsSharp.Volumes
 {

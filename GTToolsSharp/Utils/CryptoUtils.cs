@@ -14,13 +14,12 @@ using Syroot.BinaryData.Memory;
 using Syroot.BinaryData.Core;
 using Syroot.BinaryData;
 
-using GTToolsSharp.Encryption;
-using PDTools.Crypto;
-
-using PDTools.Compression;
 using ICSharpCode.SharpZipLib.Zip.Compression;
-using ICSharpCode.SharpZipLib.Zip.Compression.Streams;
 
+using PDTools.Hashing;
+using PDTools.Compression;
+
+using GTToolsSharp.Encryption;
 
 namespace GTToolsSharp.Utils
 {

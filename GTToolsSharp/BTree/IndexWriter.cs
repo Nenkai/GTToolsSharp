@@ -87,10 +87,11 @@ namespace GTToolsSharp.BTree
             for (int i = 0; i < CurrentIndexes.Count; i++)
                 stream.WriteBits((ulong)(tocSize + indexEntryOffsets[i]), 12);
             stream.WriteBits((ulong)(tocSize + indexEntryWriter.Length), 12);
+            stream.AlignToNextByte();
 
             // Finally add the data
             stream.Position = baseIndexBlockPos + tocSize;
-            stream.WriteByteData(indexEntryWriter.GetSpan());
+            stream.WriteByteData(indexEntryWriter.GetSpanToCurrentPosition());
         }
 
         public record BTreeIndex(int KeyIndex, int SegmentOffset, IBTreeKey<TKey> Key);

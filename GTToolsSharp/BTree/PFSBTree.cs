@@ -157,6 +157,7 @@ namespace GTToolsSharp.BTree
             uint fileInfoOffset = (uint)bs.Position;
             FileInfos.Serialize(ref bs, this);
 
+            int endPos = bs.Position;
             // The list of file entry btrees mostly consist of the relation between files, folder, extensions and data
             // Thus it is writen at the end
             // Each tree is a subdir
@@ -170,6 +171,7 @@ namespace GTToolsSharp.BTree
                 bs.Position = (int)treeOffset;
 
                 f.Serialize(ref bs, this);
+                endPos = bs.Position;
             }
 
             // Go back to write the meta data
@@ -177,7 +179,10 @@ namespace GTToolsSharp.BTree
             bs.WriteUInt32(fileNamesOffset);
             bs.WriteUInt32(extOffset);
             bs.WriteUInt32(fileInfoOffset);
-            return bs.GetSpan().ToArray();
+
+            bs.Position = endPos;
+
+            return bs.GetSpanToCurrentPosition().ToArray();
         }
 
         public void RemoveFiles(List<string> filesToRemove)

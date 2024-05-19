@@ -11,7 +11,7 @@ namespace GTToolsSharp.BTree
 {
     public interface IBTreeKey<T>
     {
-        public T GetLastIndex();
+        public T GetLastEntryAsIndex();
 
         public T CompareGetDiff(T key);
 
