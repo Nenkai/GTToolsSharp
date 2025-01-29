@@ -7,105 +7,96 @@ using System.IO;
 using System.Buffers;
 using System.Diagnostics;
 
-using Syroot.BinaryData.Memory;
-using Syroot.BinaryData.Core;
-using Syroot.BinaryData;
-
-using GTToolsSharp.Utils;
-using static GTToolsSharp.Utils.CryptoUtils;
-
 using PDTools.Utils;
 
-namespace GTToolsSharp.BTree
+namespace GTToolsSharp.BTree;
+
+public class FileInfoBTree : BTree<FileInfoKey>
 {
-    public class FileInfoBTree : BTree<FileInfoKey>
+    public FileInfoBTree(Memory<byte> buffer, PFSBTree parentToC)
+        : base(buffer, parentToC)
     {
-        public FileInfoBTree(Memory<byte> buffer, PFSBTree parentToC)
-            : base(buffer, parentToC)
+        
+    }
+
+    public uint SearchIndexByKey(FileInfoKey key)
+    {
+        // We are searching in index blocks
+        BitStream stream = new BitStream(BitStreamMode.Read, _buffer.Span);
+
+        uint indexBlockCount = (uint)stream.ReadByte();
+        int indexBlockOffset = (int)stream.ReadBits(24);
+
+        stream.Position = indexBlockOffset;
+
+        SearchResult res = new SearchResult();
+
+        Span<byte> data = default;
+        for (uint i = indexBlockCount; i != 0; i--)
         {
-            
+            data = SearchWithComparison(ref stream, indexBlockCount, key, res, SearchCompareMethod.LessThan);
+            if (data.IsEmpty)
+                goto DONE;
+
+            BitStream indexDataStream = new BitStream(BitStreamMode.Read, data);
+            res.maxIndex = (uint)indexDataStream.ReadVarInt();
+            uint nextSegmentOffset = (uint)indexDataStream.ReadVarInt();
+
+            stream.Position = (int)nextSegmentOffset;
         }
 
+        // Search within regular blocks
+        data = SearchWithComparison(ref stream, 0, key, res, SearchCompareMethod.EqualTo);
 
-        public uint SearchIndexByKey(FileInfoKey key)
+    DONE:
+        if (indexBlockCount == 0)
+            res.upperBound = 0;
+
+        if (!data.IsEmpty)
         {
-            // We are searching in index blocks
-            BitStream stream = new BitStream(BitStreamMode.Read, _buffer.Span);
+            uint index = (res.maxIndex - res.upperBound + res.lowerBound);
+            key.KeyOffset = (uint)(_buffer.Length - data.Length);
 
-            uint indexBlockCount = (uint)stream.ReadByte();
-            int indexBlockOffset = (int)stream.ReadBits(24);
+            BitStream keyStream = new BitStream(BitStreamMode.Read, data);
+            //key.Deserialize(ref keyStream);
+            return index;
+        }
+        else
+            return FileInfoKey.InvalidIndex;
 
-            stream.Position = indexBlockOffset;
+        return 0;
+    }
 
-            SearchResult res = new SearchResult();
+    public FileInfoKey GetByFileIndex(uint fileIndex)
+        => Entries.FirstOrDefault(e => e.FileIndex == fileIndex);
 
-            Span<byte> data = default;
-            for (uint i = indexBlockCount; i != 0; i--)
-            {
-                data = SearchWithComparison(ref stream, indexBlockCount, key, res, SearchCompareMethod.LessThan);
-                if (data.IsEmpty)
-                    goto DONE;
+    public override int LessThanKeyCompareOp(FileInfoKey key, Span<byte> data)
+    {
+        BitStream bitStream = new BitStream(BitStreamMode.Read, data);
 
-                BitStream indexDataStream = new BitStream(BitStreamMode.Read, data);
-                res.maxIndex = (uint)indexDataStream.ReadVarInt();
-                uint nextSegmentOffset = (uint)indexDataStream.ReadVarInt();
+        uint nodeIndex = (uint)bitStream.ReadVarInt();
+        if (key.FileIndex < nodeIndex)
+            return -1;
+        else
+            return 1;
+    }
 
-                stream.Position = (int)nextSegmentOffset;
-            }
+    public override int EqualToKeyCompareOp(FileInfoKey key, Span<byte> data)
+    {
+        BitStream bitStream = new BitStream(BitStreamMode.Read, data);
 
-            // Search within regular blocks
-            data = SearchWithComparison(ref stream, 0, key, res, SearchCompareMethod.EqualTo);
-
-        DONE:
-            if (indexBlockCount == 0)
-                res.upperBound = 0;
-
-            if (!data.IsEmpty)
-            {
-                uint index = (res.maxIndex - res.upperBound + res.lowerBound);
-                key.KeyOffset = (uint)(_buffer.Length - data.Length);
-
-                BitStream keyStream = new BitStream(BitStreamMode.Read, data);
-                //key.Deserialize(ref keyStream);
-                return index;
-            }
-            else
-                return FileInfoKey.InvalidIndex;
-
+        bitStream.ReadByte(); // Skip flag
+        uint nodeIndex = (uint)bitStream.ReadVarInt();
+        if (key.FileIndex < nodeIndex)
+            return -1;
+        else if (key.FileIndex > nodeIndex)
+            return 1;
+        else
             return 0;
-        }
+    }
 
-        public FileInfoKey GetByFileIndex(uint fileIndex)
-            => Entries.FirstOrDefault(e => e.FileIndex == fileIndex);
-
-        public override int LessThanKeyCompareOp(FileInfoKey key, Span<byte> data)
-        {
-            BitStream bitStream = new BitStream(BitStreamMode.Read, data);
-
-            uint nodeIndex = (uint)bitStream.ReadVarInt();
-            if (key.FileIndex < nodeIndex)
-                return -1;
-            else
-                return 1;
-        }
-
-        public override int EqualToKeyCompareOp(FileInfoKey key, Span<byte> data)
-        {
-            BitStream bitStream = new BitStream(BitStreamMode.Read, data);
-
-            bitStream.ReadByte(); // Skip flag
-            uint nodeIndex = (uint)bitStream.ReadVarInt();
-            if (key.FileIndex < nodeIndex)
-                return -1;
-            else if (key.FileIndex > nodeIndex)
-                return 1;
-            else
-                return 0;
-        }
-
-        public override FileInfoKey SearchByKey(Span<byte> data)
-        {
-            throw new NotImplementedException();
-        }
+    public override FileInfoKey SearchByKey(Span<byte> data)
+    {
+        throw new NotImplementedException();
     }
 }

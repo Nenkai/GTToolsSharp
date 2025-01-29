@@ -4,15 +4,14 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace GTToolsSharp.Encryption
-{
-    public struct Key
-    {
-        public uint[] Data { get; set; }
+namespace GTToolsSharp.Encryption;
 
-        public Key(uint data1, uint data2, uint data3, uint data4)
-        {
-            Data = new[] { data1, data2, data3, data4 };
-        }
+public struct Key
+{
+    public uint[] Data { get; set; }
+
+    public Key(uint data1, uint data2, uint data3, uint data4)
+    {
+        Data = [data1, data2, data3, data4];
     }
 }

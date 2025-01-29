@@ -10,89 +10,88 @@ using Syroot.BinaryData.Memory;
 
 using PDTools.Utils;
 
-namespace GTToolsSharp.Headers
+namespace GTToolsSharp.Headers;
+
+public class FileDeviceGTFS3Header : PFSVolumeHeaderBase
 {
-    public class FileDeviceGTFS3Header : PFSVolumeHeaderBase
+    private static readonly byte[] HeaderMagic = [0x5B, 0x74, 0x51, 0x62];
+
+    public override int HeaderSize => 0xA60;
+
+    public ulong JulianBuiltTime { get; set; }
+
+    public VolEntryGTFS3[] VolList { get; set; }
+
+    public record VolEntryGTFS3(string Name, ulong Size);
+
+    public override void Read(Span<byte> buffer)
     {
-        private static readonly byte[] HeaderMagic = { 0x5B, 0x74, 0x51, 0x62 };
+        SpanReader sr = new SpanReader(buffer, Endian.Big);
+        Magic = sr.ReadBytes(4); // Magic
 
-        public override int HeaderSize => 0xA60;
+        JulianBuiltTime = sr.ReadUInt64();
+        SerialNumber = sr.ReadUInt64(); // Also patch sequence
 
-        public ulong JulianBuiltTime { get; set; }
+        sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); // reserve_0-3
+        sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); // reserve_4-7
+        sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); // reserve_8-b
+        sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); // reserve_c-f
 
-        public VolEntryGTFS3[] VolList { get; set; }
+        sr.Position = 0xF0;
+        ToCNodeIndex = sr.ReadUInt32();
+        CompressedTOCSize = sr.ReadUInt32();
+        ExpandedTOCSize = sr.ReadUInt32();
+        uint volListCount = sr.ReadUInt32();
 
-        public record VolEntryGTFS3(string Name, ulong Size);
+        VolList = new VolEntryGTFS3[(int)volListCount];
 
-        public override void Read(Span<byte> buffer)
+        for (int i = 0; i < volListCount; i++)
         {
-            SpanReader sr = new SpanReader(buffer, Endian.Big);
-            Magic = sr.ReadBytes(4); // Magic
+            byte[] name = sr.ReadBytes(16);
+            ulong size = sr.ReadUInt64();
+            VolList[i] = new VolEntryGTFS3(GetActualVolFileName(name), size);
+        }
+    }
 
-            JulianBuiltTime = sr.ReadUInt64();
-            SerialNumber = sr.ReadUInt64(); // Also patch sequence
+    public override byte[] Serialize()
+    {
+        byte[] header = new byte[HeaderSize];
+        SpanWriter sw = new SpanWriter(header, Endian.Big);
+        sw.WriteBytes(HeaderMagic);
+        sw.WriteUInt64(JulianBuiltTime);
+        sw.WriteUInt64(SerialNumber);
+        sw.Position += sizeof(uint) * 16;
 
-            sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); // reserve_0-3
-            sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); // reserve_4-7
-            sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); // reserve_8-b
-            sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); sr.ReadInt32(); // reserve_c-f
-
-            sr.Position = 0xF0;
-            ToCNodeIndex = sr.ReadUInt32();
-            CompressedTOCSize = sr.ReadUInt32();
-            ExpandedTOCSize = sr.ReadUInt32();
-            uint volListCount = sr.ReadUInt32();
-
-            VolList = new VolEntryGTFS3[(int)volListCount];
-
-            for (int i = 0; i < volListCount; i++)
-            {
-                byte[] name = sr.ReadBytes(16);
-                ulong size = sr.ReadUInt64();
-                VolList[i] = new VolEntryGTFS3(GetActualVolFileName(name), size);
-            }
+        sw.Position = 0xF0;
+        sw.WriteUInt32(ToCNodeIndex);
+        sw.WriteUInt32(CompressedTOCSize);
+        sw.WriteUInt32(ExpandedTOCSize);
+        sw.WriteInt32(VolList.Length);
+        for (int i = 0; i < VolList.Length; i++)
+        {
+            // TODO
         }
 
-        public override byte[] Serialize()
+        return header;
+    }
+
+    private string GetActualVolFileName(byte[] nameBytes)
+    {
+        Span<byte> nameSpan = nameBytes.AsSpan();
+        for (int i = 0; i < 4; i++)
         {
-            byte[] header = new byte[HeaderSize];
-            SpanWriter sw = new SpanWriter(header, Endian.Big);
-            sw.WriteBytes(HeaderMagic);
-            sw.WriteUInt64(JulianBuiltTime);
-            sw.WriteUInt64(SerialNumber);
-            sw.Position += sizeof(uint) * 16;
-
-            sw.Position = 0xF0;
-            sw.WriteUInt32(ToCNodeIndex);
-            sw.WriteUInt32(CompressedTOCSize);
-            sw.WriteUInt32(ExpandedTOCSize);
-            sw.WriteInt32(VolList.Length);
-            for (int i = 0; i < VolList.Length; i++)
-            {
-                // TODO
-            }
-
-            return header;
+            Span<byte> currentPart = nameSpan.Slice(i * sizeof(uint), sizeof(uint));
+            currentPart.Reverse();
         }
 
-        private string GetActualVolFileName(byte[] nameBytes)
-        {
-            Span<byte> nameSpan = nameBytes.AsSpan();
-            for (int i = 0; i < 4; i++)
-            {
-                Span<byte> currentPart = nameSpan.Slice(i * sizeof(uint), sizeof(uint));
-                currentPart.Reverse();
-            }
+        string s = Encoding.ASCII.GetString(nameSpan);
+        return s.TrimEnd('\0');
+    }
 
-            string s = Encoding.ASCII.GetString(nameSpan);
-            return s.TrimEnd('\0');
-        }
-
-        public override void PrintInfo()
-        {
-            Program.Log($"[>] PFS Version/Serial No: '{SerialNumber}'");
-            Program.Log($"[>] Table of Contents Entry Index: {ToCNodeIndex}");
-            Program.Log($"[>] TOC Size: 0x{CompressedTOCSize:X8} bytes (0x{ExpandedTOCSize:X8} expanded)");
-        }
+    public override void PrintInfo()
+    {
+        Program.Log($"[>] PFS Version/Serial No: '{SerialNumber}'");
+        Program.Log($"[>] Table of Contents Entry Index: {ToCNodeIndex}");
+        Program.Log($"[>] TOC Size: 0x{CompressedTOCSize:X8} bytes (0x{ExpandedTOCSize:X8} expanded)");
     }
 }
