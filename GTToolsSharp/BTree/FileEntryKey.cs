@@ -43,10 +43,10 @@ public class FileEntryKey : IBTreeKey<FileEntryKey>
     public uint GetSerializedKeySize()
     {
         uint keyLength = 1;
-        keyLength += (uint)BitStream.GetSizeOfVarInt(NameIndex);
+        keyLength += BitStream.GetSizeOfVarInt(NameIndex);
         if (Flags.HasFlag(EntryKeyFlags.File))
-            keyLength += (uint)BitStream.GetSizeOfVarInt(FileExtensionIndex);
-        keyLength += (uint)BitStream.GetSizeOfVarInt(EntryIndex);
+            keyLength += BitStream.GetSizeOfVarInt(FileExtensionIndex);
+        keyLength += BitStream.GetSizeOfVarInt(EntryIndex);
 
         return keyLength;
     }

@@ -25,8 +25,8 @@ namespace GTToolsSharp.BTree;
 /// </summary>
 public class PFSBTree
 {
-    private readonly static byte[] TOC_MAGIC_BE = [0x5B, 0x74, 0x51, 0x6E];
-    private readonly static byte[] TOC_MAGIC_LE = [0x6E, 0x51, 0x74, 0x5B];
+    private static ReadOnlySpan<byte> TOC_MAGIC_BE => "[tQn"u8;
+    private static ReadOnlySpan<byte> TOC_MAGIC_LE => "nQt["u8;
 
     public const int SECTOR_SIZE = 2048;
 
@@ -60,9 +60,9 @@ public class PFSBTree
     {
         var sr = new SpanReader(Data, Endian.Big);
         byte[] magic = sr.ReadBytes(4);
-        if (magic.AsSpan().SequenceEqual(TOC_MAGIC_BE.AsSpan()))
+        if (magic.AsSpan().SequenceEqual(TOC_MAGIC_BE))
             sr.Endian = Endian.Big;
-        else if (magic.AsSpan().SequenceEqual(TOC_MAGIC_LE.AsSpan()))
+        else if (magic.AsSpan().SequenceEqual(TOC_MAGIC_LE))
             sr.Endian = Endian.Little;
         else
         {
@@ -133,7 +133,7 @@ public class PFSBTree
         File.WriteAllBytes(path, compressedToc);
 
         byte[] md5 = System.Security.Cryptography.MD5.HashData(compressedToc);
-        return BitConverter.ToString(md5).Replace("-", "").ToLowerInvariant();
+        return Convert.ToHexStringLower(md5);
     }
 
     /// <summary>
@@ -141,7 +141,7 @@ public class PFSBTree
     /// </summary>
     public byte[] Serialize()
     {
-        var bs = new BitStream(BitStreamMode.Write, 1024);
+        var bs = new BitStream(1024);
 
         bs.WriteByteData(TOC_MAGIC_BE);
         bs.SeekToByte(0x10);
@@ -161,7 +161,7 @@ public class PFSBTree
         // The list of file entry btrees mostly consist of the relation between files, folder, extensions and data
         // Thus it is writen at the end
         // Each tree is a subdir
-        const int baseListPos = 20;
+        const int baseListPos = 0x14;
         for (int i = 0; i < Files.Count; i++)
         {
             FileEntryBTree f = Files[i];
@@ -187,7 +187,7 @@ public class PFSBTree
 
     public void RemoveFiles(List<string> filesToRemove)
     {
-        Dictionary<string, FileEntryKey> tocFiles = GetAllRegisteredFileMap();
+        Dictionary<string, FileEntryKey> tocFiles = GetAllRegisteredFiles();
         foreach (var file in filesToRemove)
         {
             if (tocFiles.TryGetValue(file, out FileEntryKey fileEntry))
@@ -272,7 +272,7 @@ public class PFSBTree
         return infoKey;
     }
 
-    public bool TryCheckAndFixInvalidSectorIndexes()
+    public bool TryCheckAndFixInvalidPageIndices()
     {
         bool valid = true;
         List<FileInfoKey> sectorSortedFiles = FileInfos.Entries.OrderBy(e => e.SectorOffset).ToList();
@@ -474,7 +474,7 @@ public class PFSBTree
     /// Gets all the relational files within the table of contents.
     /// </summary>
     /// <returns></returns>
-    public Dictionary<string, FileEntryKey> GetAllRegisteredFileMap()
+    public Dictionary<string, FileEntryKey> GetAllRegisteredFiles()
     {
         var files = new Dictionary<string, FileEntryKey>();
         uint currentIndex = 0;
@@ -632,7 +632,7 @@ public class PFSBTree
         return false;
     }
 
-    private bool IsCompressableFile(string path)
+    private static bool IsCompressableFile(string path)
     {
         if (path.StartsWith("crs/") && path.EndsWith("stream")) // Stream files should NOT be compressed
             return false;
@@ -643,7 +643,7 @@ public class PFSBTree
         if (path.StartsWith("replay/")) // Replays can be compressed already
             return false;
 
-        if (path.StartsWith("carsound/")) // Dunno why
+        if (path.StartsWith("carsound/")) // Sounds are compressed for the most part
             return false;
 
         if (path.EndsWith("gpb") || path.EndsWith("mpackage")) // Not original but added it because the components inside are compressed already

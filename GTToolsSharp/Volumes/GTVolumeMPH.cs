@@ -18,9 +18,9 @@ using GTToolsSharp.Encryption;
 namespace GTToolsSharp.Volumes;
 
 /// <summary>
-/// GT7 Volume based on Minimal Perfect Hash.
+/// GT7 Volume based on Minimal Perfect Hash. (Disposable object)
 /// </summary>
-public class GTVolumeMPH
+public class GTVolumeMPH : IDisposable
 {
     private static List<string> _dmsEntryList { get; set; } = [];
 
@@ -52,7 +52,7 @@ public class GTVolumeMPH
 
     }
 
-    public GTVolumeMPH(FileStream sourceStream)
+    private GTVolumeMPH(FileStream sourceStream)
     {
         MainStream = sourceStream;
     }
@@ -400,5 +400,15 @@ public class GTVolumeMPH
             Alphabet[(int)(seed / 0x510 % 36)],
         ];
         return new string(str);
+    }
+
+    public void Dispose()
+    {
+        ((IDisposable)MainStream)?.Dispose();
+        if (SplitVolumes is not null)
+        {
+            foreach (var vol in SplitVolumes)
+                vol?.Dispose();
+        }
     }
 }

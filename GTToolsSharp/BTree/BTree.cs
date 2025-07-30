@@ -16,7 +16,7 @@ namespace GTToolsSharp.BTree;
 [DebuggerDisplay("Count = {Entries.Count}")]
 public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
 {
-    public const int BTREE_SEGMENT_SIZE = 0x1000;
+    public const int BTREE_PAGE_SIZE = 0x1000;
 
     protected Memory<byte> _buffer;
     private readonly PFSBTree _parentToC;
@@ -41,14 +41,14 @@ public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
     {
         BitStream treeStream = new BitStream(BitStreamMode.Read, _buffer.Span);
 
-        byte indexBlockCount = treeStream.ReadByte();
-        uint indexBlockOffset = (uint)treeStream.ReadBits(24);
-        short segmentCount = treeStream.ReadInt16();
+        byte indexPageCount = treeStream.ReadByte();
+        uint indexPagesOffset = (uint)treeStream.ReadBits(24);
+        short pageCount = treeStream.ReadInt16();
 
-        // Iterate through all segments and all their keys
-        for (int i = 0; i < segmentCount; i++)
+        // Iterate through all pages and all their keys
+        for (int i = 0; i < pageCount; i++)
         {
-            int segPos = treeStream.Position;
+            int thisPageOffset = treeStream.Position;
 
             bool moreThanOneKey = treeStream.ReadBoolBit();
             uint keyCount = (uint)treeStream.ReadBits(11);
@@ -63,13 +63,13 @@ public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
                 keyOffsets.Add(offset);
             }
 
-            // Offset to the next segment for the btree
-            uint nextSegmentOffset = (uint)treeStream.ReadBits(12);
+            // Offset to the next page for the btree
+            uint nextPageOffset = (uint)treeStream.ReadBits(12);
 
             for (int j = 0; j < keyCount; j++)
             {
-                treeStream.Position = (int)(segPos + keyOffsets[j]);
-                Debug.Assert(keyOffsets[j] < nextSegmentOffset, "Key offset was beyond next segment?");
+                treeStream.Position = (int)(thisPageOffset + keyOffsets[j]);
+                Debug.Assert(keyOffsets[j] < nextPageOffset, "Key offset was beyond next page offset?");
 
                 // Parse key info
                 TKey key = new TKey();
@@ -77,9 +77,9 @@ public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
                 Entries.Add(key);
             }
 
-            // Done with this segment, go to next
-            if (i != segmentCount - 1)
-                treeStream.Position = (int)(segPos + nextSegmentOffset);
+            // Done with this page, go to next
+            if (i != pageCount - 1)
+                treeStream.Position = (int)(thisPageOffset + nextPageOffset);
         }
     }
 
@@ -87,12 +87,12 @@ public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
     {
         BitStream treeStream = new BitStream(BitStreamMode.Read, _buffer.Span);
 
-        byte indexBlockCount = treeStream.ReadByte();
-        uint segmentCount = (uint)treeStream.ReadBits(12);
+        byte indexPageCount = treeStream.ReadByte();
+        uint pageCount = (uint)treeStream.ReadBits(12);
         uint unkOffset = (uint)treeStream.ReadBits(12);
 
-        // Iterate through all segments and all their keys
-        for (int i = 0; i < segmentCount + 1; i++)
+        // Iterate through all pages and all their keys
+        for (int i = 0; i < pageCount + 1; i++)
         {
             int segPos = treeStream.Position;
 
@@ -126,11 +126,11 @@ public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
 
         byte hasEntries = treeStream.ReadByte();
         uint indexBlockOffset = (uint)treeStream.ReadBits(24);
-        short segmentCount = treeStream.ReadInt16();
+        short pageCount = treeStream.ReadInt16();
 
-        for (uint i = 0u; i < segmentCount; ++i)
+        for (uint i = 0u; i < pageCount; ++i)
         {
-            int segPos = treeStream.Position;
+            int thisPageOffset = treeStream.Position;
 
             bool moreThanOneKey = treeStream.ReadBoolBit();
             uint keyCount = (uint)treeStream.ReadBits(11);
@@ -140,7 +140,7 @@ public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
                 treeStream.SeekToBit((int)((treeStream.Position * 8) + (index + 1) * 12));
                 int keyOffset = (int)treeStream.ReadBits(12);
 
-                treeStream.SeekToByte(segPos + keyOffset);
+                treeStream.SeekToByte(thisPageOffset + keyOffset);
 
                 key = new TKey();
                 key.Deserialize(ref treeStream, _parentToC);
@@ -149,8 +149,8 @@ public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
 
             index -= keyCount;
 
-            uint nextSegmentOffset = (uint)treeStream.ReadBits(12);
-            treeStream.SeekToByte((int)(segPos + nextSegmentOffset));
+            uint nextPageOffset = (uint)treeStream.ReadBits(12);
+            treeStream.SeekToByte((int)(thisPageOffset + nextPageOffset));
         }
 
         key = default;
@@ -168,7 +168,7 @@ public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
         int segPos = stream.Position;
 
         bool moreThanOneKey = stream.ReadBoolBit();
-        uint high = (uint)stream.ReadBits(11); // Segment key count
+        uint high = (uint)stream.ReadBits(11); // Page key count
 
         uint low = 0;
         uint index = 0;
@@ -177,7 +177,7 @@ public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
 
         Span<byte> keyData = default;
 
-        // BSearch segment to compare with our target key
+        // BSearch page to compare with our target key
         while (low < high)
         {
             uint mid = low + (high - low) / 2;
@@ -232,49 +232,49 @@ public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
         int baseTreePos = stream.Position;
         stream.Position += 6;
 
-        short segmentCount = 0; // 1 per 0x1000
+        short pageCount = 0; // 1 per 0x1000
         int index = 0; // To keep track of which key we are currently at
 
         // Following lists is for writing index blocks later on
-        BitStream indexStream = new BitStream(BitStreamMode.Write);
+        BitStream indexStream = new BitStream();
         IndexWriter<TKey> indexWriter = new IndexWriter<TKey>();
 
-        int baseSegmentPos = stream.Position;
+        int basePageOffset = stream.Position;
         while (index < Entries.Count)
         {
-            int segmentKeyCount = 0;
-            baseSegmentPos = stream.Position;
+            int pageKeyCount = 0;
+            basePageOffset = stream.Position;
 
-            BitStream entryWriter = new BitStream(BitStreamMode.Write, 1024);
+            BitStream entryWriter = new BitStream(1024);
 
             // To keep track of where the keys are located to write them in the toc
-            List<int> segmentKeyOffsets = [];
+            List<int> pageKeyOffsets = [];
 
-            // Write keys in 0x1000 segments
+            // Write keys in 0x1000 pages
             while (index < Entries.Count)
             {
                 TKey key = Entries[index];
                 uint keySize = key.GetSerializedKeySize();
 
-                // Get the current segment size - apply size of key offsets (12 bits each) (extra (+ 12 + 12) due to segment header and next segment offset)
-                int currentSizeTaken = MiscUtils.MeasureBytesTakenByBits(((double)segmentKeyCount * 12) + 12 + 12);
+                // Get the current page size - apply size of key offsets (12 bits each) (extra (+ 12 + 12) due to page header and page offset)
+                int currentSizeTaken = MiscUtils.MeasureBytesTakenByBits(((double)pageKeyCount * 12) + 12 + 12);
                 currentSizeTaken += entryWriter.Position; // And size of key data themselves
 
-                // Segment size exceeded?
-                if (currentSizeTaken + (keySize + 2) >= BTREE_SEGMENT_SIZE) // Extra 2 to fit the 12 bits as short
+                // Page size exceeded?
+                if (currentSizeTaken + (keySize + 2) >= BTREE_PAGE_SIZE) // Extra 2 to fit the 12 bits as short
                 {
-                    // Segment's done, move on to next
+                    // Page's done, move on to next
                     break;
                 }
 
-                // To build up the segment's TOC when its filled or done
-                segmentKeyOffsets.Add(entryWriter.Position);
+                // To build up the page's TOC when its filled or done
+                pageKeyOffsets.Add(entryWriter.Position);
 
                 // Serialize the key
                 key.Serialize(ref entryWriter);
 
                 // Move on to next
-                segmentKeyCount++;
+                pageKeyCount++;
                 index++;
             }
 
@@ -285,43 +285,43 @@ public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
                 TKey current = Entries[index];
 
                 if (current is FileInfoKey fileInfoKey)
-                    indexWriter.AddIndex(ref indexStream, fileInfoKey.FileIndex, (uint)(baseSegmentPos - baseTreePos), Entries[index - 1], Entries[index]);
+                    indexWriter.AddIndex(ref indexStream, fileInfoKey.FileIndex, (uint)(basePageOffset - baseTreePos), Entries[index - 1], Entries[index]);
                 else if (current is FileEntryKey fileEntryKey)
-                    indexWriter.AddIndex(ref indexStream, fileEntryKey.NameIndex, (uint)(baseSegmentPos - baseTreePos), Entries[index - 1], Entries[index]);
+                    indexWriter.AddIndex(ref indexStream, fileEntryKey.NameIndex, (uint)(basePageOffset - baseTreePos), Entries[index - 1], Entries[index]);
                 else if (current is StringKey)
-                    indexWriter.AddIndex(ref indexStream, (uint)index, (uint)(baseSegmentPos - baseTreePos), Entries[index - 1], Entries[index]);
+                    indexWriter.AddIndex(ref indexStream, (uint)index, (uint)(basePageOffset - baseTreePos), Entries[index - 1], Entries[index]);
             }
 
 
-            // Finish up segment header
-            stream.Position = baseSegmentPos;
+            // Finish up page header
+            stream.Position = basePageOffset;
             stream.WriteBoolBit(true);
-            stream.WriteBits((ulong)segmentKeyCount, 11);
+            stream.WriteBits((ulong)pageKeyCount, 11);
 
-            int tocSize = MiscUtils.MeasureBytesTakenByBits((segmentKeyCount * 12) + 12 + 12);
-            for (int i = 0; i < segmentKeyCount; i++)
+            int tocSize = MiscUtils.MeasureBytesTakenByBits((pageKeyCount * 12) + 12 + 12);
+            for (int i = 0; i < pageKeyCount; i++)
             {
-                // Translate each key offset to segment relative offsets
-                stream.WriteBits((ulong)(tocSize + segmentKeyOffsets[i]), 12);
+                // Translate each key offset to page relative offsets
+                stream.WriteBits((ulong)(tocSize + pageKeyOffsets[i]), 12);
             }
 
             Span<byte> entryBuffer = entryWriter.GetSpanToCurrentPosition();
-            int nextSegmentOffset = tocSize + entryBuffer.Length;
+            int nextPageOffset = tocSize + entryBuffer.Length;
 
-            Debug.Assert(nextSegmentOffset < BTREE_SEGMENT_SIZE, "Next segment offset beyond segment size?");
+            Debug.Assert(nextPageOffset < BTREE_PAGE_SIZE, "Next segment offset beyond segment size?");
 
-            stream.WriteBits((ulong)nextSegmentOffset, 12);
+            stream.WriteBits((ulong)nextPageOffset, 12);
 
             // Write key data
             stream.WriteByteData(entryBuffer);
 
-            segmentCount++;
+            pageCount++;
         }
 
-        // Write index blocks that links all segments together 
+        // Write index blocks that links all pages together 
         int indexBlocksOffset = stream.Position - baseTreePos;
 
-        if (segmentCount > 1)
+        if (pageCount > 1)
         {
             // Hack to check current type
             var k = new TKey();
@@ -330,12 +330,12 @@ public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
             if (k is FileEntryKey lastEntryIndex)
             {
                 lastEntryIndex.FileExtensionIndex = (uint)(parentTOC.Extensions.Entries.Count);
-                indexWriter.Finalize(ref indexStream, (uint)(baseSegmentPos - baseTreePos), (uint)parentTOC.FileNames.Entries.Count, lastKey); // Last index of file name & extension tree
+                indexWriter.Finalize(ref indexStream, (uint)(basePageOffset - baseTreePos), (uint)parentTOC.FileNames.Entries.Count, lastKey); // Last index of file name & extension tree
             }
             else if (k is FileInfoKey)
-                indexWriter.Finalize(ref indexStream, (uint)(baseSegmentPos - baseTreePos), (Entries[^1] as FileInfoKey).FileIndex + 1, lastKey); // Last index
+                indexWriter.Finalize(ref indexStream, (uint)(basePageOffset - baseTreePos), (Entries[^1] as FileInfoKey).FileIndex + 1, lastKey); // Last index
             else if (k is StringKey)
-                indexWriter.Finalize(ref indexStream, (uint)(baseSegmentPos - baseTreePos), (uint)Entries.Count, lastKey); // Last index
+                indexWriter.Finalize(ref indexStream, (uint)(basePageOffset - baseTreePos), (uint)Entries.Count, lastKey); // Last index
 
             stream.WriteByteData(indexStream.GetSpanToCurrentPosition());
         }
@@ -347,9 +347,9 @@ public abstract class BTree<TKey> where TKey : IBTreeKey<TKey>, new()
         stream.Position = baseTreePos;
 
         // Finish tree header
-        stream.WriteByte(indexWriter.SegmentCount);
-        stream.WriteBits(segmentCount > 1 ? (ulong)indexBlocksOffset : 6, 24); // If theres no index block, just point to the first and only segment
-        stream.WriteInt16(segmentCount);
+        stream.WriteByte(indexWriter.PageCount);
+        stream.WriteBits(pageCount > 1 ? (ulong)indexBlocksOffset : 6, 24); // If theres no index block, just point to the first and only page
+        stream.WriteInt16(pageCount);
 
         // Done. Move to bottom.
         stream.Position = endPos;

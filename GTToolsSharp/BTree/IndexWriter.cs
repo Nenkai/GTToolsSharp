@@ -4,63 +4,63 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-using GTToolsSharp.Utils;
 using PDTools.Utils;
 
 namespace GTToolsSharp.BTree;
 
 public class IndexWriter<TKey> where TKey : IBTreeKey<TKey>, new()
 {
-    public const int BTREE_SEGMENT_SIZE = 0x1000;
+    public const int BTREE_PAGE_SIZE = 0x1000;
 
     public int CurrentDataLength = 0;
 
-    public byte SegmentCount = 0;
-    public List<BTreeIndex> CurrentIndexes { get; set; } = [];
+    public byte PageCount = 0;
+    public List<BTreeIndex> CurrentIndices { get; set; } = [];
 
     public IndexWriter()
     {
 
     }
 
-    public void AddIndex(ref BitStream stream, uint keyIndex, uint segmentOffset, TKey prevKey, TKey nextKey)
+    public void AddIndex(ref BitStream stream, uint keyIndex, uint pageOffset, TKey prevKey, TKey nextKey)
     {
-        // v Include new
-        int newIndexBlockSize = MiscUtils.MeasureBytesTakenByBits(((double)(CurrentIndexes.Count + 1) * 12) + 12 + 12);
-        newIndexBlockSize += CurrentDataLength;
+        // (extra (+ 12 + 12) bits due to page header and page segment offset)
+        //                                                                                        v + 1 as we include the new entry
+        int newIndexPageSize = MiscUtils.MeasureBytesTakenByBits(((double)(CurrentIndices.Count + 1) * 12) + 12 + 12);
+        newIndexPageSize += CurrentDataLength;
 
         var diffKey = prevKey.CompareGetDiff(nextKey);
-        var index = new BTreeIndex(keyIndex, segmentOffset, diffKey);
+        var index = new BTreeIndex(keyIndex, pageOffset, diffKey);
         uint indexSize = MeasureIndexEntrySize(index);
 
-        if (newIndexBlockSize + indexSize >= BTREE_SEGMENT_SIZE) // Can we fit index?
+        if (newIndexPageSize + indexSize >= BTREE_PAGE_SIZE) // Can we fit index?
         {
             // Nope, we are about to start a new one
             WriteBlock(ref stream);
-            CurrentIndexes.Clear();
+            CurrentIndices.Clear();
         }
         else
         {
-            CurrentIndexes.Add(index);
-            if (CurrentIndexes.Count == 1)
-                SegmentCount++;
+            CurrentIndices.Add(index);
+            if (CurrentIndices.Count == 1)
+                PageCount++;
 
             CurrentDataLength += (int)indexSize;
         }
     }
 
-    public void Finalize(ref BitStream stream, uint segmentOffset, uint lastIndex, TKey lastKeyIndex)
+    public void Finalize(ref BitStream stream, uint pageOffset, uint lastIndex, TKey lastKeyIndex)
     {
-        var lastIndexEntry = new BTreeIndex(lastIndex, segmentOffset, lastKeyIndex);
-        CurrentIndexes.Add(lastIndexEntry);
+        var lastIndexEntry = new BTreeIndex(lastIndex, pageOffset, lastKeyIndex);
+        CurrentIndices.Add(lastIndexEntry);
         WriteBlock(ref stream);
     }
 
     private static uint MeasureIndexEntrySize(BTreeIndex index)
     {
-        uint size = (uint)BitStream.GetSizeOfVarInt(index.KeyIndex);
+        uint size = BitStream.GetSizeOfVarInt(index.KeyIndex);
         size += index.Key.GetSerializedIndexSize();
-        size += (uint)BitStream.GetSizeOfVarInt(index.SegmentOffset);
+        size += BitStream.GetSizeOfVarInt(index.PageOffset);
         return size;
     }
 
@@ -69,22 +69,22 @@ public class IndexWriter<TKey> where TKey : IBTreeKey<TKey>, new()
         int baseIndexBlockPos = stream.Position;
 
         // Write entries first
-        BitStream indexEntryWriter = new BitStream(BitStreamMode.Write);
+        BitStream indexEntryWriter = new BitStream();
         List<int> indexEntryOffsets = [];
-        for (int i = 0; i < CurrentIndexes.Count; i++)
+        for (int i = 0; i < CurrentIndices.Count; i++)
         {
             indexEntryOffsets.Add(indexEntryWriter.Position);
 
-            indexEntryWriter.WriteVarInt(CurrentIndexes[i].KeyIndex);
-            CurrentIndexes[i].Key?.SerializeIndex(ref indexEntryWriter); // Only for strings
-            indexEntryWriter.WriteVarInt(CurrentIndexes[i].SegmentOffset);
+            indexEntryWriter.WriteVarInt(CurrentIndices[i].KeyIndex);
+            CurrentIndices[i].Key?.SerializeIndex(ref indexEntryWriter); // Only for strings
+            indexEntryWriter.WriteVarInt(CurrentIndices[i].PageOffset);
         }
 
         // Done writing entries, we can write the index header
-        stream.WriteBits((ulong)CurrentIndexes.Count, 12);
+        stream.WriteBits((ulong)CurrentIndices.Count, 12);
 
-        int tocSize = MiscUtils.MeasureBytesTakenByBits((double)(CurrentIndexes.Count * 12) + 12 + 12); // Entry count (12 bits) + offset array (12 * off count) + rem next segment (12)
-        for (int i = 0; i < CurrentIndexes.Count; i++)
+        int tocSize = MiscUtils.MeasureBytesTakenByBits((double)(CurrentIndices.Count * 12) + 12 + 12); // Entry count (12 bits) + offset array (12 * off count) + rem next page (12)
+        for (int i = 0; i < CurrentIndices.Count; i++)
             stream.WriteBits((ulong)(tocSize + indexEntryOffsets[i]), 12);
         stream.WriteBits((ulong)(tocSize + indexEntryWriter.Length), 12);
         stream.AlignToNextByte();
@@ -94,5 +94,5 @@ public class IndexWriter<TKey> where TKey : IBTreeKey<TKey>, new()
         stream.WriteByteData(indexEntryWriter.GetSpanToCurrentPosition());
     }
 
-    public record BTreeIndex(uint KeyIndex, uint SegmentOffset, IBTreeKey<TKey> Key);
+    public record BTreeIndex(uint KeyIndex, uint PageOffset, IBTreeKey<TKey> Key);
 }

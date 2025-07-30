@@ -15,10 +15,13 @@ using PDTools.Compression;
 
 namespace GTToolsSharp.Volumes;
 
-public class FileDeviceVol
+/// <summary>
+/// File device for a single volume handle used in GT7SP. (Disposable object)
+/// </summary>
+public class FileDeviceVol : IDisposable
 {
     public const ulong Magic = 0x2B26958523AD;
-    private FileStream _fs;
+    private readonly FileStream _fs;
 
     public string Name { get; set; }
 
@@ -71,5 +74,10 @@ public class FileDeviceVol
         }
 
         return true;
+    }
+
+    public void Dispose()
+    {
+        ((IDisposable)_fs).Dispose();
     }
 }

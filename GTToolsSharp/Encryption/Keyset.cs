@@ -95,7 +95,7 @@ public class Keyset
         }
     }
 
-    public void DecryptBlocks(Span<uint> data, Span<uint> dest)
+    public static void DecryptBlocks(Span<uint> data, Span<uint> dest)
     {
         uint prevBlock = BinaryPrimitives.ReverseEndianness(data[0]);
         dest[0] = BinaryPrimitives.ReverseEndianness(prevBlock);
@@ -116,7 +116,7 @@ public class Keyset
         }
     }
 
-    public void EncryptBlocks(Span<uint> data, Span<uint> dest)
+    public static void EncryptBlocks(Span<uint> data, Span<uint> dest)
     {
         uint prevBlock = BinaryPrimitives.ReverseEndianness(data[0]);
         dest[0] = BinaryPrimitives.ReverseEndianness(prevBlock);

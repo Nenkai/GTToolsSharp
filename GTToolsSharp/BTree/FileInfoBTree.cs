@@ -24,7 +24,7 @@ public class FileInfoBTree : BTree<FileInfoKey>
         // We are searching in index blocks
         BitStream stream = new BitStream(BitStreamMode.Read, _buffer.Span);
 
-        uint indexBlockCount = (uint)stream.ReadByte();
+        uint indexBlockCount = stream.ReadByte();
         int indexBlockOffset = (int)stream.ReadBits(24);
 
         stream.Position = indexBlockOffset;
@@ -40,9 +40,9 @@ public class FileInfoBTree : BTree<FileInfoKey>
 
             BitStream indexDataStream = new BitStream(BitStreamMode.Read, data);
             res.maxIndex = (uint)indexDataStream.ReadVarInt();
-            uint nextSegmentOffset = (uint)indexDataStream.ReadVarInt();
+            uint nextPageOffset = (uint)indexDataStream.ReadVarInt();
 
-            stream.Position = (int)nextSegmentOffset;
+            stream.Position = (int)nextPageOffset;
         }
 
         // Search within regular blocks

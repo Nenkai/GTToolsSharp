@@ -47,7 +47,7 @@ public class PFSVolumeUnpacker
         fileIndexesToExtract ??= [];
 
         // Lazy way
-        var files = Volume.BTree.GetAllRegisteredFileMap();
+        var files = Volume.BTree.GetAllRegisteredFiles();
 
         // Cache it
         Dictionary<uint, FileInfoKey> fileInfoKeys = [];

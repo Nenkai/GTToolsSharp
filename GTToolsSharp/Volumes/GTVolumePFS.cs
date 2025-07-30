@@ -21,9 +21,9 @@ using PDTools.Compression;
 namespace GTToolsSharp.Volumes;
 
 /// <summary>
-/// Represents a container for all the files used within Gran Turismo games. GT5, 6, Sport.
+/// Represents a container for all the files used within Gran Turismo games. GT5, 6, Sport. (Disposable object)
 /// </summary>
-public class GTVolumePFS
+public class GTVolumePFS : IDisposable
 {
     public const int BASE_VOLUME_ENTRY_INDEX = 1;
     
@@ -291,5 +291,14 @@ public class GTVolumePFS
         }
 
         return true;
+    }
+
+    public void Dispose()
+    {
+        if (SplitVolumes is not null)
+        {
+            foreach (FileDeviceVol vol in SplitVolumes)
+                vol?.Dispose();
+        }
     }
 }

@@ -80,10 +80,7 @@ class Program
             return;
         }
 
-        Keyset[] keyset = CheckKeys();
-        if (keyset is null)
-            return;
-
+        Keyset[] keyset = GetKeys();
         if (!string.IsNullOrEmpty(options.LogPath))
         {
             sw?.Dispose();
@@ -199,11 +196,7 @@ class Program
             }
         }
 
-
-        Keyset[] keyset = CheckKeys();
-        if (keyset is null)
-            return;
-
+        Keyset[] keyset = GetKeys();
         if (!string.IsNullOrEmpty(options.LogPath))
         {
             sw?.Dispose();
@@ -244,6 +237,13 @@ class Program
         Program.Log("[-] Started unpacking process.", forceConsolePrint: true);
 
         PFSVolumeUnpacker unpacker = new PFSVolumeUnpacker(vol);
+        if (string.IsNullOrEmpty(options.OutputPath))
+        {
+            string inputDirName = Path.GetDirectoryName(options.InputPath);
+            string inputFileName = Path.GetFileNameWithoutExtension(options.InputPath);
+            options.OutputPath = Path.Combine(inputDirName, $"{inputFileName}_extracted");
+        }
+
         unpacker.SetOutputDirectory(options.OutputPath);
         if (options.OnlyLog)
             unpacker.NoUnpack = true;
@@ -261,7 +261,7 @@ class Program
             return;
         }
 
-        var vol = GTVolumeMPH.Load(options.InputPath);
+        using var vol = GTVolumeMPH.Load(options.InputPath);
         if (vol == null)
         {
             Console.WriteLine($"[X] Could not unpack volume.");
@@ -299,10 +299,7 @@ class Program
             return;
         }
 
-        Keyset[] keyset = CheckKeys();
-        if (keyset is null)
-            return;
-
+        Keyset[] keyset = GetKeys();
         if (!string.IsNullOrEmpty(options.LogPath))
         {
             sw?.Dispose();
@@ -334,12 +331,9 @@ class Program
     public static void Crypt(CryptVerbs options)
     {
         Keyset keys = null;
-        
-        Keyset[] keysets = CheckKeys();
-        if (keysets is null)
-            return;
 
-        keys = keysets.Where(e => e.GameCode.Equals(options.GameCode, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+        Keyset[] keyset = GetKeys();
+        keys = keyset.Where(e => e.GameCode.Equals(options.GameCode, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
         if (keys is null)
         {
             Console.WriteLine($"Keyset with GameCode '{options.GameCode}' does not exist in the keyset file.");
@@ -438,10 +432,7 @@ class Program
             }
         }
 
-        Keyset[] keyset = CheckKeys();
-        if (keyset is null)
-            return;
-
+        Keyset[] keyset = GetKeys();
         bool found = false;
         GTVolumePFS vol = null;
         foreach (var k in keyset)
@@ -461,7 +452,7 @@ class Program
         }
 
         using var sw = new StreamWriter(options.OutputPath);
-        var entries = vol.BTree.GetAllRegisteredFileMap();
+        var entries = vol.BTree.GetAllRegisteredFiles();
         if (options.OrderByFileIndex)
             entries = entries.OrderBy(e => e.Value.EntryIndex).ToDictionary(x => x.Key, x => x.Value);
 
@@ -640,7 +631,7 @@ class Program
         using (FileStream fsOut = new FileStream(file + ".out", FileMode.Create))
         {
             byte[] dataKey = new byte[8];
-            using SymmetricAlgorithm salsa20 = new Salsa20SymmetricAlgorithm();
+            using Salsa20SymmetricAlgorithm salsa20 = new Salsa20SymmetricAlgorithm();
             using var decrypt = salsa20.CreateEncryptor(keyBytes, dataKey);
 
             byte[] buffer = new byte[0x8000];
@@ -678,40 +669,36 @@ class Program
         File.WriteAllText("key.json", json);
     }
 
-    public static Keyset[] CheckKeys()
+    public static Keyset[] GetKeys()
     {
         if (!File.Exists("key.json"))
         {
             try
             {
                 CreateDefaultKeysFile();
-                Console.WriteLine("[X] Error: Volume Encryption Key file is missing (key.json).");
+                Console.WriteLine("[!] Note: Volume Encryption Key file is missing (key.json).");
                 Console.WriteLine(" A default one was created with the keys for the following game codes:");
                 foreach (var k in KeysetStore.Default_Keysets)
                     Console.WriteLine($"  - {k.GameCode}");
 
-                Console.WriteLine(" Just run the program again if the game you are trying to extract/pack matches one of the above.");
                 Console.WriteLine(" If not, change the file accordingly and provide keys for the game build/region you are trying to unpack.");
                 
                 Console.WriteLine();
             }
             catch (Exception e)
             {
-                Console.WriteLine($"[X] key.json was missing. Tried to create a default one, but unable to create it: {e.Message}");
+                Console.WriteLine($"[X] key.json was missing. Tried to create a file with default keys, but unable to create it: {e.Message}");
             }
 
-            return null;
+            return KeysetStore.Default_Keysets;
         }
         else
         {
             Keyset[] keyset = ReadKeysets();
-            if (keyset is null)
-                return null;
-
             if (keyset.Length == 0)
             {
-                Console.WriteLine("No keys found in key.json.");
-                return null;
+                Console.WriteLine("No keys found in key.json. Using default.");
+                return KeysetStore.Default_Keysets;
             }
 
             return keyset;
@@ -726,8 +713,8 @@ class Program
         }
         catch (Exception e)
         {
-            Console.WriteLine($"Error: Unable to parse key.json. {e.Message}");
-            return null;
+            Console.WriteLine($"Error: Unable to parse key.json: {e.Message} - using defaults.");
+            return KeysetStore.Default_Keysets;
         }
     }
     

@@ -54,10 +54,10 @@ public class GT5POldCrypto
 
 	public static void DoHeaderXorPass(Span<uint> input)
 	{
-		uint ret = CRCXor(input.Slice(1), input[0]);
-		ret = CRCXor(input.Slice(2), ret);
-		ret = CRCXor(input.Slice(3), ret);
-		ret = CRCXor(input.Slice(4), ret);
+		uint ret = CRCXor(input[1..], input[0]);
+		ret = CRCXor(input[2..], ret);
+		ret = CRCXor(input[3..], ret);
+		ret = CRCXor(input[4..], ret);
 	}
 
 	public static uint CRCXor(Span<uint> input, uint input2)

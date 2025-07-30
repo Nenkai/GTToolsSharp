@@ -20,16 +20,16 @@ using PDTools.Crypto;
 namespace GTToolsSharp.Volumes;
 
 /// <summary>
-/// GT7 Side Cluster Volume
+/// File device for a single volume handle used in GT7. (Disposable object)
 /// </summary>
-public class ClusterVolume
+public class ClusterVolume : IDisposable
 {
     // Same magic as GTS
     public const ulong Magic = 0x2B26958523AD;
 
     public GTVolumeMPH ParentMasterVolume { get; set; }
 
-    private FileStream _fs;
+    private readonly FileStream _fs;
 
     public string Name { get; set; }
 
@@ -162,7 +162,7 @@ public class ClusterVolume
         return true;
     }
 
-    public uint GetMagic(Stream stream, out string asciiMagic)
+    public static uint GetMagic(Stream stream, out string asciiMagic)
     {
         asciiMagic = "";
 
@@ -232,7 +232,7 @@ public class ClusterVolume
         ArrayPool<byte>.Shared.Return(buffer);
     }
 
-    public byte[] GetStreamCryptorIVByNonce(uint nonce)
+    public static byte[] GetStreamCryptorIVByNonce(uint nonce)
     {
         byte[] iv = new byte[12];
         BinaryPrimitives.TryWriteUInt32LittleEndian(iv, nonce);
@@ -242,6 +242,11 @@ public class ClusterVolume
     public override string ToString()
     {
         return $"{Name} (Size: 0x{VolumeSize:X16})";
+    }
+
+    public void Dispose()
+    {
+        ((IDisposable)_fs).Dispose();
     }
 }
 

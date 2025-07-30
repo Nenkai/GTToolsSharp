@@ -15,7 +15,7 @@ public class UnpackVerbs
     [Option('i', "input", Required = true, HelpText = "Input file volume or folder. Usually GT.VOL, or if game update, a PDIPFS folder.")]
     public string InputPath { get; set; }
 
-    [Option('o', "output", Required = true, HelpText = "Output Folder for unpacked files. If you don't provide one, will display info about the volume.")]
+    [Option('o', "output", HelpText = "Output Folder for unpacked files. If you don't provide one, will display info about the volume.")]
     public string OutputPath { get; set; }
 
     [Option("base-folder", HelpText = "Used for extracting PDIPFS with Binary Patching files introduced with Gran Turismo 1.05+.")]
@@ -179,7 +179,8 @@ public class PackVerbs
     [Option("start-index", HelpText = "Start index of which new files to pack will start from, useful when making files work across multiple updates by making it high.")]
     public uint StartIndex { get; set; }
 
-    [Option("create_bdmark", HelpText = "Bdmark will be created. Advanced users only. Used for patching games from their first version (i.e GT5 1.00) as bdmark tells which files were read from the disc and installed into the HDD.")]
+    [Option("create_bdmark", HelpText = "Use for 1.00 versions or games that only use a volume. Whether to create a PDIPFS_bdmark folder, which contain the same files but empty.\n" +
+        "Essentially, game checks if there's an empty file in bdmark. if not, use volume. if yes, use file in PDIPFS.")]
     public bool CreateBDMARK { get; set; }
 
     [Option("updatenodeinfo", HelpText = "Advanced users only. Creates an update node info file with the summary of the patch.")]

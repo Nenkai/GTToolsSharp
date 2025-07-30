@@ -75,7 +75,7 @@ public class FileDeviceGTFS3Header : PFSVolumeHeaderBase
         return header;
     }
 
-    private string GetActualVolFileName(byte[] nameBytes)
+    private static string GetActualVolFileName(byte[] nameBytes)
     {
         Span<byte> nameSpan = nameBytes.AsSpan();
         for (int i = 0; i < 4; i++)

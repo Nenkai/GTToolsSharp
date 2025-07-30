@@ -59,10 +59,10 @@ public class StringKey : IBTreeKey<StringKey>
     }
 
     public uint GetSerializedKeySize()
-        => (uint)BitStream.GetSizeOfVariablePrefixString(Value);
+        => BitStream.GetSizeOfVariablePrefixString(Value);
 
     public uint GetSerializedIndexSize()
-        => (uint)BitStream.GetSizeOfVariablePrefixString(Value);
+        => BitStream.GetSizeOfVariablePrefixString(Value);
 
     public override string ToString()
         => Value;

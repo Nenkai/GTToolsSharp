@@ -31,12 +31,12 @@ public abstract class PFSVolumeHeaderBase
     public uint ToCNodeIndex { get; set; }
 
     /// <summary>
-    /// Compressed size in bytes for the segment of the table of contents.
+    /// Compressed size in bytes for the page of the table of contents.
     /// </summary>
     public uint CompressedTOCSize { get; set; }
 
     /// <summary>
-    /// Uncompressed size in bytes for the segment of the table of contents.
+    /// Uncompressed size in bytes for the page of the table of contents.
     /// </summary>
     public uint ExpandedTOCSize { get; set; }
 

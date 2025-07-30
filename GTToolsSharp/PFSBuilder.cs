@@ -22,8 +22,8 @@ namespace GTToolsSharp;
 
 public class PatchFileSystemBuilder
 {
-    private GTVolumePFS _volume { get; set; }
-    private PFSBTree _toc { get; set; }
+    private GTVolumePFS _volume;
+    private PFSBTree _toc;
     private PFSVolumeHeaderBase _volumeHeader => _volume.VolumeHeader;
 
     /// <summary>
@@ -37,12 +37,37 @@ public class PatchFileSystemBuilder
     public GrimPatch Patch { get; private set; }
 
     public Dictionary<string, InputPackEntry> FilesToPack = [];
+
+    /// <summary>
+    /// Whether to pack files as new entries, even if they already exist in the TOC. Useful for patching/modding without altering original files.
+    /// </summary>
     public bool PackAllAsNewEntries { get; set; }
+
+    /// <summary>
+    /// Whether to create a PDIPFS_bdmark folder, which contain the same files but empty. </b>
+    /// This is used for the game to mark/alert files to not use files present in the volume, but the ones in the PDIPFS folder instead. Mainly for 1.00 versions or games that only use a volume.
+    /// </summary>
     public bool CreateBDMark { get; set; }
+
+    /// <summary>
+    /// Whether to create UPDATENODEINFO, used for delta patching and Grim patching. (GT6)
+    /// </summary>
     public bool CreateUpdateNodeInfo { get; set; }
+
+    /// <summary>
+    /// Whether to create a PATCHSEQUENCE file, used for delta patching and Grim patching. (GT6)
+    /// </summary>
     public bool CreatePatchSequence { get; set; }
     public bool UsePackingCache { get; set; }
+
+    /// <summary>
+    /// Whether to not compress any files.
+    /// </summary>
     public bool NoCompress { get; set; }
+
+    /// <summary>
+    /// Whether to create files for Grim patching
+    /// </summary>
     public bool GrimPatch { get; set; }
 
     public ulong OldSerial { get; set; }
@@ -67,6 +92,7 @@ public class PatchFileSystemBuilder
     /// <param name="doMD5"></param>
     public void RegisterFilesToPackFromDirectory(string inputDir, List<string> filesToIgnore, bool doMD5 = false)
     {
+        Program.Log("[-] Indexing files from directory...", forceConsolePrint: true);
         string[] fileNames = Directory.GetFiles(inputDir, "*", SearchOption.AllDirectories);
         Array.Sort(fileNames, StringComparer.OrdinalIgnoreCase);
         var files = fileNames.Select(fileName => new FileInfo(fileName))
@@ -95,14 +121,10 @@ public class PatchFileSystemBuilder
 
             if (doMD5)
             {
-                using (var md5 = MD5.Create())
-                {
-                    using (var stream = File.OpenRead(entry.FullPath))
-                    {
-                        var hash = md5.ComputeHash(stream);
-                        entry.MD5Checksum = BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-                    }
-                }
+                using var md5 = MD5.Create();
+                using var stream = File.OpenRead(entry.FullPath);
+                var hash = md5.ComputeHash(stream);
+                entry.MD5Checksum = Convert.ToHexStringLower(hash);
             }
         }
     }
@@ -183,11 +205,11 @@ public class PatchFileSystemBuilder
 
         Directory.Move($"{outrepackDir}_temp", outrepackDir);
 
-        Program.Log($"[-] Verifying and fixing Table of Contents segment sizes if needed");
-        if (!_toc.TryCheckAndFixInvalidSectorIndexes())
-            Program.Log($"[-] Re-ordered segment indexes.");
+        Program.Log($"[-] Verifying and fixing Table of Contents page sizes if needed");
+        if (!_toc.TryCheckAndFixInvalidPageIndices())
+            Program.Log($"[-] Re-ordered page indexes.");
         else
-            Program.Log($"[/] Segment sizes are correct.");
+            Program.Log($"[/] Page sizes are correct.");
 
         if (PackAllAsNewEntries)
             Program.Log($"[-] Packing as new: New TOC Entry Index is {_volumeHeader.ToCNodeIndex}.");
@@ -210,7 +232,7 @@ public class PatchFileSystemBuilder
         byte[] header = _volumeHeader.Serialize();
 
         Span<uint> headerBlocks = MemoryMarshal.Cast<byte, uint>(header);
-        _volume.Keyset.EncryptBlocks(headerBlocks, headerBlocks);
+        Encryption.Keyset.EncryptBlocks(headerBlocks, headerBlocks);
         CryptoUtils.CryptBuffer(_volume.Keyset, header, header, GTVolumePFS.BASE_VOLUME_ENTRY_INDEX);
 
         string headerPath = Path.Combine(outrepackDir, PDIPFSPathResolver.Default);
@@ -276,7 +298,7 @@ public class PatchFileSystemBuilder
             // Pick up files we're going to add if there's any
             PreRegisterNewFilesToPack(FilesToPack);
 
-            Dictionary<string, FileEntryKey> tocFiles = _toc.GetAllRegisteredFileMap();
+            Dictionary<string, FileEntryKey> tocFiles = _toc.GetAllRegisteredFiles();
 
             // Pack Non-Added files first
             foreach (var tocFile in tocFiles)
@@ -437,14 +459,14 @@ public class PatchFileSystemBuilder
     /// <param name="FilesToPack"></param>
     private void PreRegisterNewFilesToPack(Dictionary<string, InputPackEntry> FilesToPack)
     {
-        Dictionary<string, FileEntryKey> tocFiles = _toc.GetAllRegisteredFileMap();
+        Dictionary<string, FileEntryKey> tocFiles = _toc.GetAllRegisteredFiles();
 
         // Add Files, these files will have their sizes adjusted later on during repack process
         foreach (var file in FilesToPack)
         {
             if (!tocFiles.ContainsKey(file.Key))
             {
-                Program.Log($"[:] Pack: Adding new file to TOC: {file.Key}");
+                Program.Log($"[:] Pack: Adding new file to TOC: {file.Key} ({file.Value.VolumeDirPath})");
                 _toc.AddNewFile(file.Key);
                 file.Value.IsAddedFile = true;
             }

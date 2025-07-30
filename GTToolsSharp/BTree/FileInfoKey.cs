@@ -149,7 +149,6 @@ public enum FileInfoFlags
     /// GT5P Only
     /// </summary>
     CustomSalsaCrypt = 0x02,
-
     UnkFlag0x04 = 0x04,
     UnkFlag0x08 = 0x08,
     UnkFlag0x10 = 0x10,

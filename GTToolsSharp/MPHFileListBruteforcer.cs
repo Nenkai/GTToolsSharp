@@ -136,7 +136,7 @@ internal class MPHFileListBruteforcer
         BruteforceCarSound(validFiles);
 
         // Rtext
-        string[] countries = new[] { "BP", "CN", "CZ", "DK", "DE", "EL", "ES", "FI", "FR", "GB", "HU", "IT", "JP", "KR", "MS", "NO", "NL", "PL", "PT", "RU", "SE", "TR", "TW", "US" };
+        string[] countries = ["BP", "CN", "CZ", "DK", "DE", "EL", "ES", "FI", "FR", "GB", "HU", "IT", "JP", "KR", "MS", "NO", "NL", "PL", "PT", "RU", "SE", "TR", "TW", "US"];
         foreach (var c in countries)
         {
             _vol.CheckFile(validFiles, $"rtext/common/{c}.rt2");
