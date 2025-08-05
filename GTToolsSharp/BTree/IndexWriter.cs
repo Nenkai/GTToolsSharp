@@ -38,15 +38,14 @@ public class IndexWriter<TKey> where TKey : IBTreeKey<TKey>, new()
             // Nope, we are about to start a new one
             WriteBlock(ref stream);
             CurrentIndices.Clear();
+            CurrentDataLength = 0;
         }
-        else
-        {
-            CurrentIndices.Add(index);
-            if (CurrentIndices.Count == 1)
-                PageCount++;
+        
+        CurrentIndices.Add(index);
+        if (CurrentIndices.Count == 1)
+            PageCount++;
 
-            CurrentDataLength += (int)indexSize;
-        }
+        CurrentDataLength += (int)indexSize;
     }
 
     public void Finalize(ref BitStream stream, uint pageOffset, uint lastIndex, TKey lastKeyIndex)
