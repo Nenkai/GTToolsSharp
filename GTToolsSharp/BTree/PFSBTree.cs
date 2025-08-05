@@ -41,7 +41,7 @@ public class PFSBTree
     public StringBTree FileNames { get; private set; }
     public StringBTree Extensions { get; private set; }
     public FileInfoBTree FileInfos { get; private set; }
-    public List<FileEntryBTree> Files { get; private set; }
+    public List<FileEntryBTree> EntriesPerFolder { get; private set; }
 
     public PFSVolumeHeaderBase ParentHeader { get; }
     public GTVolumePFS ParentVolume { get; }
@@ -97,15 +97,15 @@ public class PFSBTree
         else
             FileInfos.LoadEntriesOld();
 
-        Files = new List<FileEntryBTree>((int)entryTreeCount);
+        EntriesPerFolder = new List<FileEntryBTree>((int)entryTreeCount);
 
         for (int i = 0; i < entryTreeCount; i++)
         {
-            Files.Add(new FileEntryBTree(Data.AsMemory((int)RootAndFolderOffsets[i]), this));
+            EntriesPerFolder.Add(new FileEntryBTree(Data.AsMemory((int)RootAndFolderOffsets[i]), this));
             if (!ParentVolume.IsGT5PDemoStyle)
-                Files[i].LoadEntries();
+                EntriesPerFolder[i].LoadEntries();
             else
-                Files[i].LoadEntriesOld();
+                EntriesPerFolder[i].LoadEntriesOld();
         }
 
         return true;
@@ -145,8 +145,8 @@ public class PFSBTree
 
         bs.WriteByteData(TOC_MAGIC_BE);
         bs.SeekToByte(0x10);
-        bs.WriteUInt32((uint)Files.Count);
-        bs.Position += sizeof(uint) * Files.Count;
+        bs.WriteUInt32((uint)EntriesPerFolder.Count);
+        bs.Position += sizeof(uint) * EntriesPerFolder.Count;
 
         uint fileNamesOffset = (uint)bs.Position;
         FileNames.Serialize(ref bs, this);
@@ -162,9 +162,9 @@ public class PFSBTree
         // Thus it is writen at the end
         // Each tree is a subdir
         const int baseListPos = 0x14;
-        for (int i = 0; i < Files.Count; i++)
+        for (int i = 0; i < EntriesPerFolder.Count; i++)
         {
-            FileEntryBTree f = Files[i];
+            FileEntryBTree f = EntriesPerFolder[i];
             uint treeOffset = (uint)bs.Position;
             bs.Position = baseListPos + (i * sizeof(uint));
             bs.WriteUInt32(treeOffset);
@@ -209,7 +209,7 @@ public class PFSBTree
     {
         // Check paths
         string[] pathParts = newEntryPath.Split(Path.AltDirectorySeparatorChar);
-        FileEntryBTree currentSubTree = Files[0];
+        FileEntryBTree currentSubTree = EntriesPerFolder[0];
 
         uint newKeyIndex = NextEntryIndex();
 
@@ -230,7 +230,7 @@ public class PFSBTree
                 else if (!subTreeKey.Flags.HasFlag(EntryKeyFlags.Directory))
                     throw new InvalidOperationException($"Tried to modify existing key {newEntryPath} but entry key ({subTreeKey}) is not marked as directory. Is the volume corrupted?");
 
-                currentSubTree = Files[(int)subTreeKey.EntryIndex];
+                currentSubTree = EntriesPerFolder[(int)subTreeKey.EntryIndex];
             }
             else
             {
@@ -246,7 +246,7 @@ public class PFSBTree
         }
 
         // Find the original entry key, copy from it, add to the tree
-        foreach (FileEntryBTree tree in Files)
+        foreach (FileEntryBTree tree in EntriesPerFolder)
         {
             foreach (FileEntryKey child in tree.Entries)
             {
@@ -343,7 +343,7 @@ public class PFSBTree
         for (uint i = 0; i < folders.Length - 1; i++) // Do not include file name
         {
             // If the dir doesn't exist, create a new one - we have a new index that is the last current folder
-            if (!DirectoryExists(Files[(int)baseDirEntryIndex], folders[i], out uint parentDirEntryIndex))
+            if (!DirectoryExists(EntriesPerFolder[(int)baseDirEntryIndex], folders[i], out uint parentDirEntryIndex))
                 baseDirEntryIndex = RegisterDirectory(baseDirEntryIndex, folders[i]);
             else
                 baseDirEntryIndex = parentDirEntryIndex; // Already there, update the current folder index
@@ -369,8 +369,8 @@ public class PFSBTree
         newEntry.NameIndex = nameIndex;
         newEntry.FileExtensionIndex = extIndex;
         newEntry.EntryIndex = FileInfos.Entries[^1].FileIndex;
-        Files[(int)entryIndex].Entries.Add(newEntry);
-        Files[(int)entryIndex].ResortByNameIndexes();
+        EntriesPerFolder[(int)entryIndex].Entries.Add(newEntry);
+        EntriesPerFolder[(int)entryIndex].ResortByNameIndexes();
     }
 
     /// <summary>
@@ -385,7 +385,7 @@ public class PFSBTree
         uint dirIndex = 0;
 
         // Grab the next file/folder entry of the one we just added, will be used for sorting
-        var subDirsInBaseDir = Files[(int)parentDirIndex].Entries.Where(e => e.Flags.HasFlag(EntryKeyFlags.Directory));
+        var subDirsInBaseDir = EntriesPerFolder[(int)parentDirIndex].Entries.Where(e => e.Flags.HasFlag(EntryKeyFlags.Directory));
         if (subDirsInBaseDir.Count() > 1)
         {
             // Find the first entry whose names appear after the current folder
@@ -401,7 +401,7 @@ public class PFSBTree
             {
                 uint lastDirIndex = subDirsInBaseDir.Max(e => e.EntryIndex);
 
-                var subDirs = Files[(int)lastDirIndex].Entries
+                var subDirs = EntriesPerFolder[(int)lastDirIndex].Entries
                     .Where(e => e.Flags.HasFlag(EntryKeyFlags.Directory));
 
 
@@ -412,7 +412,7 @@ public class PFSBTree
 
         // Update the trees if needed
         uint currentIndex = dirIndex;
-        foreach (var tree in Files)
+        foreach (var tree in EntriesPerFolder)
         {
             foreach (var child in tree.Entries)
             {
@@ -428,11 +428,11 @@ public class PFSBTree
         newEntry.Flags = EntryKeyFlags.Directory;
         newEntry.NameIndex = dirNameIndex;
         newEntry.EntryIndex = dirIndex;
-        Files[(int)parentDirIndex].Entries.Add(newEntry);
-        Files[(int)parentDirIndex].ResortByNameIndexes();
+        EntriesPerFolder[(int)parentDirIndex].Entries.Add(newEntry);
+        EntriesPerFolder[(int)parentDirIndex].ResortByNameIndexes();
 
         // Basically add the new empty folder
-        Files.Insert((int)dirIndex, new FileEntryBTree());
+        EntriesPerFolder.Insert((int)dirIndex, new FileEntryBTree());
 
         return dirIndex;
     }
@@ -440,7 +440,7 @@ public class PFSBTree
     public bool TryRemoveFile(FileInfoKey file)
     {
         int removed = 0;
-        foreach (var tree in Files)
+        foreach (var tree in EntriesPerFolder)
             removed += tree.Entries.RemoveAll(e => e.EntryIndex == file.FileIndex);
 
         if (removed > 0)
@@ -478,9 +478,9 @@ public class PFSBTree
     {
         var files = new Dictionary<string, FileEntryKey>();
         uint currentIndex = 0;
-        for (int i = 0; i < Files[0].Entries.Count; i++)
+        for (int i = 0; i < EntriesPerFolder[0].Entries.Count; i++)
         {
-            var currentEntry = Files[0].Entries[i];
+            var currentEntry = EntriesPerFolder[0].Entries[i];
             if (currentEntry.Flags.HasFlag(EntryKeyFlags.Directory))
             {
                 string baseDir = FileNames.GetByIndex(currentEntry.NameIndex).Value + '/';
@@ -504,9 +504,9 @@ public class PFSBTree
     {
         string bDir = baseDir;
         uint baseDirIndex = dirIndex;
-        for (int i = 0; i < Files[(int)dirIndex].Entries.Count; i++)
+        for (int i = 0; i < EntriesPerFolder[(int)dirIndex].Entries.Count; i++)
         {
-            var currentEntry = Files[(int)dirIndex].Entries[i];
+            var currentEntry = EntriesPerFolder[(int)dirIndex].Entries[i];
             if (currentEntry.Flags.HasFlag(EntryKeyFlags.Directory))
             {
                 baseDir += FileNames.GetByIndex(currentEntry.NameIndex).Value + '/';
@@ -536,7 +536,7 @@ public class PFSBTree
         if (Extensions.TryAddNewString(ext, out uint keyIndex))
         {
             // Each new key after the extension needs increased index
-            foreach (var tree in Files)
+            foreach (var tree in EntriesPerFolder)
             {
                 foreach (var entry in tree.Entries)
                 {
@@ -559,7 +559,7 @@ public class PFSBTree
         if (FileNames.TryAddNewString(name, out uint keyIndex))
         {
             // We inserted a key possibly in the middle of the tree since its sorted - every keys after that one needs to be increased
-            foreach (var tree in Files)
+            foreach (var tree in EntriesPerFolder)
             {
                 foreach (var entry in tree.Entries)
                 {
@@ -611,7 +611,7 @@ public class PFSBTree
     }
 
     /// <summary>
-    /// Checks if a directory already exists within the table of contents.
+    /// Checks if a directory already exists within a btree folder.
     /// </summary>
     /// <param name="tree"></param>
     /// <param name="path"></param>
@@ -622,7 +622,7 @@ public class PFSBTree
         entryIndexIfExists = 0;
         foreach (var entry in tree.Entries)
         {
-            if (FileNames.GetByIndex(entry.NameIndex).Value.Equals(path))
+            if (entry.Flags.HasFlag(EntryKeyFlags.Directory) && FileNames.GetByIndex(entry.NameIndex).Value.Equals(path))
             {
                 entryIndexIfExists = entry.EntryIndex;
                 return true;
@@ -634,7 +634,7 @@ public class PFSBTree
 
     private static bool IsCompressableFile(string path)
     {
-        if (path.StartsWith("crs/") && path.EndsWith("stream")) // Stream files should NOT be compressed
+        if (path.StartsWith("crs/") && path.EndsWith("stream")) // Stream files should NOT be compressed (shapestream, texstream)
             return false;
 
         if (path.StartsWith("car/") && path.EndsWith("bin")) // Car Paint files shouldn't either
@@ -643,7 +643,10 @@ public class PFSBTree
         if (path.StartsWith("replay/")) // Replays can be compressed already
             return false;
 
-        if (path.StartsWith("carsound/")) // Sounds are compressed for the most part
+        if (path.StartsWith("carsound/") || path.EndsWith(".sgd") || path.EndsWith(".at3") || path.EndsWith(".esgx")) // Sounds are compressed for the most part
+            return false;
+
+        if (path.StartsWith("movies/") || path.EndsWith(".pam"))
             return false;
 
         if (path.EndsWith("gpb") || path.EndsWith("mpackage")) // Not original but added it because the components inside are compressed already
