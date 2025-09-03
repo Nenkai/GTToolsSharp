@@ -10,6 +10,7 @@ using Syroot.BinaryData;
 using Syroot.BinaryData.Memory;
 using SharpCompress.Compressors;
 using SharpCompress.Compressors.BZip2;
+using CommunityToolkit.HighPerformance.Buffers;
 
 namespace GTToolsSharp.BinaryPatching;
 
@@ -39,10 +40,10 @@ public class BsPatch
 		}
 
 		const int buffSize = 0x100000;
-		byte[] newData = ArrayPool<byte>.Shared.Rent(buffSize);
-		byte[] oldData = ArrayPool<byte>.Shared.Rent(buffSize);
+		using MemoryOwner<byte> newData = MemoryOwner<byte>.Allocate(buffSize);
+        using MemoryOwner<byte> oldData = MemoryOwner<byte>.Allocate(buffSize);
 
-		byte[] patch = File.ReadAllBytes(patchFile);
+        byte[] patch = File.ReadAllBytes(patchFile);
 		using var compressedControlStream = new MemoryStream(patch);
 		compressedControlStream.Position = 0x20;
 		using var controlStream = new BZip2Stream(compressedControlStream, CompressionMode.Decompress, false);
@@ -72,19 +73,18 @@ public class BsPatch
 			while (bytesToCopy > 0)
 			{
 				int actualBytesToCopy = Math.Min(bytesToCopy, buffSize);
-				diffStream.ReadExactly(newData, 0, actualBytesToCopy);
+				Span<byte> chunk = newData.Span.Slice(0, actualBytesToCopy);
+                diffStream.ReadExactly(chunk);
 
 				int availableInputBytes = Math.Min(actualBytesToCopy, (int)(inputFileStream.Length - inputFileStream.Position));
-				inputFileStream.ReadExactly(oldData, 0, availableInputBytes);
+				inputFileStream.ReadExactly(oldData.Span.Slice(0, availableInputBytes));
 
 				for (int index = 0; index < availableInputBytes; index++)
-					newData[index] += oldData[index];
+                    chunk[index] += oldData.Span[index];
 
-				outputFileStream.Write(newData, 0, actualBytesToCopy);
+				outputFileStream.Write(chunk);
 
 				newPosition += actualBytesToCopy;
-
-
 
 				oldPosition += actualBytesToCopy;
 				bytesToCopy -= actualBytesToCopy;
@@ -98,18 +98,20 @@ public class BsPatch
 			{
 				int actualBytesToCopy = Math.Min(bytesToCopy, buffSize);
 
-				extraStream.ReadExactly(newData, 0, actualBytesToCopy);
-				outputFileStream.Write(newData, 0, actualBytesToCopy);
+				Span<byte> chunk = newData.Span.Slice(0, actualBytesToCopy);
 
-				newPosition += actualBytesToCopy;
+                extraStream.ReadExactly(chunk);
+				outputFileStream.Write(chunk);
+
+                newPosition += actualBytesToCopy;
 				bytesToCopy -= actualBytesToCopy;
 			}
 
 			oldPosition = (int)(oldPosition + control[2]);
 		}
-	}
+    }
 
-	private static long ReadInt64(Stream stream)
+    private static long ReadInt64(Stream stream)
 	{
 		Span<byte> buf = stackalloc byte[8];
 		stream.ReadExactly(buf);

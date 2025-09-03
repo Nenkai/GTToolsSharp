@@ -1,28 +1,36 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography;
-using System.IO;
-using System.IO.Compression;
-
+﻿using GTToolsSharp.BinaryPatching;
 using GTToolsSharp.BTree;
-using GTToolsSharp.Utils;
 using GTToolsSharp.Encryption;
-using GTToolsSharp.BinaryPatching;
+using GTToolsSharp.Utils;
 using GTToolsSharp.Volumes;
 
 using PDTools.Compression;
-using PDTools.Utils;
 using PDTools.Crypto;
+using PDTools.Utils;
+
+using SharpCompress.Common;
+
+using System;
+using System.Buffers;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace GTToolsSharp;
 
 public class PFSVolumeUnpacker
 {
-    public GTVolumePFS Volume { get; }
+    public GTVolumePFS MainPFS { get; }
+
+    /// <summary>
+    /// For TPPS
+    /// </summary>
+    public GTVolumePFS BaseVolumePFS { get; }
     public UpdateNodeInfo TPPS { get; set; }
 
     public string OutputDirectory { get; private set; }
@@ -32,10 +40,13 @@ public class PFSVolumeUnpacker
     public void SetOutputDirectory(string dirPath)
         => OutputDirectory = dirPath;
 
-    public PFSVolumeUnpacker(GTVolumePFS vol)
+    public PFSVolumeUnpacker(GTVolumePFS baseVolOrPfs, GTVolumePFS baseVolume = null)
     {
-        Volume = vol;
+        MainPFS = baseVolOrPfs;
+        BaseVolumePFS = baseVolume;
     }
+
+    private bool _hasInit = false;
 
     /// <summary>
     /// Unpacks all the files within the volume.
@@ -44,14 +55,16 @@ public class PFSVolumeUnpacker
     /// <param name="basePFSFolder">Base PDIPFS folder for binary patching</param>
     public void UnpackFiles(IEnumerable<int> fileIndexesToExtract, string basePFSFolder)
     {
+        Init();
+
         fileIndexesToExtract ??= [];
 
         // Lazy way
-        var files = Volume.BTree.GetAllRegisteredFiles();
+        var files = MainPFS.BTree.GetAllRegisteredFiles();
 
         // Cache it
         Dictionary<uint, FileInfoKey> fileInfoKeys = [];
-        foreach (var file in Volume.BTree.FileInfos.Entries)
+        foreach (var file in MainPFS.BTree.FileInfos.Entries)
             fileInfoKeys.Add(file.FileIndex, file);
 
         foreach (var file in files)
@@ -65,6 +78,15 @@ public class PFSVolumeUnpacker
         }
     }
 
+    private void Init()
+    {
+        if (_hasInit)
+            return;
+
+        InitTPPS();
+        _hasInit = true;
+    }
+
     /// <summary>
     /// Unpacks a file node.
     /// </summary>
@@ -74,26 +96,27 @@ public class PFSVolumeUnpacker
     /// <returns></returns>
     public bool UnpackFile(FileInfoKey nodeKey, string entryPath, string filePath)
     {
+        Init();
+
         // Split Volumes
         if ((int)nodeKey.VolumeIndex != -1)
         {
-            var volDevice = Volume.SplitVolumes[nodeKey.VolumeIndex];
+            var volDevice = MainPFS.SplitVolumes[nodeKey.VolumeIndex];
             if (volDevice is null)
                 return false;
 
             Program.Log($"[:] Unpacking '{entryPath}' from '{volDevice.Name}'..");
 
-            return Volume.SplitVolumes[nodeKey.VolumeIndex].UnpackFile(nodeKey, Volume.Keyset, filePath);
+            return MainPFS.SplitVolumes[nodeKey.VolumeIndex].UnpackFile(nodeKey, MainPFS.Keyset, filePath);
         }
         else
         {
-            if (!Volume.IsPatchVolume)
+            if (!MainPFS.IsPatchVolume)
             {
                 if (NoUnpack)
                     return false;
 
-                ulong offset = Volume.DataOffset + (ulong)nodeKey.SectorOffset * PFSBTree.SECTOR_SIZE;
-                return UnpackVolumeFile(nodeKey, filePath, offset);
+                return UnpackVolumeFile(MainPFS, nodeKey, filePath);
             }
             else
                 return UnpackPFSFile(nodeKey, entryPath, filePath);
@@ -102,8 +125,8 @@ public class PFSVolumeUnpacker
 
     private bool UnpackPFSFile(FileInfoKey nodeKey, string entryPath, string filePath)
     {
-        string patchFilePath = PDIPFSPathResolver.GetPathFromSeed(nodeKey.FileIndex, Volume.IsGT5PDemoStyle);
-        string localPath = Volume.PatchVolumeFolder + "/" + patchFilePath;
+        string patchFilePath = PDIPFSPathResolver.GetPathFromSeed(nodeKey.FileIndex, MainPFS.IsGT5PDemoStyle);
+        string localPath = MainPFS.PatchVolumeFolder + "/" + patchFilePath;
 
         if (NoUnpack)
             return false;
@@ -125,13 +148,13 @@ public class PFSVolumeUnpacker
             if (Encoding.ASCII.GetString(magic).StartsWith("BSDIFF"))
             {
                 fs.Dispose();
-                return UnpackTPPSFile(nodeKey, entryPath, patchFilePath);
+                return UnpackTPPSFile(nodeKey, entryPath, patchFilePath, filePath);
             }
 
             fs.Position = 0;
         }
 
-        if (Volume.IsGT5PDemoStyle)
+        if (MainPFS.IsGT5PDemoStyle)
         {
             bool customCrypt = nodeKey.Flags.HasFlag(FileInfoFlags.CustomSalsaCrypt)
                 || entryPath == "piece/car_thumb_M/gtr_07_01.img" // Uncompressed files, but no special flag either...
@@ -141,7 +164,7 @@ public class PFSVolumeUnpacker
 
             if (customCrypt)
             {
-                if (Volume.Keyset.DecryptManager is null || !Volume.Keyset.DecryptManager.Keys.TryGetValue(entryPath, out string b64Key) || b64Key.Length < 32)
+                if (MainPFS.Keyset.DecryptManager is null || !MainPFS.Keyset.DecryptManager.Keys.TryGetValue(entryPath, out string b64Key) || b64Key.Length < 32)
                 {
                     Program.Log($"[X] Could not find custom decryption key for {filePath}, skipping it.", forceConsolePrint: true);
                     return false;
@@ -158,7 +181,7 @@ public class PFSVolumeUnpacker
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                     using (var outCompressedFile = new FileStream(filePath + ".in", FileMode.Create))
-                        VolumeCrypto.DecryptOld(Volume.Keyset, fs, outCompressedFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
+                        VolumeCrypto.DecryptOld(MainPFS.Keyset, fs, outCompressedFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
 
                     using (var inCompressedFile = new FileStream(filePath + ".in", FileMode.Open))
                     {
@@ -175,7 +198,7 @@ public class PFSVolumeUnpacker
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                     using var outFile = new FileStream(filePath, FileMode.Create);
-                    VolumeCrypto.DecryptOld(Volume.Keyset, fs, outFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
+                    VolumeCrypto.DecryptOld(MainPFS.Keyset, fs, outFile, nodeKey.FileIndex, nodeKey.CompressedSize, 0, salsa);
                 }
 
                 if (customCrypt)
@@ -190,7 +213,7 @@ public class PFSVolumeUnpacker
         {
             if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
             {
-                if (!CryptoUtils.DecryptCheckCompression(fs, Volume.Keyset, nodeKey.FileIndex, nodeKey.UncompressedSize))
+                if (!CryptoUtils.DecryptCheckCompression(fs, MainPFS.Keyset, nodeKey.FileIndex, nodeKey.UncompressedSize))
                 {
                     Program.Log($"[X] Failed to decompress file {filePath} ({patchFilePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
                     return false;
@@ -199,51 +222,62 @@ public class PFSVolumeUnpacker
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                 fs.Position = 0;
 
-                return CryptoUtils.DecryptAndInflateToFile(Volume.Keyset, fs, nodeKey.FileIndex, nodeKey.UncompressedSize, filePath);
+                using var outputFile = File.Create(filePath);
+                return CryptoUtils.DecryptAndInflateToFile(MainPFS.Keyset, fs, outputFile, nodeKey.UncompressedSize, nodeKey.FileIndex);
             }
             else
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                CryptoUtils.CryptToFile(Volume.Keyset, fs, nodeKey.FileIndex, filePath);
+                CryptoUtils.CryptToFile(MainPFS.Keyset, fs, filePath, nodeKey.UncompressedSize, nodeKey.FileIndex);
             }
         }
 
         return true;
     }
 
-    private bool UnpackVolumeFile(FileInfoKey nodeKey, string filePath, ulong offset)
+    private bool UnpackVolumeFile(GTVolumePFS pfs, FileInfoKey nodeKey, string filePath)
     {
-        Volume.MainStream.Position = (long)offset;
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+        using var fs = File.Create(filePath);
+
+        return UnpackVolumeFile(pfs, nodeKey, fs, filePath);
+    }
+
+    private bool UnpackVolumeFile(GTVolumePFS pfs, FileInfoKey nodeKey, Stream outStream, string filePathForLog)
+    {
+        ulong offset = pfs.DataOffset + (ulong)nodeKey.SectorOffset * PFSBTree.SECTOR_SIZE;
+        pfs.MainStream.Position = (long)offset;
+
         if (nodeKey.Flags.HasFlag(FileInfoFlags.Compressed))
         {
-            if (!CryptoUtils.DecryptCheckCompression(Volume.MainStream, Volume.Keyset, nodeKey.FileIndex, nodeKey.UncompressedSize))
+            if (!CryptoUtils.DecryptCheckCompression(pfs.MainStream, pfs.Keyset, nodeKey.FileIndex, nodeKey.UncompressedSize))
             {
-                Program.Log($"[X] Failed to decompress file ({filePath}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
+                Program.Log($"[X] Failed to decompress file ({filePathForLog}) while unpacking file info key {nodeKey.FileIndex}", forceConsolePrint: true);
                 return false;
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-            Volume.MainStream.Position -= 8;
-            CryptoUtils.DecryptAndInflateToFile(Volume.Keyset, Volume.MainStream, nodeKey.FileIndex, nodeKey.UncompressedSize, filePath, false);
+
+            pfs.MainStream.Position -= 8;
+            CryptoUtils.DecryptAndInflateToFile(pfs.Keyset, pfs.MainStream, outStream, nodeKey.UncompressedSize,nodeKey.FileIndex, false);
         }
         else
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-            CryptoUtils.CryptToFile(Volume.Keyset, Volume.MainStream, nodeKey.FileIndex, nodeKey.UncompressedSize, filePath, false);
+            CryptoUtils.CryptToFile(pfs.Keyset, pfs.MainStream, outStream, nodeKey.UncompressedSize, nodeKey.FileIndex, false);
         }
 
         return true;
     }
 
-    private bool UnpackTPPSFile(FileInfoKey nodeKey, string filePath, string patchFilePath)
+
+    private bool UnpackTPPSFile(FileInfoKey nodeKey, string filePath, string patchFilePath, string outputPath)
     {
-        if (TPPS is null && !InitTPPS())
+        if (TPPS is null)
         {
             Program.Log($"[X] Detected BSDIFF file for {filePath} ({patchFilePath}) - could not initialize binary patcher.", forceConsolePrint: true);
             return false;
         }
 
-        if (ApplyFromPatchAndExtract(nodeKey, filePath))
+        if (ApplyFromPatchAndExtract(nodeKey, filePath, outputPath))
         {
             Program.Log($"[/] Extracted binary patched file: {filePath} ({patchFilePath})", forceConsolePrint: true);
             return true;
@@ -254,15 +288,14 @@ public class PFSVolumeUnpacker
 
     private bool InitTPPS()
     {
-        if (TPPS?.Entries?.Count > 0)
-            return true;
-
-        string updateNodeInfopath = Path.Combine(Volume.InputPath, "UPDATENODEINFO");
+        string updateNodeInfopath = Path.Combine(MainPFS.InputPath, "UPDATENODEINFO");
         if (!File.Exists(updateNodeInfopath))
             return false;
 
+        Program.Log("[:] Loading node information (UPDATENODEINFO)...");
         TPPS = new UpdateNodeInfo();
         TPPS.ParseNodeInfo(updateNodeInfopath);
+        Program.Log($"[/] Loaded UPDATENODEINFO with {TPPS.Entries.Count} nodes ({TPPS.Entries.Count(e => e.Value.NewFileInfoFlags == TPPSFileState.BinaryPatched)} are to be binary patched)");
 
         return true;
     }
@@ -273,25 +306,63 @@ public class PFSVolumeUnpacker
     /// <param name="key"></param>
     /// <param name="outputFilePath"></param>
     /// <returns></returns>
-    private bool ApplyFromPatchAndExtract(FileInfoKey key, string outputFilePath)
+    private bool ApplyFromPatchAndExtract(FileInfoKey key, string pfsFilePath, string outputFilePath)
     {
         if (!TPPS.TryGetEntry(key.FileIndex, out NodeInfo info))
             return false;
 
-        string oldFilePfsPath = PDIPFSPathResolver.GetPathFromSeed(info.CurrentEntryIndex);
-        string oldFilePath = Path.Combine(this.BasePFSFolder, oldFilePfsPath);
-
-        if (!File.Exists(oldFilePath))
+        if (string.IsNullOrWhiteSpace(this.BasePFSFolder))
+        {
+            Program.Log($"[X] Unable to binary patch file '{pfsFilePath}', no base pfs was provided. Provide --base-pfs with the path to the old PDIPFS (basically point to the PDIPFS of the game of the previous version).");
             return false;
+        }
 
-        byte[] oldFile = File.ReadAllBytes(oldFilePath);
-        Volume.Keyset.CryptBytes(oldFile, oldFile, info.CurrentEntryIndex);
+        string oldNodePfsPath = PDIPFSPathResolver.GetPathFromSeed(info.CurrentEntryIndex);
+        string oldFilePath = Path.Combine(this.BasePFSFolder, oldNodePfsPath);
 
-        if (info.NewFileInfoFlags == TPPSFileState.BinaryPatched)
-            PS2ZIP.TryInflateInMemory(oldFile, key.UncompressedSize, out oldFile);
+        byte[] oldFile;
+        if (File.Exists(oldFilePath))
+        {
+            oldFile = File.ReadAllBytes(oldFilePath);
+            MainPFS.Keyset.CryptBytes(oldFile, oldFile, info.CurrentEntryIndex);
 
-        string patchPfsPath = PDIPFSPathResolver.GetPathFromSeed(info.NewEntryIndex);
-        string patchPath = Path.Combine(Volume.InputPath, patchPfsPath);
+            if (info.NewFileInfoFlags == TPPSFileState.BinaryPatched)
+            {
+                oldFile = PS2ZIP.Inflate(oldFile);
+            }
+        }
+        else
+        {
+            if (BaseVolumePFS is not null)
+            {
+                var oldFileStream = new MemoryStream();
+
+                Program.Log($"[:] Binary patched file '{pfsFilePath}' not found in patch file system, trying base volume...");
+                FileInfoKey baseVolFileEntry = BaseVolumePFS.BTree.FileInfos.GetByFileIndex(info.CurrentEntryIndex);
+
+                if (baseVolFileEntry is null)
+                {
+                    Program.Log($"[X] Unable to binary patch file '{pfsFilePath}' (oldIndex: {info.CurrentEntryIndex} [{oldNodePfsPath}], newIndex: {info.NewEntryIndex}) - not found in patch file system, but also not found in volume?");
+                    return false;
+                }
+
+                if (!UnpackVolumeFile(BaseVolumePFS, baseVolFileEntry, oldFileStream, outputFilePath))
+                {
+                    Program.Log($"[X] Unable to binary patch file '{pfsFilePath}' (oldIndex: {info.CurrentEntryIndex} [{oldNodePfsPath}], newIndex: {info.NewEntryIndex}) - failed to extract from base volume for binary patching.");
+                    return false;
+                }
+
+                oldFile = oldFileStream.ToArray();
+            }
+            else
+            {
+                Program.Log($"[X] Unable to binary patch file '{pfsFilePath}' (oldIndex: {info.CurrentEntryIndex} [{oldNodePfsPath}], newIndex: {info.NewEntryIndex}) - not found in patch file system. Provide the volume aswell (GT.VOL) with --base-vol.");
+                return false;
+            }
+        }
+
+        string oldPatchedNodePfsPath = PDIPFSPathResolver.GetPathFromSeed(info.NewEntryIndex);
+        string patchPath = Path.Combine(MainPFS.InputPath, oldPatchedNodePfsPath);
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputFilePath));
         using var outputFile = new FileStream(outputFilePath, FileMode.Create);

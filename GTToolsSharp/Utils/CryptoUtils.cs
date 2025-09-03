@@ -20,6 +20,7 @@ using PDTools.Hashing;
 using PDTools.Compression;
 
 using GTToolsSharp.Encryption;
+using CommunityToolkit.HighPerformance.Buffers;
 
 namespace GTToolsSharp.Utils;
 
@@ -43,19 +44,16 @@ public static class CryptoUtils
     /// <param name="inputStream"></param>
     /// <param name="nodeSeed"></param>
     /// <param name="outPath"></param>
-    public static bool DecryptAndInflateToFile(Keyset keyset, FileStream inputStream, uint nodeSeed, uint uncompressedSize, string outPath, bool closeStream = true)
+    public static bool DecryptAndInflateToFile(Keyset keyset, FileStream inputStream, Stream outputStream, uint uncompressedSize, uint nodeSeed, bool closeStream = true)
     {
         bool result = false;
-        // Our new file
-        using (var newFileStream = new FileStream(outPath, FileMode.Create))
-        {
-            var decryptStream = new CryptoStream(inputStream, new VolumeCryptoTransform(keyset, nodeSeed), CryptoStreamMode.Read);
-            uint magic = decryptStream.ReadUInt32();
-            if (magic == PS2ZIP.PS2ZIP_MAGIC)
-                result = PS2ZIP.TryInflate(decryptStream, newFileStream, skipMagic: true);
-            else if (magic == PDIZIP.PDIZIP_MAGIC)
-                result = PDIZIP.Inflate(decryptStream, newFileStream, skipMagic: true);
-        }
+
+        var decryptStream = new CryptoStream(inputStream, new VolumeCryptoTransform(keyset, nodeSeed), CryptoStreamMode.Read);
+        uint magic = decryptStream.ReadUInt32();
+        if (magic == PS2ZIP.PS2ZIP_MAGIC)
+            result = PS2ZIP.TryInflate(decryptStream, outputStream, skipMagic: true);
+        else if (magic == PDIZIP.PDIZIP_MAGIC)
+            result = PDIZIP.Inflate(decryptStream, outputStream, skipMagic: true);
 
         if (closeStream)
             inputStream.Dispose();
@@ -70,7 +68,7 @@ public static class CryptoUtils
     /// <param name="inputStream"></param>
     /// <param name="nodeSeed"></param>
     /// <param name="outPath"></param>
-    public static uint EncryptAndDeflateToFile(Keyset keyset, FileStream inputStream, uint nodeSeed, string outPath, bool closeStream = true)
+    public static uint DeflateAndEncryptToFile(Keyset keyset, FileStream inputStream, uint nodeSeed, string outPath, bool closeStream = true)
     {
         const int bufferSize = 0x20000;
         // Prepare encryption
@@ -109,6 +107,9 @@ public static class CryptoUtils
 
         if (closeStream)
             inputStream.Dispose();
+
+        ArrayPool<byte>.Shared.Return(buffer);
+        ArrayPool<byte>.Shared.Return(deflateBuffer);
 
         return (uint)outputStream.Length;
     }
@@ -203,42 +204,32 @@ public static class CryptoUtils
     /// <param name="fs">Input stream.</param>
     /// <param name="seed">Seed for the entry.</param>
     /// <param name="outPath">File output name.</param>
-    public static void CryptToFile(Keyset keyset, Stream fs, uint seed, string outPath, bool closeStream = true)
+    public static void CryptToFile(Keyset keyset, Stream fs, Stream outputStream, uint size, uint seed, bool closeStream = true)
     {
-        // Our new file
-        using (var newFileStream = new FileStream(outPath, FileMode.Create))
+        var decryptStream = new CryptoStream(fs, new VolumeCryptoTransform(keyset, seed), CryptoStreamMode.Read);
+
+        using MemoryOwner<byte> buf = MemoryOwner<byte>.Allocate(0x20000);
+        while (size > 0)
         {
-            var decryptStream = new CryptoStream(fs, new VolumeCryptoTransform(keyset, seed), CryptoStreamMode.Read);
-            decryptStream.CopyTo(newFileStream);
+            uint chunkSize = (uint)Math.Min(size, buf.Length);
+            Span<byte> chunk = buf.Span.Slice(0, (int)chunkSize);
+            decryptStream.ReadExactly(chunk);
+            outputStream.Write(chunk);
+
+            size -= chunkSize;
         }
 
         if (closeStream)
             fs.Dispose();
     }
 
-    public static void CryptToFile(Keyset keyset, Stream fs, uint seed, uint outSize, string outPath, bool closeStream = true)
+    public static void CryptToFile(Keyset keyset, Stream fs, string outPath, uint outSize, uint seed, bool closeStream = true)
     {
         // Our new file
-        using (var newFileStream = new FileStream(outPath, FileMode.Create))
-        {
-            var decryptStream = new CryptoStream(fs, new VolumeCryptoTransform(keyset, seed), CryptoStreamMode.Read);
-
-            int bytes = (int)outSize;
-            int read;
-            const int bufSize = 0x20000;
-            byte[] buffer = ArrayPool<byte>.Shared.Rent(bufSize);
-            while (outSize > 0 && (read = decryptStream.Read(buffer, 0, Math.Min(buffer.Length, (int)bytes))) > 0)
-            {
-                newFileStream.Write(buffer, 0, read);
-                bytes -= read;
-            }
-
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
-
-        if (closeStream)
-            fs.Dispose();
+        using var newFileStream = File.Create(outPath);
+        CryptToFile(keyset, fs, newFileStream, outSize, seed, closeStream);
     }
+    
 
     /// <summary>
     /// Crypts a buffer.

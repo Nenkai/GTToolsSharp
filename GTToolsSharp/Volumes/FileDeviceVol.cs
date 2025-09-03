@@ -65,12 +65,14 @@ public class FileDeviceVol : IDisposable
 
             Directory.CreateDirectory(Path.GetDirectoryName(filePath));
             _fs.Position -= 8;
-            return CryptoUtils.DecryptAndInflateToFile(keyset, _fs, nodeKey.FileIndex, nodeKey.UncompressedSize, filePath, false);
+
+            using var outputStream = File.Create(filePath);
+            return CryptoUtils.DecryptAndInflateToFile(keyset, _fs, outputStream, nodeKey.UncompressedSize, nodeKey.FileIndex, false);
         }
         else
         {
             Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-            CryptoUtils.CryptToFile(keyset, _fs, nodeKey.FileIndex, nodeKey.UncompressedSize, filePath, false);
+            CryptoUtils.CryptToFile(keyset, _fs, filePath, nodeKey.UncompressedSize, nodeKey.FileIndex, false);
         }
 
         return true;

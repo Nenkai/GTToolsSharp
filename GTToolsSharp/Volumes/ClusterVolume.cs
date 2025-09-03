@@ -16,6 +16,7 @@ using GTToolsSharp.Entities;
 
 using PDTools.Compression;
 using PDTools.Crypto;
+using CommunityToolkit.HighPerformance.Buffers;
 
 namespace GTToolsSharp.Volumes;
 
@@ -216,20 +217,18 @@ public class ClusterVolume : IDisposable
 
     public void HandlePlain(Stream input, Stream outputStream, ulong size)
     {
-        byte[] buffer = ArrayPool<byte>.Shared.Rent(0x20000);
+        using MemoryOwner<byte> buffer = MemoryOwner<byte>.Allocate(0x20000);
         ulong rem = size;
 
         while (rem > 0)
         {
-            Span<byte> current = buffer.AsSpan(0, (int)Math.Min(rem, (ulong)buffer.Length));
+            Span<byte> current = buffer.Span.Slice(0, (int)Math.Min(rem, (ulong)buffer.Length));
             var read = input.Read(current);
 
             outputStream.Write(current);
 
             rem -= (uint)read;
         }
-
-        ArrayPool<byte>.Shared.Return(buffer);
     }
 
     public static byte[] GetStreamCryptorIVByNonce(uint nonce)

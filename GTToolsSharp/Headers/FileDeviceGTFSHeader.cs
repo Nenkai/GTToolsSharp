@@ -38,7 +38,7 @@ public class FileDeviceGTFSHeader : PFSVolumeHeaderBase
 
     public override void PrintInfo()
     {
-        Program.Log($"[>] PFS Version/Serial No: '{SerialNumber}'");
+        Program.Log($"[>] PFS Version/Serial No: '{SerialNumber}' ({new DateTime(2001, 1, 1) + TimeSpan.FromSeconds(SerialNumber)})");
         Program.Log($"[>] Table of Contents Entry Index: {ToCNodeIndex}");
         Program.Log($"[>] TOC Size: 0x{CompressedTOCSize:X8} bytes (0x{ExpandedTOCSize:X8} expanded)");
     }

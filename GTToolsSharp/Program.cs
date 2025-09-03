@@ -217,11 +217,11 @@ class Program
         }
 
         bool found = false;
-        GTVolumePFS vol = null;
+        GTVolumePFS pfs = null;
         foreach (var k in keyset)
         {
-            vol = GTVolumePFS.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Little);
-            if (vol != null)
+            pfs = GTVolumePFS.Load(k, options.InputPath, isDir, Syroot.BinaryData.Core.Endian.Little);
+            if (pfs != null)
             {
                 found = true;
                 break;
@@ -234,9 +234,38 @@ class Program
             return;
         }
 
-        Program.Log("[-] Started unpacking process.", forceConsolePrint: true);
+        GTVolumePFS baseVol = null;
+        found = false;
+        if (!string.IsNullOrWhiteSpace(options.BaseVolumeFile))
+        {
+            if (File.Exists(options.BaseVolumeFile))
+            {
+                foreach (var k in keyset)
+                {
+                    baseVol = GTVolumePFS.Load(k, options.BaseVolumeFile, isPatchVolume: false, Syroot.BinaryData.Core.Endian.Little);
+                    if (baseVol != null)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
 
-        PFSVolumeUnpacker unpacker = new PFSVolumeUnpacker(vol);
+                if (!found)
+                {
+                    Console.WriteLine($"[X] Could not unpack base volume. Make sure that you have a valid game key/seed in your key.json.");
+                    return;
+                }
+            }
+            else
+            {
+                Console.WriteLine($"[X] Base volume path provided does not exist.");
+                return;
+
+            }
+        }
+
+        Program.Log("[-] Started unpacking process.", forceConsolePrint: true);
+        PFSVolumeUnpacker unpacker = new PFSVolumeUnpacker(pfs, baseVolume: baseVol);
         if (string.IsNullOrEmpty(options.OutputPath))
         {
             string inputDirName = Path.GetDirectoryName(options.InputPath);

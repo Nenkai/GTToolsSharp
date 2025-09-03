@@ -47,6 +47,10 @@ public class GTVolumePFS : IDisposable
     public FileDeviceVol[] SplitVolumes { get; set; }
 
     public uint DataOffset;
+
+    /// <summary>
+    /// This is null if this is a patch dir (PDIPFS).
+    /// </summary>
     public FileStream MainStream { get; }
 
     public GTVolumePFS(FileStream sourceStream, Endian endianness)

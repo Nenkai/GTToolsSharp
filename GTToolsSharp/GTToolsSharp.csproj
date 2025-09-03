@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
+    <PackageReference Include="CommunityToolkit.HighPerformance" Version="8.4.0" />
     <PackageReference Include="ImpromptuNinjas.ZStd" Version="1.4.5.5" />
     <PackageReference Include="SharpCompress" Version="0.39.0" />
     <PackageReference Include="SharpZipLib" Version="1.4.2" />

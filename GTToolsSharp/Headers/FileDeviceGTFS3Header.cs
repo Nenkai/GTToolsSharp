@@ -70,6 +70,7 @@ public class FileDeviceGTFS3Header : PFSVolumeHeaderBase
         for (int i = 0; i < VolList.Length; i++)
         {
             // TODO
+            throw new NotImplementedException();
         }
 
         return header;
@@ -90,7 +91,7 @@ public class FileDeviceGTFS3Header : PFSVolumeHeaderBase
 
     public override void PrintInfo()
     {
-        Program.Log($"[>] PFS Version/Serial No: '{SerialNumber}'");
+        Program.Log($"[>] PFS Version/Serial No: '{SerialNumber}' ({new DateTime(2001, 1, 1) + TimeSpan.FromSeconds(SerialNumber)})");
         Program.Log($"[>] Table of Contents Entry Index: {ToCNodeIndex}");
         Program.Log($"[>] TOC Size: 0x{CompressedTOCSize:X8} bytes (0x{ExpandedTOCSize:X8} expanded)");
     }

@@ -12,6 +12,7 @@ using System.Runtime.InteropServices;
 
 using PDTools.Hashing;
 using PDTools.Crypto;
+using CommunityToolkit.HighPerformance.Buffers;
 
 namespace GTToolsSharp.Encryption;
 
@@ -32,7 +33,7 @@ public class VolumeCrypto
 		uint[] keys = PrepareKey(crc ^ seed, keyset.Key.Data);
 		byte[] table = GenerateBitsTable(keys);
 
-		byte[] buffer = ArrayPool<byte>.Shared.Rent(0x20000);
+		using MemoryOwner<byte> buffer = MemoryOwner<byte>.Allocate(0x20000);
 
 		while (fileSize > 0)
 		{
@@ -41,16 +42,14 @@ public class VolumeCrypto
 				bufferSize = 0x20000;
 
 			inStream.Position = (long)offset;
-			inStream.ReadExactly(buffer);
+			inStream.ReadExactly(buffer.Span);
 
-			DecryptBuffer(buffer, buffer, (int)bufferSize, table, offset);
-			outStream.Write(buffer.AsSpan(0, (int)bufferSize));
+			DecryptBuffer(buffer.Span, buffer.Span, (int)bufferSize, table, offset);
+			outStream.Write(buffer.Span.Slice(0, (int)bufferSize));
 
 			fileSize -= bufferSize;
 			offset += bufferSize;
 		}
-
-		ArrayPool<byte>.Shared.Return(buffer);
 	}
 
 	/// <summary>
@@ -66,7 +65,7 @@ public class VolumeCrypto
 		uint[] keys = PrepareKeyOld(keyset, seed);
 		byte[] table = GenerateBitsTable(keys);
 
-		byte[] buffer = ArrayPool<byte>.Shared.Rent(0x20000);
+		using MemoryOwner<byte> buffer = MemoryOwner<byte>.Allocate(0x20000);
 
 		bool first = true;
 		while (fileSize > 0)
@@ -76,26 +75,24 @@ public class VolumeCrypto
 				bufferSize = 0x20000;
 
 			inStream.Position = (long)offset;
-			inStream.ReadExactly(buffer);
+			inStream.ReadExactly(buffer.Span);
 
-			DecryptBuffer(buffer, buffer, (int)bufferSize, table, offset);
+			DecryptBuffer(buffer.Span, buffer.Span, (int)bufferSize, table, offset);
 			if (salsa.Initted)
 			{
 				if (skipCompressMagicForDecrypt)
-					salsa.DecryptOffset(buffer, first ? (int)bufferSize - 8 : (int)bufferSize, first ? (long)offset + 8 : (long)offset, first ? 8 : 0);
+					salsa.DecryptOffset(buffer.Span, first ? (int)bufferSize - 8 : (int)bufferSize, first ? (long)offset + 8 : (long)offset, first ? 8 : 0);
 				else
-					salsa.DecryptOffset(buffer, (int)bufferSize, (int)offset, 0);
+					salsa.DecryptOffset(buffer.Span, (int)bufferSize, (int)offset, 0);
 			}
 
-			outStream.Write(buffer.AsSpan(0, (int)bufferSize));
+			outStream.Write(buffer.Span.Slice(0, (int)bufferSize));
 
 			fileSize -= bufferSize;
 			offset += bufferSize;
 
 			first = false;
 		}
-
-		ArrayPool<byte>.Shared.Return(buffer);
 	}
 
 	/// <summary>

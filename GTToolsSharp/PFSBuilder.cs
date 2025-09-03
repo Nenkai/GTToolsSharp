@@ -412,7 +412,7 @@ public class PatchFileSystemBuilder
         if (key.Flags.HasFlag(FileInfoFlags.Compressed))
         {
             Program.Log($"[:] Pack: Compressing + Encrypting {file.VolumeDirPath} -> {pfsFilePath}");
-            newCompressedSize = CryptoUtils.EncryptAndDeflateToFile(_volume.Keyset, fs, key.FileIndex, outputFile, closeStream: true);
+            newCompressedSize = CryptoUtils.DeflateAndEncryptToFile(_volume.Keyset, fs, key.FileIndex, outputFile, closeStream: true);
             nodeInfo.NewCompressedFileSize = newCompressedSize;
         }
         else

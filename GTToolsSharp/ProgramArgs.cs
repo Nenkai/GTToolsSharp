@@ -18,8 +18,13 @@ public class UnpackVerbs
     [Option('o', "output", HelpText = "Output Folder for unpacked files. If you don't provide one, will display info about the volume.")]
     public string OutputPath { get; set; }
 
-    [Option("base-folder", HelpText = "Used for extracting PDIPFS with Binary Patching files introduced with Gran Turismo 1.05+.")]
+    [Option("base-pfs", HelpText = "Used for extracting PDIPFS with Binary Patching files introduced with Gran Turismo 1.07+.\n" +
+        "NOTE: It will binary patch/update old PDIPFS files into the updated files in memory, and then extract these. It will NOT save new PDIPFS files (like the game would to update).\n" +
+        "You should use this when: your game is on a certain version with all files already patched by the game, and you want to extract the next version (i.e 1.07->1.08).")]
     public string BasePFSFolder { get; set; }
+
+    [Option("base-vol", HelpText = "To be used alongside --base-pfs, so that the unpacker can also binary patch files that originates from the volume, if they aren't in the old PFS.")]
+    public string BaseVolumeFile { get; set; }
 
     [Option("unpack-log-only", HelpText = "Only log volume information while unpacking. (No unpacking will be done)")]
     public bool OnlyLog { get; set; }

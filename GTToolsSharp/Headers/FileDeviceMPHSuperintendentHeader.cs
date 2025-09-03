@@ -107,8 +107,7 @@ internal class FileDeviceMPHSuperintendentHeader : MPHVolumeHeaderBase
 
     public override void PrintInfo()
     {
-        Program.Log($"[>] PFS Version/Serial No: '{SerialNumber}'");
-        Program.Log($"[>] Serial Date: {new DateTime(2001, 1, 1) + TimeSpan.FromSeconds(SerialNumber)}");
+        Program.Log($"[>] PFS Version/Serial No: '{SerialNumber}' ({new DateTime(2001, 1, 1) + TimeSpan.FromSeconds(SerialNumber)})");
         Program.Log($"[>] Formatter Code: 0x{FormatterCode:X8}");
         Program.Log($"[>] VOL Count: {VolumeInfo.Length}");
         Program.Log($"[>] Flags: 0x{Flags:X8}");
