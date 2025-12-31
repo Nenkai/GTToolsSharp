@@ -67,6 +67,7 @@ public static class KeysetStore
     public static readonly Keyset Keyset_GT5_US = new("GT5_US", "PATAGONIAN-22798263", new Key(0x5A1A59E5, 0x4D3546AB, 0xF30AF68B, 0x89F08D0D));
     public static readonly Keyset Keyset_GT5_JP = new("GT5_JP", "SAHARA-568201135", new Key(0xD770A27B, 0x2114AABD, 0xDD8C423D, 0x54690651));
     public static readonly Keyset Keyset_GT5_ASIA = new("GT5_ASIA", "TAKLAMAKAN-63706075", new Key(0x93783D89, 0x33D56FB5, 0xE7701B43, 0x6032AD93));
+    public static readonly Keyset Keyset_GTAC_2012_JP = new("GT_ACADEMY_2012_JP", "GREATVICTORIA-744162146", new Key(0x91116B39, 0x8969F049, 0x6279B36B, 0x0D3BD931));
     public static readonly Keyset Keyset_GTAC_2012_EU = new("GT_ACADEMY_2012_EU", "GREATBASIN-579805832", new Key(0xE631DC25, 0x82C2998F, 0x4F875673, 0xBD641F33));
     public static readonly Keyset Keyset_GTAC_2012_US = new("GT_ACADEMY_2012_US", "CHIHUAHUAN-638729911", new Key(0x8128DD09, 0xA82AB067, 0x49DBA01F, 0x499939D3));
     public static readonly Keyset Keyset_GTAC_2012_ASIA = new("GT_ACADEMY_2012_ASIA", "GREATSANDY-774795678", new Key(0x95878E3F, 0xC58426A1, 0x72E21421, 0x1D3CC8FB));
@@ -102,6 +103,7 @@ public static class KeysetStore
         Keyset_GT5_JP,
         Keyset_GT5_ASIA,
 
+        Keyset_GTAC_2012_JP,
         Keyset_GTAC_2012_EU,
         Keyset_GTAC_2012_US,
         Keyset_GTAC_2012_ASIA,

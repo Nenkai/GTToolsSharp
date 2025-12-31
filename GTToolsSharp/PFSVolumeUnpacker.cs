@@ -67,15 +67,21 @@ public class PFSVolumeUnpacker
         foreach (var file in MainPFS.BTree.FileInfos.Entries)
             fileInfoKeys.Add(file.FileIndex, file);
 
+        int numExtracted = 0;
         foreach (var file in files)
         {
             if (!fileIndexesToExtract.Any() || fileIndexesToExtract.Contains((int)file.Value.EntryIndex))
             {
                 string volPath = file.Key;
                 var fileInfo = fileInfoKeys[file.Value.EntryIndex];
-                UnpackFile(fileInfo, volPath, Path.Combine(OutputDirectory, volPath));
+                if (UnpackFile(fileInfo, volPath, Path.Combine(OutputDirectory, volPath)))
+                {
+                    numExtracted++;
+                }
             }
         }
+
+        Program.Log($"[:] Extracted {numExtracted} files.");
     }
 
     private void Init()
@@ -139,7 +145,7 @@ public class PFSVolumeUnpacker
         if (!File.Exists(localPath))
             return false;
 
-        Program.Log($"[:] Unpacking: {patchFilePath} -> {filePath}");
+        Program.Log($"[:] Unpacking: {patchFilePath} -> {entryPath} (from file info #{nodeKey.FileIndex})");
         using var fs = new FileStream(localPath, FileMode.Open);
         if (fs.Length >= 7)
         {
