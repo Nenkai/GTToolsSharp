@@ -79,7 +79,7 @@ public class FileEntryBTree : BTree<FileEntryKey>
          * OrderBy doesnt touch them as it should be 
          */
         // Entries.Sort((x, y) => x.NameIndex.CompareTo(y.NameIndex)); 
-        Entries = Entries.OrderBy(e => e.NameIndex).ToList();
+        Entries = Entries.OrderBy(e => e.NameIndex).ThenBy(e => e.FileExtensionIndex).ToList();
     }
 
     public FileEntryKey GetFolderEntryByNameIndex(uint nameIndex)
