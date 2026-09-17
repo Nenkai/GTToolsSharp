@@ -370,7 +370,7 @@ public class PFSBTree
         newEntry.FileExtensionIndex = extIndex;
         newEntry.EntryIndex = FileInfos.Entries[^1].FileIndex;
         EntriesPerFolder[(int)entryIndex].Entries.Add(newEntry);
-        EntriesPerFolder[(int)entryIndex].ResortByNameIndexes();
+        EntriesPerFolder[(int)entryIndex].ResortByIndices();
     }
 
     /// <summary>
@@ -429,7 +429,7 @@ public class PFSBTree
         newEntry.NameIndex = dirNameIndex;
         newEntry.EntryIndex = dirIndex;
         EntriesPerFolder[(int)parentDirIndex].Entries.Add(newEntry);
-        EntriesPerFolder[(int)parentDirIndex].ResortByNameIndexes();
+        EntriesPerFolder[(int)parentDirIndex].ResortByIndices();
 
         // Basically add the new empty folder
         EntriesPerFolder.Insert((int)dirIndex, new FileEntryBTree());
@@ -531,7 +531,7 @@ public class PFSBTree
     /// Registers a new extension for the table of contents and updates the file tree if needed.
     /// </summary>
     /// <param name="ext">Extension to update.</param>
-    public uint RegisterExtension(string ext)
+    private uint RegisterExtension(string ext)
     {
         if (Extensions.TryAddNewString(ext, out uint keyIndex))
         {
@@ -554,7 +554,7 @@ public class PFSBTree
     /// Registers a new file name for the table of contents and updates the file tree if needed.
     /// </summary>
     /// <param name="ext">Extension to update.</param>
-    public uint RegisterFilename(string name)
+    private uint RegisterFilename(string name)
     {
         if (FileNames.TryAddNewString(name, out uint keyIndex))
         {
@@ -589,7 +589,7 @@ public class PFSBTree
     /// Gets the highest next sector index.
     /// </summary>
     /// <returns></returns>
-    public uint NextSectorIndex()
+    private uint NextSectorIndex()
     {
         FileInfoKey lastSectorKey = FileInfos.Entries.OrderByDescending(e => e.SectorOffset).FirstOrDefault();
 

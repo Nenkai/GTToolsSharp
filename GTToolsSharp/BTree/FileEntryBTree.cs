@@ -72,14 +72,13 @@ public class FileEntryBTree : BTree<FileEntryKey>
     }
 
 
-    public void ResortByNameIndexes()
+    public void ResortByIndices()
     {
-        /* Well, quicksort can go to hell. 
-         * Wasted 2 days of mine because this crap would reorder entries that werent needed to be 
-         * OrderBy doesnt touch them as it should be 
-         */
-        // Entries.Sort((x, y) => x.NameIndex.CompareTo(y.NameIndex)); 
-        Entries = Entries.OrderBy(e => e.NameIndex).ToList();
+        // When the game needs to search for rows, it will bsearch each byte of the key's data (essentially: name index + extension index + file info index)
+        // So ensure that we order these.
+        Entries = Entries.OrderBy(e => e.NameIndex)
+            .ThenBy(e => e.FileExtensionIndex)
+            .ToList();
     }
 
     public FileEntryKey GetFolderEntryByNameIndex(uint nameIndex)
