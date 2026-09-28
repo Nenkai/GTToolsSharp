@@ -45,7 +45,7 @@ public class ClusterVolume : IDisposable
 
     public static ClusterVolume Read(string path)
     {
-        FileStream fs = new FileStream(path, FileMode.Open);
+        FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         BinaryStream bs = new BinaryStream(fs, ByteConverter.Little);
 
         ulong magic = bs.ReadUInt64();
@@ -64,7 +64,7 @@ public class ClusterVolume : IDisposable
 
     public bool UnpackFile(MPHNodeInfo nodeKey, string outputPath, string volPath, int nodeIndex)
     {
-        long offset = SectorSize * (long)nodeKey.GetVolumeIndex();
+        long offset = SectorSize * (long)nodeKey.GetSectorIndex();
         _fs.Position = offset;
 
         Stream fileStream = PrepareStreamCryptor(_fs, nodeKey);
