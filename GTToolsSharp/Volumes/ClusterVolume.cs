@@ -208,7 +208,7 @@ public class ClusterVolume : IDisposable
             }
 
             // File is encrypted
-            return new ChaCha20Stream(baseStream, KeysetStore.GT7_Volume_Data_Key, GetStreamCryptorIVByNonce(info.Nonce));
+            return new ChaCha20Stream(baseStream, GT7Keyset.Current?.VolumeDataKey ?? KeysetStore.GT7_Volume_Data_Key, GetStreamCryptorIVByNonce(info.Nonce));
         }
 
         // No encryption

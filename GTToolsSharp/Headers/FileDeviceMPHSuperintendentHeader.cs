@@ -14,7 +14,7 @@ internal class FileDeviceMPHSuperintendentHeader : MPHVolumeHeaderBase
 {
     public override int HeaderSize => 0x800;
 
-    private static readonly uint HeaderMagic = 0x5B745163;
+    internal static readonly uint HeaderMagic = 0x5B745163;
 
     public ulong JulianTimestamp { get; set; }
 
@@ -195,6 +195,15 @@ public class IndexerMPH
     public ulong GValueCount { get; set; }
     public byte[] GValues { get; set; }
 
+    // Hash constants: 1.00 defaults; builds after 1.00 load theirs from a GT7Keyset.
+    public uint HashInit { get; set; } = 1111111111;
+    public ulong HashMul { get; set; } = 103;
+    public uint SeedMul { get; set; } = 1504569917;
+    public uint SeedAdd { get; set; } = 987987987;
+    public ulong CharMul { get; set; } = 1350490027;
+    public ulong CharAdd { get; set; } = 123456789012345;
+    public bool SignedChars { get; set; }
+
     public void Read(ref BitStream bs)
     {
         NodeCount = bs.ReadInt32();
@@ -230,11 +239,12 @@ public class IndexerMPH
      ***************************************/
     public uint GetHashFromString(uint seed, uint lim, string key)
     {
-        uint h = 1111111111, s = seed;
+        uint h = HashInit, s = seed;
         for (var i = 0; i < key.Length; ++i)
         {
-            s = s * 1504569917 + 987987987;
-            h = (uint)((h * 103UL % seed) + GetHash(s, lim, key[i]));
+            s = s * SeedMul + SeedAdd;
+            ulong c = SignedChars ? (ulong)(long)(sbyte)key[i] : key[i];
+            h = (uint)((h * HashMul % seed) + GetHash(s, lim, c));
         }
 
         return h % seed % lim;
@@ -256,9 +266,9 @@ public class IndexerMPH
         return ExistsACM256[index / 256] + ExistsACM32[index / 32] + System.Numerics.BitOperations.PopCount(  (ulong)Exists[index / 32] & ((1u << (index % 32)) - 1) );
     }
 
-    public uint GetHash(uint seed, uint lim, uint key)
+    public uint GetHash(uint seed, uint lim, ulong key)
     {
-        return (uint)(((ulong)key * 1350490027 + 123456789012345UL) % seed % lim);
+        return (uint)((key * CharMul + CharAdd) % seed % lim);
     }
 
     int GetG(int i)  

@@ -84,6 +84,14 @@ public class GTVolumeMPH : IDisposable
             DecryptHeader(tmpData);
 
             headerType = MPHVolumeHeaderBase.Detect(tmpData);
+
+            if (headerType == MPHVolumeHeaderType.Unknown && GT7Keyset.Current is not null)
+            {
+                fs.Position = 0;
+                fs.ReadExactly(tmpData);
+                DecryptHeaderV2(tmpData, GT7Keyset.Current);
+                headerType = MPHVolumeHeaderBase.Detect(tmpData);
+            }
         }
 
         if (headerType == MPHVolumeHeaderType.Unknown)
@@ -118,7 +126,7 @@ public class GTVolumeMPH : IDisposable
     // vol11: sky stuff?
     // vol31: Museum
 
-    public async Task UnpackAllFiles(string outputDirectory)
+    public async Task UnpackAllFiles(string outputDirectory, HashSet<int> onlyNodes = null)
     {
         Program.Log("[-] Unpacking all files from volume.");
 
@@ -148,6 +156,9 @@ public class GTVolumeMPH : IDisposable
         foreach (int i in order)
         {
             MPHNodeInfo file = h.Nodes[i];
+            if (file.IsJunk || (onlyNodes is not null && !onlyNodes.Contains(i)))
+                continue;
+
             ClusterVolume clusterVolume = file.IsFromClusterVolume() && file.GetVolumeIndex() < SplitVolumes.Length
                 ? SplitVolumes[file.GetVolumeIndex()] : null;
 
@@ -173,9 +184,10 @@ public class GTVolumeMPH : IDisposable
                 if (clusterVolume is not null)
                 {
                     // One bad node should not end a run over the whole index: log it and carry on.
+                    // An undiscovered file gets its node index so UnpackFile names it by content.
                     try
                     {
-                        clusterVolume.UnpackFile(file, outPath, volPath, -1);
+                        clusterVolume.UnpackFile(file, outPath, volPath, string.IsNullOrEmpty(volPath) ? i : -1);
                     }
                     catch (Exception ex)
                     {
@@ -272,6 +284,13 @@ public class GTVolumeMPH : IDisposable
         }
     }
 
+    public static bool DecryptHeaderV2(Span<byte> data, GT7Keyset keyset)
+    {
+        keyset.DecryptIndex(data);
+        Unscramble(data, keyset.CrcSeed);
+        return true;
+    }
+
     public static bool DecryptHeader(Span<byte> data)
     {
         // Decrypt whole file
@@ -280,8 +299,14 @@ public class GTVolumeMPH : IDisposable
         // Love when libs don't support span
         chacha20.DecryptBytes(data, data.Length, 0);
 
-        const uint BASE_CRC = 0xA7E4A1E8;
-        uint crc = BASE_CRC;
+        Unscramble(data, 0xA7E4A1E8);
+        return true;
+    }
+
+    /// <summary>CRC-chained un-scramble of the first 0x800 bytes; the seed changed after 1.00.</summary>
+    public static void Unscramble(Span<byte> data, uint seed)
+    {
+        uint crc = seed;
 
         var ints = MemoryMarshal.Cast<byte, uint>(data);
 
@@ -306,8 +331,6 @@ public class GTVolumeMPH : IDisposable
 
             ints[i] = value;
         }
-
-        return true;
     }
 
     private SortedDictionary<string, MPHNodeInfo> RegisterFiles()
