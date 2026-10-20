@@ -578,13 +578,13 @@ class Program
         }
         else if (File.Exists(options.InputPath))
         {
-            if (string.IsNullOrEmpty(options.OutputPath))
+            if (string.IsNullOrWhiteSpace(options.OutputPath))
                 options.OutputPath = options.InputPath;
 
             Console.WriteLine("[:] Compressing..");
-            using (var fs = new FileStream(options.InputPath, FileMode.Create))
+            using (var fs = new FileStream(options.InputPath, FileMode.Open))
             using (var br = new BinaryReader(fs))
-            using (var outputStream = new FileStream(options.OutputPath + ".out", FileMode.Open))
+            using (var outputStream = new FileStream(options.OutputPath + ".out", FileMode.Create))
             {
                 if (br.ReadUInt32() != 0xFFF7EEC5)
                 {
