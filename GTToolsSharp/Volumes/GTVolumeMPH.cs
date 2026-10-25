@@ -66,7 +66,7 @@ public class GTVolumeMPH : IDisposable
     /// <returns></returns>
     public static GTVolumeMPH Load(string path)
     {
-        FileStream fs = new FileStream(path, FileMode.Open);
+        FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         GTVolumeMPH vol = new GTVolumeMPH(fs);
 
         byte[] headerMagic = new byte[4];
@@ -84,6 +84,14 @@ public class GTVolumeMPH : IDisposable
             DecryptHeader(tmpData);
 
             headerType = MPHVolumeHeaderBase.Detect(tmpData);
+
+            if (headerType == MPHVolumeHeaderType.Unknown && GT7Keyset.Current is not null)
+            {
+                fs.Position = 0;
+                fs.ReadExactly(tmpData);
+                DecryptHeaderV2(tmpData, GT7Keyset.Current);
+                headerType = MPHVolumeHeaderBase.Detect(tmpData);
+            }
         }
 
         if (headerType == MPHVolumeHeaderType.Unknown)
@@ -118,7 +126,7 @@ public class GTVolumeMPH : IDisposable
     // vol11: sky stuff?
     // vol31: Museum
 
-    public async Task UnpackAllFiles(string outputDirectory)
+    public async Task UnpackAllFiles(string outputDirectory, HashSet<int> onlyNodes = null)
     {
         Program.Log("[-] Unpacking all files from volume.");
 
@@ -129,17 +137,36 @@ public class GTVolumeMPH : IDisposable
 
         Program.Log($"[!] Mapped {gameFiles.Count}/{h.Nodes.Length} files from hashed volume.");
 
+        // Reverse map (node -> first path in sorted order): gameFiles.ContainsValue/FirstOrDefault per node
+        // was O(nodes x files), hours on GT7's ~half-million-entry index.
+        var pathByNode = new Dictionary<MPHNodeInfo, string>(ReferenceEqualityComparer.Instance);
+        foreach (var kv in gameFiles)
+            pathByNode.TryAdd(kv.Value, kv.Key);
+
+        int failed = 0;
+
+        // Visit nodes in on-disk order (volume, then sector). Hash order seeks randomly across every
+        // volume, which on spinning disks ran ~10x slower.
+        int[] order = Enumerable.Range(0, h.Nodes.Length)
+            .OrderBy(n => h.Nodes[n].GetVolumeIndex())
+            .ThenBy(n => h.Nodes[n].GetSectorIndex())
+            .ToArray();
+
         // await ParallelExtractFiles(outputDirectory, h, gameFiles);
-        for (int i = 0; i < h.Nodes.Length; i++)
+        foreach (int i in order)
         {
             MPHNodeInfo file = h.Nodes[i];
-            ClusterVolume clusterVolume = file.IsFromClusterVolume() ? SplitVolumes[file.GetVolumeIndex()] : null;
+            if (file.IsJunk || (onlyNodes is not null && !onlyNodes.Contains(i)))
+                continue;
+
+            ClusterVolume clusterVolume = file.IsFromClusterVolume() && file.GetVolumeIndex() < SplitVolumes.Length
+                ? SplitVolumes[file.GetVolumeIndex()] : null;
 
             string outPath;
             string volPath;
-            if (gameFiles.ContainsValue(file))
+            if (pathByNode.TryGetValue(file, out string knownPath))
             {
-                volPath = gameFiles.FirstOrDefault(e => e.Value == file).Key;
+                volPath = knownPath;
                 outPath = Path.Combine(outputDirectory, volPath);
             }
             else
@@ -156,7 +183,17 @@ public class GTVolumeMPH : IDisposable
             {
                 if (clusterVolume is not null)
                 {
-                    clusterVolume.UnpackFile(file, outPath, volPath, -1);
+                    // One bad node should not end a run over the whole index: log it and carry on.
+                    // An undiscovered file gets its node index so UnpackFile names it by content.
+                    try
+                    {
+                        clusterVolume.UnpackFile(file, outPath, volPath, string.IsNullOrEmpty(volPath) ? i : -1);
+                    }
+                    catch (Exception ex)
+                    {
+                        failed++;
+                        Program.Log($"[X] Failed node {i} ({(string.IsNullOrEmpty(volPath) ? file.EntryHash.ToString("X8") : volPath)}): {ex.GetType().Name}: {ex.Message}", forceConsolePrint: true);
+                    }
                 }
                 else
                 {
@@ -166,9 +203,11 @@ public class GTVolumeMPH : IDisposable
             }
             else if (file.IsFromPFSStyleFile())
             {
-                throw new NotImplementedException("PFS Style file not implemented (PS5 volume?)");
+                Program.Log($"[!] Node {i} is a PFS-style file (not implemented), skipping");
             }
         }
+
+        Program.Log($"[/] Done: {h.Nodes.Length} nodes, {failed} failed.", forceConsolePrint: true);
     }
 
     public bool UnpackFile(string path, string outputDirectory = "")
@@ -245,6 +284,13 @@ public class GTVolumeMPH : IDisposable
         }
     }
 
+    public static bool DecryptHeaderV2(Span<byte> data, GT7Keyset keyset)
+    {
+        keyset.DecryptIndex(data);
+        Unscramble(data, keyset.CrcSeed);
+        return true;
+    }
+
     public static bool DecryptHeader(Span<byte> data)
     {
         // Decrypt whole file
@@ -253,8 +299,14 @@ public class GTVolumeMPH : IDisposable
         // Love when libs don't support span
         chacha20.DecryptBytes(data, data.Length, 0);
 
-        const uint BASE_CRC = 0xA7E4A1E8;
-        uint crc = BASE_CRC;
+        Unscramble(data, 0xA7E4A1E8);
+        return true;
+    }
+
+    /// <summary>CRC-chained un-scramble of the first 0x800 bytes; the seed changed after 1.00.</summary>
+    public static void Unscramble(Span<byte> data, uint seed)
+    {
+        uint crc = seed;
 
         var ints = MemoryMarshal.Cast<byte, uint>(data);
 
@@ -279,8 +331,6 @@ public class GTVolumeMPH : IDisposable
 
             ints[i] = value;
         }
-
-        return true;
     }
 
     private SortedDictionary<string, MPHNodeInfo> RegisterFiles()

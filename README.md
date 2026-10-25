@@ -26,6 +26,7 @@ Input:
 * GT5/6 `GTToolsSharp unpack -i <input GT.VOL/PDIPFS> -o <Folder to extract to>`
 * GTS: `GTToolsSharp unpack -i <input gt.idx> -o <Folder to extract to>`
 * GT7:  `GTToolsSharp gt7unpack -i <input gt.idx> -f <optional specific game file to unpack> -o <Folder to extract to>`
+  * GT7 builds after 1.00 use a different index format and crypto constants: add `--keyset <keyset.json>` describing your build (format in `GT7Keyset.cs`). No keysets are included. `--nodes 1,2,3` re-extracts only those node indices.
 
 Examples:
   * Normal Unpack: `GTToolsSharp unpack -i PDIPFS -o PDIPFS_EXTRACTED`

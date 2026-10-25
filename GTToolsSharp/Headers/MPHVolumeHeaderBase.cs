@@ -37,6 +37,10 @@ public abstract class MPHVolumeHeaderBase
         var magic = sr.ReadUInt32();
         if (magic == FileDeviceMPHSuperintendentHeader.HeaderMagic)
             return MPHVolumeHeaderType.MPH;
+
+        if (GT7Keyset.Current is not null && header.Length >= 4
+            && BinaryPrimitives.ReadUInt32LittleEndian(header) == GT7Keyset.Current.HeaderMagic)
+            return MPHVolumeHeaderType.MPHv2;
         
         return MPHVolumeHeaderType.Unknown;
     }
@@ -46,6 +50,7 @@ public abstract class MPHVolumeHeaderBase
         MPHVolumeHeaderBase header = volHeaderType switch
         {
             MPHVolumeHeaderType.MPH => new FileDeviceMPHSuperintendentHeader(),
+            MPHVolumeHeaderType.MPHv2 => new FileDeviceMPHSuperintendentHeaderV2(),
             _ => throw new Exception("Invalid volume type provided."),
         };
 
@@ -57,6 +62,12 @@ public abstract class MPHVolumeHeaderBase
             headerBytes = new byte[input.Length];
             input.ReadExactly(headerBytes);
             GTVolumeMPH.DecryptHeader(headerBytes.AsSpan());
+        }
+        else if (volHeaderType == MPHVolumeHeaderType.MPHv2)
+        {
+            headerBytes = new byte[input.Length];
+            input.ReadExactly(headerBytes);
+            GTVolumeMPH.DecryptHeaderV2(headerBytes.AsSpan(), GT7Keyset.Current);
         }
         else
             headerBytes = null;
@@ -80,4 +91,9 @@ public enum MPHVolumeHeaderType
     /// GT7
     /// </summary>
     MPH,
+
+    /// <summary>
+    /// GT7 after 1.00 (little-endian superintendent, keyset-driven crypto)
+    /// </summary>
+    MPHv2,
 }

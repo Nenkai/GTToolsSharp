@@ -74,6 +74,12 @@ public class GT7UnpackVerbs
     [Option("save-volume-header", HelpText = "Decrypts and saves the volume header (as VolumeHeader.bin)")]
     public bool SaveVolumeHeader { get; set; }
 
+    [Option("keyset", HelpText = "JSON keyset for a GT7 build after 1.00 (index state, CRC seed, MPH hash constants).")]
+    public string KeysetPath { get; set; }
+
+    [Option("nodes", HelpText = "Only unpack these node indices (comma-separated), e.g. to retry failures.")]
+    public string NodeIndices { get; set; }
+
     [Usage(ApplicationAlias = "GTToolsSharp")]
     public static IEnumerable<Example> Examples
     {

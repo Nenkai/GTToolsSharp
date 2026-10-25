@@ -91,7 +91,7 @@ public class GTVolumePFS : IDisposable
         }
         else
         {
-            fs = new FileStream(path, FileMode.Open);
+            fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             vol = new GTVolumePFS(fs, endianness);
         }
 

@@ -284,6 +284,12 @@ class Program
 
     public static async Task UnpackGT7(GT7UnpackVerbs options)
     {
+        if (!string.IsNullOrEmpty(options.KeysetPath))
+        {
+            GT7Keyset.Current = GT7Keyset.Load(options.KeysetPath);
+            Program.Log($"[-] Loaded GT7 keyset '{GT7Keyset.Current.Build}'", forceConsolePrint: true);
+        }
+
         if (!File.Exists(options.InputPath))
         {
             Console.WriteLine($"[X] Input index file does not exist.");
@@ -316,7 +322,9 @@ class Program
         }
         else
         {
-            await vol.UnpackAllFiles(options.OutputPath);
+            HashSet<int> only = string.IsNullOrEmpty(options.NodeIndices) ? null
+                : options.NodeIndices.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToHashSet();
+            await vol.UnpackAllFiles(options.OutputPath, only);
         }
     }
 
