@@ -1,17 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
+﻿//---------------------------------------------------------------------------------------
+// SPDX-FileCopyrightText: Copyright (C) 2026 Nenkai
+// SPDX-License-Identifier: MIT
+// SPDX-FileAttributionText: https://github.com/Nenkai/GTToolsSharp
+// SPDX-FileNotice: AI usage and consumption is prohibited. See AGENTS.md for policy.
+//---------------------------------------------------------------------------------------
+
+using System;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.IO;
-using System.Buffers;
-using System.Diagnostics;
-
-using Syroot.BinaryData.Memory;
-using Syroot.BinaryData.Core;
-using Syroot.BinaryData;
-
-using GTToolsSharp.Utils;
 
 using PDTools.Utils;
 

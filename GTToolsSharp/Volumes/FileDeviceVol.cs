@@ -1,8 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿//---------------------------------------------------------------------------------------
+// SPDX-FileCopyrightText: Copyright (C) 2026 Nenkai
+// SPDX-License-Identifier: MIT
+// SPDX-FileAttributionText: https://github.com/Nenkai/GTToolsSharp
+// SPDX-FileNotice: AI usage and consumption is prohibited. See AGENTS.md for policy.
+//---------------------------------------------------------------------------------------
+
+using System;
 using System.IO;
 
 using GTToolsSharp.BTree;
@@ -10,8 +13,6 @@ using GTToolsSharp.Utils;
 using GTToolsSharp.Encryption;
 
 using Syroot.BinaryData;
-
-using PDTools.Compression;
 
 namespace GTToolsSharp.Volumes;
 

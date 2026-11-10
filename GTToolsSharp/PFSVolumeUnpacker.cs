@@ -1,4 +1,11 @@
-﻿using GTToolsSharp.BinaryPatching;
+﻿//---------------------------------------------------------------------------------------
+// SPDX-FileCopyrightText: Copyright (C) 2026 Nenkai
+// SPDX-License-Identifier: MIT
+// SPDX-FileAttributionText: https://github.com/Nenkai/GTToolsSharp
+// SPDX-FileNotice: AI usage and consumption is prohibited. See AGENTS.md for policy.
+//---------------------------------------------------------------------------------------
+
+using GTToolsSharp.BinaryPatching;
 using GTToolsSharp.BTree;
 using GTToolsSharp.Encryption;
 using GTToolsSharp.Utils;
@@ -8,16 +15,11 @@ using PDTools.Compression;
 using PDTools.Crypto;
 using PDTools.Utils;
 
-using SharpCompress.Common;
-
 using System;
-using System.Buffers;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 
